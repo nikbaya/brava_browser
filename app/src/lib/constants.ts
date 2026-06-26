@@ -29,6 +29,25 @@ export const ANCESTRY_COLOR: Record<Ancestry, string> = {
   non_EUR: '#566573',
 }
 
+// Ancestry-composition colours/labels for the biobank pies (superpopulations,
+// including Middle Eastern (MID), which has no own meta stratum).
+export const ANCESTRY_GROUP_COLOR: Record<string, string> = {
+  EUR: '#1f6f8b',
+  AFR: '#e08a1e',
+  AMR: '#2f7d4f',
+  EAS: '#c0392b',
+  SAS: '#7d5ba6',
+  MID: '#34495e',
+}
+export const ANCESTRY_GROUP_LABEL: Record<string, string> = {
+  EUR: 'European',
+  AFR: 'African',
+  AMR: 'Admixed American',
+  EAS: 'East Asian',
+  SAS: 'Central & South Asian',
+  MID: 'Middle Eastern',
+}
+
 // Display labels + the file suffix used in the raw bucket
 // ({PHENO}_..._cutoff{SUFFIX}.tsv.gz). 'All' is the no-suffix cross-ancestry meta.
 export const ANCESTRY_META: Record<

@@ -19,8 +19,9 @@ const LP_SUGGEST = 4 // p < 1e-4
 const SIG_GENE_COLOR = 'bg-protective/55'
 const SIG_MASK_COLOR = 'bg-protective/30'
 const SIG_SUGGEST_COLOR = 'bg-accent/55'
-const DIR_POS_COLOR = 'bg-[#2563a8]/50'
-const DIR_NEG_COLOR = 'bg-[#c0392b]/50'
+// β > 0 (risk / higher) = red, β < 0 (protective / lower) = blue.
+const DIR_POS_COLOR = 'bg-[#c0392b]/50'
+const DIR_NEG_COLOR = 'bg-[#2563a8]/50'
 
 export function SigDot({ lp }: { lp: number | null | undefined }) {
   let cls = 'border border-ink-faint/40'
@@ -46,7 +47,7 @@ export function SigDot({ lp }: { lp: number | null | undefined }) {
 }
 
 /**
- * Effect-direction dot: blue = positive β, red = negative β. The tooltip
+ * Effect-direction dot: red = positive β, blue = negative β. The tooltip
  * carries the trait-aware meaning (risk/protective vs higher/lower).
  */
 export function DirDot({

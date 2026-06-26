@@ -18,7 +18,20 @@ import re
 import urllib.request
 from pathlib import Path
 
-from common import ANCESTRIES, CACHE_DIR, GENE_PREFIX, gsutil_ls
+import pandas as pd
+
+from common import (
+    ANCESTRIES,
+    CACHE_DIR,
+    GENE_PREFIX,
+    gsutil_ls,
+    stem_to_id,
+    supp_tables,
+)
+
+# Per-ancestry strata exposed by the browser besides the cross-ancestry meta.
+_SUPER = ["EUR", "AFR", "AMR", "EAS", "SAS"]
+_NON_EUR = ["AFR", "AMR", "EAS", "SAS", "MID"]  # MID has no own stratum; folds in
 
 R_URL = (
     "https://raw.githubusercontent.com/BRaVa-genetics/BRaVa_curation/"
@@ -78,36 +91,84 @@ def detect_phenotypes() -> dict[str, list[str]]:
     found: dict[str, set[str]] = {}
     for path in gsutil_ls(f"{GENE_PREFIX}/"):
         base = path.rsplit("/", 1)[-1]
-        if "_ALL_gene_meta_analysis" not in base or not base.endswith(".tsv.gz"):
+        if "_gene_meta_analysis" not in base or not base.endswith(".tsv.gz"):
             continue
-        pheno = base.split("_ALL_gene_meta_analysis")[0]
+        pheno = stem_to_id(base.split("_gene_meta_analysis")[0])
         suffix = base[: -len(".tsv.gz")].split("100_cutoff")[-1].lstrip(".")
         if suffix in suffix_to_anc:
             found.setdefault(pheno, set()).add(suffix_to_anc[suffix])
     return {p: sorted(a, key=lambda x: order[x]) for p, a in found.items()}
 
 
+def load_sample_sizes(supp: Path) -> dict[str, dict]:
+    """Per-(phenotype, ancestry) N from supp tables S4 (binary) + S5 (continuous).
+
+    Returns {pheno_id: {anc: {n, case?, ctrl?}}} with the cross-ancestry meta
+    ("All") and non-European meta ("non_EUR") aggregated from the strata.
+    """
+    s4 = pd.read_excel(supp, sheet_name="Table S4", header=0)  # binary
+    s5 = pd.read_excel(supp, sheet_name="Table S5", header=0)  # continuous
+
+    out: dict[str, dict] = {}
+    # Binary: sum cases/controls across biobanks for each (pheno, ancestry).
+    b = s4.groupby(["Phenotype ID", "Ancestry"])[["N cases", "N controls"]].sum()
+    for (pid, anc), row in b.iterrows():
+        c, k = int(row["N cases"]), int(row["N controls"])
+        out.setdefault(pid, {})[anc] = {"n": c + k, "case": c, "ctrl": k}
+    # Continuous: sum N across biobanks.
+    q = s5.groupby(["Phenotype ID", "Ancestry"])["N"].sum()
+    for (pid, anc), n in q.items():
+        out.setdefault(pid, {})[anc] = {"n": int(n)}
+
+    # Add aggregate strata (All = every ancestry; non_EUR = non-European).
+    def agg(strata: dict, keys: list[str]) -> dict | None:
+        rows = [strata[a] for a in keys if a in strata]
+        if not rows:
+            return None
+        d = {"n": sum(r["n"] for r in rows)}
+        if all("case" in r for r in rows):
+            d["case"] = sum(r["case"] for r in rows)
+            d["ctrl"] = sum(r["ctrl"] for r in rows)
+        return d
+
+    for pid, strata in out.items():
+        allkeys = list(strata.keys())
+        if (a := agg(strata, allkeys)) is not None:
+            strata["All"] = a
+        if (a := agg(strata, _NON_EUR)) is not None:
+            strata["non_EUR"] = a
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="../app/public/data", type=Path)
+    ap.add_argument("--supp", type=Path, default=None, help="local supp .xlsx (else fetch)")
     args = ap.parse_args()
 
     names, categories, klass = parse_curation()
     detected = detect_phenotypes()
+    sizes = load_sample_sizes(supp_tables(args.supp))
 
     phenotypes = []
     for abbrev in sorted(detected):
-        if abbrev not in names:
-            print(f"  ! {abbrev!r} not in BRaVa curation — using fallback")
-        phenotypes.append(
-            {
-                "id": abbrev,
-                "name": names.get(abbrev, abbrev),
-                "category": categories.get(abbrev, "Other"),
-                "type": klass.get(abbrev, "binary"),
-                "ancestries": detected[abbrev],
-            }
-        )
+        # Female-specific analyses carry an _F suffix; metadata is keyed by base.
+        female = abbrev.endswith("_F")
+        base = abbrev[:-2] if female else abbrev
+        if base not in names:
+            print(f"  ! {base!r} not in BRaVa curation — using fallback")
+        rec = {
+            "id": abbrev,
+            "name": names.get(base, base),
+            "category": categories.get(base, "Other"),
+            "type": klass.get(base, "binary"),
+            "ancestries": detected[abbrev],
+        }
+        if female:
+            rec["sex"] = "female"
+        if base in sizes:
+            rec["n"] = sizes[base]
+        phenotypes.append(rec)
 
     meta = args.out / "meta"
     meta.mkdir(parents=True, exist_ok=True)

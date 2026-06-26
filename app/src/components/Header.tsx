@@ -5,25 +5,25 @@ import SearchBar from './SearchBar'
 export default function Header() {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
+      <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-2">
         <Link to="/" className="flex shrink-0 items-center" aria-label="BRaVa browser home">
           <img
             src={`${import.meta.env.BASE_URL}BRaVa_logo.svg`}
             alt="BRaVa"
-            className="h-9 w-auto"
+            className="h-10 w-auto"
           />
         </Link>
-        <div className="mx-auto w-full max-w-xl">
+        <div className="mx-auto min-w-0 max-w-md flex-1">
           <SearchBar />
         </div>
-        <a
-          href="https://brava-genetics.github.io"
-          target="_blank"
-          rel="noreferrer"
-          className="hidden text-sm text-ink-soft hover:text-brand md:inline"
-        >
-          About
-        </a>
+        <nav className="flex shrink-0 items-center gap-4 text-sm">
+          <Link to="/about" className="text-ink-soft hover:text-brand">
+            About
+          </Link>
+          <Link to="/faq" className="text-ink-soft hover:text-brand">
+            FAQ
+          </Link>
+        </nav>
       </div>
     </header>
   )

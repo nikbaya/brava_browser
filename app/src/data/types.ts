@@ -11,6 +11,13 @@ export interface GeneIndex {
   end: number[]
 }
 
+/** Sample size for one (phenotype × ancestry); case/ctrl present for binary. */
+export interface AncestryN {
+  n: number
+  case?: number
+  ctrl?: number
+}
+
 /** meta/phenotypes.json — phenotype catalogue; array position is `pheno_idx`. */
 export interface PhenotypeMeta {
   id: string // abbreviation used in filenames (e.g. 'LDLC')
@@ -18,10 +25,30 @@ export interface PhenotypeMeta {
   category: string // grouping (e.g. 'Lipids')
   type: 'binary' | 'quantitative'
   ancestries: string[] // available ancestry strata
-  n?: number // total sample size if known
+  n?: Record<string, AncestryN> // sample size keyed by ancestry name
+  sex?: 'female' // present for female-specific analyses
 }
 export interface PhenotypeIndex {
   phenotypes: PhenotypeMeta[]
+}
+
+/** meta/biobanks.json — contributing biobanks (for the About / info page). */
+export interface Biobank {
+  id: string
+  name: string
+  country: string
+  iso2: string
+  flag: string
+  lat: number
+  lng: number
+  sample_size: number
+  ascertainment: string
+  sequencing: string
+  ancestries: string[]
+  ancestry_n: Record<string, number>
+}
+export interface BiobankIndex {
+  biobanks: Biobank[]
 }
 
 /**

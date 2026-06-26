@@ -10,12 +10,20 @@ from __future__ import annotations
 import gzip
 import io
 import subprocess
+import urllib.request
 from pathlib import Path
 
 import polars as pl
 
 BUCKET = "gs://brava-meta-analysis-public"
 GENE_PREFIX = f"{BUCKET}/gene"
+
+# Flagship-paper supplementary tables (sample sizes, biobank metadata). Hosted
+# on medRxiv; fetched and cached locally rather than committed to the repo.
+SUPP_URL = (
+    "https://www.medrxiv.org/content/medrxiv/early/2026/05/24/"
+    "2026.05.21.26353759/DC2/embed/media-2.xlsx?download=true"
+)
 
 # (name, file suffix). 'All' is the no-suffix cross-ancestry meta file.
 ANCESTRIES: list[tuple[str, str]] = [
@@ -45,7 +53,21 @@ MASK_INDEX = {m: i for i, m in enumerate(MASKS)}
 MAFS = [0.001, 0.0001]
 MAF_INDEX = {0.001: 0, 0.0001: 1, 1e-4: 1}
 
-FILE_TMPL = "{pheno}_ALL_gene_meta_analysis_100_cutoff{suffix}.tsv.gz"
+# Raw filenames are "{STEM}_gene_meta_analysis_100_cutoff{suffix}.tsv.gz" where
+# STEM is "{base}_ALL" for all-sex analyses or "{base}_F" for female-specific
+# ones. The browser's phenotype id keeps the _F tag but drops the _ALL default.
+FILE_TMPL = "{stem}_gene_meta_analysis_100_cutoff{suffix}.tsv.gz"
+_INFIX = "_gene_meta_analysis"
+
+
+def pheno_stem(pheno: str) -> str:
+    """Phenotype id -> raw-file stem ('LDLC'->'LDLC_ALL', 'BreastCanc_F' kept)."""
+    return pheno if pheno.endswith("_F") else f"{pheno}_ALL"
+
+
+def stem_to_id(stem: str) -> str:
+    """Raw-file stem -> phenotype id ('LDLC_ALL'->'LDLC', 'BreastCanc_F' kept)."""
+    return stem[:-4] if stem.endswith("_ALL") else stem
 
 CHROM_ORDER = {str(c): i for i, c in enumerate(list(range(1, 23)) + ["X", "Y"])}
 
@@ -53,8 +75,28 @@ ROOT = Path(__file__).resolve().parent
 CACHE_DIR = ROOT / ".cache"
 
 
+def supp_tables(override: Path | None = None) -> Path:
+    """Path to the supplementary-tables .xlsx; download from medRxiv if needed.
+
+    Pass `override` to use a local copy instead of fetching. Otherwise the file
+    is cached under .cache/ (medRxiv blocks the default urllib UA, so spoof one).
+    """
+    if override is not None:
+        return override
+    CACHE_DIR.mkdir(exist_ok=True)
+    dest = CACHE_DIR / "supp_tables.xlsx"
+    if not dest.exists():
+        print(f"Downloading supplementary tables from medRxiv …")
+        req = urllib.request.Request(SUPP_URL, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req) as r, open(dest, "wb") as f:
+            f.write(r.read())
+    return dest
+
+
 def gene_file_url(pheno: str, suffix: str) -> str:
-    name = FILE_TMPL.format(pheno=pheno, suffix=f".{suffix}" if suffix else "")
+    name = FILE_TMPL.format(
+        stem=pheno_stem(pheno), suffix=f".{suffix}" if suffix else ""
+    )
     return f"{GENE_PREFIX}/{name}"
 
 
@@ -66,12 +108,12 @@ def gsutil_ls(prefix: str) -> list[str]:
 
 
 def list_phenotypes() -> list[str]:
-    """Distinct phenotype abbreviations present in the gene/ prefix."""
+    """Distinct phenotype ids present in the gene/ prefix (incl. _F strata)."""
     names: set[str] = set()
     for path in gsutil_ls(f"{GENE_PREFIX}/"):
         base = path.rsplit("/", 1)[-1]
-        if "_ALL_gene_meta_analysis" in base:
-            names.add(base.split("_ALL_gene_meta_analysis")[0])
+        if _INFIX in base:
+            names.add(stem_to_id(base.split(_INFIX)[0]))
     return sorted(names)
 
 

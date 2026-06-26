@@ -14,9 +14,11 @@ SAMPLE_GENES  ?= PCSK9,LDLR,APOB,TTN,GIGYF1,BRCA2,APOC3,ANGPTL3,ASGR1,GCK,PCSK1,
 
 .PHONY: meta sample full upload clean
 
+# build_phenotypes / build_biobanks fetch the supp tables from medRxiv (cached).
 meta:
 	python build_annotation.py --out $(OUT_DEV)
 	python build_phenotypes.py --out $(OUT_DEV)
+	python build_biobanks.py --out $(OUT_DEV)
 
 sample: meta
 	python build_data.py --out $(OUT_DEV) --phenos $(SAMPLE_PHENOS) --genes $(SAMPLE_GENES)
@@ -24,6 +26,7 @@ sample: meta
 full:
 	python build_annotation.py --out $(OUT_FULL)
 	python build_phenotypes.py --out $(OUT_FULL)
+	python build_biobanks.py --out $(OUT_FULL)
 	python build_data.py --out $(OUT_FULL) --phenos all --genes all --gene-shards 16
 
 upload:

@@ -13,8 +13,12 @@ dist-ssr
 *.local
 
 # Generated data — bulky, served from GCS in production. Keep meta/*.json.
-public/data/gene/
-public/data/phenotype/
+# Matches the real dirs, the local-dev symlinks to ../pipeline/build, and the
+# .sample backups (no trailing slash so symlinks are ignored too).
+public/data/gene
+public/data/gene.sample
+public/data/phenotype
+public/data/phenotype.sample
 public/data/meta/*.parquet
 public/data/_tmp/
 

@@ -1,0 +1,4 @@
+.DS_Store
+# Supplementary tables are fetched from medRxiv by the pipeline, not committed.
+media-2*.xlsx
+supp_tables.xlsx

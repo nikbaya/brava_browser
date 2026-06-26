@@ -6,11 +6,12 @@ import {
   ANCESTRY_META,
   type Ancestry,
 } from '../lib/constants'
-import { fmtBeta, fmtPLog } from '../lib/format'
+import { fmtBeta, fmtCount, fmtPLog, fmtPos } from '../lib/format'
 import type { ForestSeries } from '../lib/select'
-import type { PhenotypeMeta } from '../data/types'
+import type { AncestryN, PhenotypeMeta } from '../data/types'
 
-const ML = 78 // left: ancestry labels
+const ML = 128 // left: ancestry label + N columns
+const LABEL_R = 56 // right edge of the ancestry-label column
 const MR = 138 // right: β [lo, hi]
 const MT = 6
 const MB = 26
@@ -144,13 +145,23 @@ export default function ForestPlot({ series, trait, maskLabel, mafLabel }: Props
                 />
               )}
               <text
-                x={ML - 8}
+                x={LABEL_R}
                 y={cy}
                 textAnchor="end"
                 dominantBaseline="central"
                 className={`text-[11px] ${isMeta ? 'fill-ink font-semibold' : 'fill-ink-soft'}`}
               >
                 {ANCESTRY_META[r.anc].label}
+              </text>
+              {/* N column */}
+              <text
+                x={ML - 10}
+                y={cy}
+                textAnchor="end"
+                dominantBaseline="central"
+                className="fill-ink-faint text-[10px] tabular-nums"
+              >
+                {trait.n?.[r.anc] ? `N=${fmtCount(trait.n[r.anc].n)}` : ''}
               </text>
               {/* CI bar */}
               {r.se != null && (
@@ -194,7 +205,7 @@ export default function ForestPlot({ series, trait, maskLabel, mafLabel }: Props
       </svg>
 
       {hover != null && rows[hover] && (
-        <Tooltip row={rows[hover]} />
+        <Tooltip row={rows[hover]} n={trait.n?.[rows[hover].anc]} />
       )}
     </div>
   )
@@ -202,6 +213,7 @@ export default function ForestPlot({ series, trait, maskLabel, mafLabel }: Props
 
 function Tooltip({
   row,
+  n,
 }: {
   row: {
     anc: Ancestry
@@ -210,6 +222,7 @@ function Tooltip({
     lpBurden: number | null
     lpSkato: number | null
   }
+  n?: AncestryN
 }) {
   return (
     <div className="pointer-events-none absolute top-0 right-0 rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-lg">
@@ -221,6 +234,14 @@ function Tooltip({
       <div className="tnum text-ink-soft">
         Burden p = {fmtPLog(row.lpBurden)} · SKAT-O p = {fmtPLog(row.lpSkato)}
       </div>
+      {n && (
+        <div className="tnum text-ink-faint">
+          N = {fmtPos(n.n)}
+          {n.case != null && n.ctrl != null && (
+            <> ({fmtPos(n.case)} cases / {fmtPos(n.ctrl)} controls)</>
+          )}
+        </div>
+      )}
     </div>
   )
 }

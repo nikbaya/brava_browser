@@ -31,6 +31,17 @@ from common import ANCESTRIES, ANCESTRY_INDEX, pivot_tests, read_gene_tsv, round
 GENE_KEYS = ["ensg", "mask_idx", "maf_idx"]
 
 
+def finite_round(col: str) -> pl.Expr:
+    """Round to sig figs, mapping non-finite (±inf / NaN) to null.
+
+    SAIGE can emit an infinite SE_Burden (and hence beta) when a stratum's
+    variance estimate is degenerate. json.dumps would write these as the literal
+    `Infinity` / `NaN`, which is invalid JSON for browsers — so null them out.
+    """
+    c = pl.col(col)
+    return pl.when(c.is_finite()).then(round_sig(c)).otherwise(None).alias(col)
+
+
 def load_meta(out: Path):
     genes = pl.read_parquet(out / "meta" / "genes.parquet")
     ensg_to_idx = dict(zip(genes["id"].to_list(), genes["gene_idx"].to_list()))
@@ -50,8 +61,8 @@ def write_phenotype_file(
         pl.col("ensg").replace_strict(ensg_to_idx, default=None).alias("gene_idx")
     ).drop_nulls("gene_idx")
     df = df.with_columns(
-        round_sig(pl.col("beta")).alias("beta"),
-        round_sig(pl.col("se")).alias("se"),
+        finite_round("beta"),
+        finite_round("se"),
     ).sort("gene_idx", "mask_idx", "maf_idx")
 
     payload = {
@@ -78,8 +89,8 @@ def write_phenotype_file(
 
 def _write_gene_partition(df: pl.DataFrame, gdir: Path) -> int:
     df = df.with_columns(
-        round_sig(pl.col("beta")).alias("beta"),
-        round_sig(pl.col("se")).alias("se"),
+        finite_round("beta"),
+        finite_round("se"),
     ).sort("ensg", "pheno_idx", "mask_idx", "maf_idx")
     count = 0
     for ensg, g in df.group_by("ensg", maintain_order=True):

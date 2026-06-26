@@ -17,8 +17,8 @@ interface Hover {
   row: Plotted
 }
 
-const M = { top: 14, right: 16, bottom: 18, left: 46 }
-const HEIGHT = 320
+const M = { top: 12, right: 16, bottom: 18, left: 46 }
+const HEIGHT = 240
 const R = 2.2
 
 /**

@@ -21,8 +21,8 @@ function catColor(cat: string): string {
   return PALETTE[h % PALETTE.length]
 }
 
-const M = { top: 14, right: 16, bottom: 88, left: 46 }
-const HEIGHT = 300
+const M = { top: 12, right: 16, bottom: 62, left: 46 }
+const HEIGHT = 248
 
 /**
  * Gene PheWAS: one point per phenotype, height = -log10(p). SVG is fine here

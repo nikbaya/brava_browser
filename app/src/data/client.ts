@@ -1,5 +1,6 @@
 import { dataUrl, metaUrl } from './config'
 import type {
+  BiobankIndex,
   GeneData,
   GeneIndex,
   PhenotypeData,
@@ -37,6 +38,8 @@ export const fetchGeneIndex = () =>
   getJSON<GeneIndex>(metaUrl('meta/genes.json'))
 export const fetchPhenotypeIndex = () =>
   getJSON<PhenotypeIndex>(metaUrl('meta/phenotypes.json'))
+export const fetchBiobankIndex = () =>
+  getJSON<BiobankIndex>(metaUrl('meta/biobanks.json'))
 
 export const fetchGene = (ensg: string) =>
   getJSON<GeneData>(dataUrl(`gene/${ensg}.json`))
