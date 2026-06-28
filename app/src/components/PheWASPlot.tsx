@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { scaleLinear } from 'd3-scale'
 import type { PhenotypeMeta } from '../data/types'
 import { fmtBeta, fmtPLog } from '../lib/format'
@@ -15,14 +15,10 @@ const PALETTE = [
   '#1f6f8b', '#e08a1e', '#2f7d4f', '#c0392b', '#7d5ba6', '#0e7c86',
   '#b5651d', '#8a8d3a', '#a83f6b', '#3b6ea5', '#5c8a3a', '#9c6b30', '#566573',
 ]
-function catColor(cat: string): string {
-  let h = 0
-  for (let i = 0; i < cat.length; i++) h = (h * 31 + cat.charCodeAt(i)) >>> 0
-  return PALETTE[h % PALETTE.length]
-}
 
 const M = { top: 12, right: 16, bottom: 62, left: 46 }
 const HEIGHT = 248
+const MIN_WIDTH = 640
 
 /**
  * Gene PheWAS: one point per phenotype, height = -log10(p). SVG is fine here
@@ -39,6 +35,19 @@ export default function PheWASPlot({
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<number | null>(null)
+  const [measured, setMeasured] = useState(920)
+
+  // Track container width so the plot fills it (no fixed-width whitespace).
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width
+      if (w) setMeasured(w)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   // Order by category then -log10(p) desc within category.
   const ordered = useMemo(() => {
@@ -53,7 +62,31 @@ export default function PheWASPlot({
       )
   }, [points, phenotypes])
 
-  const width = 920
+  // Index-based color map over the sorted unique categories: guarantees
+  // distinct, stable colors for the legend (a string hash could collide).
+  const catColorMap = useMemo(() => {
+    const cats = Array.from(new Set(ordered.map((p) => p.meta.category))).sort(
+      (a, b) => a.localeCompare(b),
+    )
+    const m = new Map<string, string>()
+    cats.forEach((c, i) => m.set(c, PALETTE[i % PALETTE.length]))
+    return m
+  }, [ordered])
+  const catColor = (cat: string) => catColorMap.get(cat) ?? PALETTE[0]
+
+  // Contiguous runs of each category (points are already category-sorted).
+  const bands = useMemo(() => {
+    const out: { category: string; i0: number; i1: number }[] = []
+    for (let i = 0; i < ordered.length; i++) {
+      const cat = ordered[i].meta.category
+      const last = out[out.length - 1]
+      if (last && last.category === cat) last.i1 = i
+      else out.push({ category: cat, i0: i, i1: i })
+    }
+    return out
+  }, [ordered])
+
+  const width = Math.max(MIN_WIDTH, measured)
   const maxY = Math.max(8, ...ordered.map((p) => p.lp ?? 0)) * 1.08
   const x = scaleLinear()
     .domain([0, Math.max(1, ordered.length)])
@@ -71,7 +104,31 @@ export default function PheWASPlot({
 
   return (
     <div ref={wrapRef} className="relative w-full overflow-x-auto">
-      <svg width={width} height={HEIGHT} className="min-w-full">
+      {/* category legend (key for point colors + bands) */}
+      <div className="flex flex-wrap gap-x-3 gap-y-1 px-1 pb-2 text-[11px] text-ink-soft">
+        {Array.from(catColorMap).map(([cat, color]) => (
+          <span key={cat} className="inline-flex items-center gap-1">
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-sm"
+              style={{ background: color }}
+            />
+            {cat}
+          </span>
+        ))}
+      </div>
+      <svg width={width} height={HEIGHT}>
+        {/* category bands (behind everything) */}
+        {bands.map((b) => (
+          <rect
+            key={b.category}
+            x={x(b.i0)}
+            y={M.top}
+            width={x(b.i1 + 1) - x(b.i0)}
+            height={HEIGHT - M.bottom - M.top}
+            fill={catColor(b.category)}
+            fillOpacity={0.07}
+          />
+        ))}
         {/* y gridlines */}
         {y.ticks(6).map((t) => (
           <g key={t}>
