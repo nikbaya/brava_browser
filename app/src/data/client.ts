@@ -3,6 +3,7 @@ import type {
   BiobankIndex,
   GeneData,
   GeneIndex,
+  PhenoSizes,
   PhenotypeData,
   PhenotypeIndex,
 } from './types'
@@ -40,6 +41,8 @@ export const fetchPhenotypeIndex = () =>
   getJSON<PhenotypeIndex>(metaUrl('meta/phenotypes.json'))
 export const fetchBiobankIndex = () =>
   getJSON<BiobankIndex>(metaUrl('meta/biobanks.json'))
+export const fetchPhenoSizes = () =>
+  getJSON<PhenoSizes>(metaUrl('meta/pheno_sizes.json'))
 
 export const fetchGene = (ensg: string) =>
   getJSON<GeneData>(dataUrl(`gene/${ensg}.json`))

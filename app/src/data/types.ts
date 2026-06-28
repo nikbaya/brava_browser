@@ -32,6 +32,19 @@ export interface PhenotypeIndex {
   phenotypes: PhenotypeMeta[]
 }
 
+/** One biobank's contribution to a (phenotype × ancestry); a pie slice. */
+export interface BiobankN {
+  id: string
+  n: number
+  case?: number
+  ctrl?: number
+}
+/**
+ * meta/pheno_sizes.json — per-biobank sample sizes for each phenotype × super-
+ * population (EUR/AFR/AMR/EAS/SAS only). Keyed by the phenotype base id.
+ */
+export type PhenoSizes = Record<string, Record<string, BiobankN[]>>
+
 /** meta/biobanks.json — contributing biobanks (for the About / info page). */
 export interface Biobank {
   id: string

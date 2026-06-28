@@ -135,6 +135,15 @@ export default function ForestPlot({ series, trait, maskLabel, mafLabel }: Props
               onMouseLeave={() => setHover(null)}
               className="cursor-default"
             >
+              {/* full-row transparent hit target so hovering anywhere in the
+                  row (not just over text/markers) highlights it */}
+              <rect
+                x={0}
+                y={cy - ROW_H / 2}
+                width={width}
+                height={ROW_H}
+                fill="transparent"
+              />
               {hover === i && (
                 <rect
                   x={0}
@@ -142,6 +151,7 @@ export default function ForestPlot({ series, trait, maskLabel, mafLabel }: Props
                   width={width}
                   height={ROW_H}
                   className="fill-brand-light/60"
+                  pointerEvents="none"
                 />
               )}
               <text

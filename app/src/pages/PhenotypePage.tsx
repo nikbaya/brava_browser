@@ -21,6 +21,7 @@ import FilterBar, { type FilterState } from '../components/FilterBar'
 import ManhattanPlot from '../components/ManhattanPlot'
 import ForestPlot from '../components/ForestPlot'
 import VirtualTable from '../components/VirtualTable'
+import AncestryPies from '../components/AncestryPies'
 
 export default function PhenotypePage() {
   const { id } = useParams()
@@ -131,7 +132,15 @@ export default function PhenotypePage() {
             traitType={pheno.type}
             filters={filters}
             ancestry={ancestry}
+            ancestryN={pheno.n?.[ancestry]}
             onOpenForest={setDrawer}
+          />
+
+          <AncestryPies
+            pheno={pheno}
+            available={available}
+            selected={ancestry}
+            onSelect={(a) => setFilters({ ...filters, ancestry: a })}
           />
         </>
       )}
@@ -233,12 +242,14 @@ function ResultsTable({
   traitType,
   filters,
   ancestry,
+  ancestryN,
   onOpenForest,
 }: {
   rows: PhenoRow[]
   traitType: PhenotypeMeta['type']
   filters: FilterState
   ancestry: Ancestry
+  ancestryN?: { n: number; case?: number; ctrl?: number }
   onOpenForest: (g: { ensg: string; symbol: string }) => void
 }) {
   const { geneIndex } = useIndex()
@@ -312,8 +323,23 @@ function ResultsTable({
   const caption = (
     <span>
       <span className="font-semibold text-ink-soft">Filters</span> ·{' '}
-      {ANCESTRY_META[ancestry].long} · {MASK_META[filters.maskIndex].label} · MAF{' '}
-      {MAF_META[filters.mafIndex].label} · {filters.test}
+      {ANCESTRY_META[ancestry].long}
+      {ancestryN && (
+        <>
+          {' '}
+          (N&nbsp;=&nbsp;<span className="tnum">{ancestryN.n.toLocaleString()}</span>
+          {ancestryN.case != null && (
+            <>
+              ;{' '}
+              <span className="tnum">{ancestryN.case.toLocaleString()}</span> cases /{' '}
+              <span className="tnum">{ancestryN.ctrl!.toLocaleString()}</span> controls
+            </>
+          )}
+          )
+        </>
+      )}{' '}
+      · {MASK_META[filters.maskIndex].label} · MAF {MAF_META[filters.mafIndex].label} ·{' '}
+      {filters.test}
     </span>
   )
 
