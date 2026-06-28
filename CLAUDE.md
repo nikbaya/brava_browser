@@ -25,7 +25,7 @@ Refer to the flagship paper preprint PDF in this repo for more background info.
 A professional, low-lag **static** browser for BRaVa **gene-level** rare-variant
 association results (gnomAD/Genebass-style), to be hosted on GitHub Pages. v1 is
 gene-level only (no variant-level). The "All by All" (All of Us) browser is the
-explicit quality bar.
+explicit quality bar. Do not cut corners - this should be a gold-standard browser.
 
 ## Architecture (two halves)
 
@@ -144,18 +144,73 @@ Raw: `{PHENO}_ALL_gene_meta_analysis_100_cutoff.{ANCESTRY}.tsv.gz` (no suffix =
   brava-genetics.github.io, localhost:5173/4173.
 - Local dev: `cd app && npm run dev` → http://localhost:5173.
 
-## Current state / open items (as of 2026-06-26)
+### Data hosting = Cloudflare R2 (free tier — HARD ceilings, never exceed)
+
+The bulky per-gene/per-phenotype JSON is hosted in a Cloudflare **R2** bucket
+(`brava-browser`, account Nikolasbaya@gmail.com) served via its public `r2.dev`
+URL. R2 was chosen for **zero egress fees**. The browser is hosting-agnostic via
+`VITE_DATA_BASE_URL`; point [deploy.yml](.github/workflows/deploy.yml) at the
+r2.dev URL.
+
+**These free-tier allowances are HARD CEILINGS — the project must NEVER exceed
+them** (overage is billable, so treat each as a non-negotiable budget):
+
+| Resource | Free ceiling / month | Notes |
+|---|---|---|
+| **R2 Storage** | **10 GB** | total stored bytes. Store JSON **gzip-compressed** to stay well under — the full build is ~4.7 GB uncompressed, far less gzipped. |
+| **Class A ops** (writes/lists) | **1 million** | uploads. A full `make full` upload is ~40k objects — fine, but avoid needless re-uploads; use sync, not blind re-copy. |
+| **Class B ops** (reads) | **10 million** | every page fetch is a read. Plenty for a research browser, but keep the client's in-memory cache (don't refetch) and long cache headers. |
+
+Overage rates (for reference, must be avoided): Storage $0.015/GB-mo,
+Class A $4.50/M, Class B $0.36/M.
+
+Implications baked into the design: keep emitting compact columnar JSON; upload
+compressed; never duplicate the dataset across buckets; if storage approaches
+10 GB (e.g. when variant-level data is added in v2), prune or re-evaluate the
+host **before** uploading.
+
+### Variant-level (v2) feasibility — fits R2 free tier (measured 2026-06-28)
+
+Checked whether adding variant-level results stays under the ceilings:
+
+| | Raw on GCS (gzip) | Browser footprint on R2 (gzip) |
+|---|---|---|
+| Gene-level (shipped v1) | 7.8 GiB | **~1.5 GB** (706 MB gene + 780 MB phenotype) |
+| Variant-level | 5.95 GiB (273 `.vcf.gz`) | **~1.5–3 GB est.** |
+
+The gene transform achieved ≈5× shrink (7.8 GiB raw → 1.5 GB browser-gz) by
+pivoting + keeping only displayed numeric fields. Variant VCFs are more verbose
+(per-biobank INFO subfields we'd strip to meta β/SE/p), so a similar reduction
+is expected. **Storage:** gene+variant ≈ 3–4.5 GB (pessimistic ~7.5 GB) — under
+10 GB. **Class A:** variant adds ~20k objects (per-gene shards) or ~273
+(per-pheno×ancestry) — negligible. **Class B:** a few reads/pageview — fine.
+So **cost is not the blocker.** The real constraint is UX/architecture: variant
+files are huge (AFib×EUR alone = **1.84M variants**), so v2 must serve by
+**region/locus-window slicing** (per-gene-region variant shards), not whole-
+phenotype files. **Before uploading v2, build the variant data and re-measure
+the actual gzipped output to confirm total stays comfortably under 10 GB.**
+
+## Current state / open items (as of 2026-06-28)
 
 - App is feature-complete for v1; production build ~360 KB JS / 113 KB gzipped,
-  no console errors. Nothing committed yet (single `Initial commit` on `main`) —
-  the user has NOT authorized commit/push.
-- **Full data build running in background** (`make full`, ~45 min): phenotype
-  files done, hash-sharded gene-file pass in progress → `pipeline/build/`.
-- **BLOCKED — GCS upload:** active gcloud account
-  (`nbaya@broadinstitute.org`) lacks `storage.objects.create` on the bucket
-  (403). User must `gcloud auth login` with a write-capable account, then
-  `cd pipeline && make upload` and
-  `gsutil cors set ../infra/cors.json gs://brava-meta-analysis-public`.
-- **TODO to go live:** finish full build → upload to GCS + set CORS → enable
-  GitHub Pages (Source: GitHub Actions) → push to `main`.
+  no console errors. Two commits on `main` (`d7234fe` latest), **not pushed**.
+- **Hosting decided: Cloudflare R2** (free tier — see ceilings above). GCS
+  upload was abandoned (403: `nbaya@broadinstitute.org` lacked write access).
+- **Local data is INCONSISTENT** and must be rebuilt: `pipeline/build/gene`
+  holds the old 38-phenotype indexing while committed
+  `meta/phenotypes.json` lists 44 (the 6 `_F_` strata were added). Fix =
+  re-run `cd pipeline && make full` (~45 min, network-bound on the ~9 GB raw
+  TSV download) → regenerates clean 44-pheno data with `finite_round`.
+- **TODO to go live (next wifi-heavy session, Claude drives):**
+  1. `cd pipeline && make full` → clean 44-pheno data in `pipeline/build/`.
+  2. Install `rclone` (none of rclone/wrangler/aws installed) → configure with
+     R2 S3-compatible API token → **gzip-compress + upload**
+     `build/{gene,phenotype,meta}` to the `brava-browser` bucket (mind the
+     10 GB / 1M-Class-A ceilings — sync, don't blind re-copy).
+  3. Set the bucket's r2.dev URL as `VITE_DATA_BASE_URL` in deploy.yml; set R2
+     CORS for nikbaya.github.io + localhost.
+  4. Enable GitHub Pages (Settings → Pages → Source: GitHub Actions).
+  5. `git push origin main` → Actions builds + deploys.
+- **Waiting on user:** the bucket's public **r2.dev URL** (to wire into
+  deploy.yml) and the R2 **API token** (for the upload).
 

@@ -25,9 +25,10 @@ jobs:
       run:
         working-directory: app
     env:
-      # Bulky per-gene / per-phenotype JSON is served from the public GCS bucket
-      # (CORS-enabled — see infra/cors.json). The search indexes ship bundled.
-      VITE_DATA_BASE_URL: https://storage.googleapis.com/brava-meta-analysis-public/browser
+      # Bulky per-gene / per-phenotype JSON is served from a public Cloudflare R2
+      # bucket (brava-browser) via its r2.dev URL (CORS-enabled in the R2
+      # dashboard). The search indexes (meta/*.json) ship bundled with the app.
+      VITE_DATA_BASE_URL: https://pub-70f6a636186f47b2a7dbb9547de34be8.r2.dev
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

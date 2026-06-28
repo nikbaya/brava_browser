@@ -13,6 +13,14 @@ const EXAMPLE_TRAITS: { id: string; label: string }[] = [
 export default function LandingPage() {
   return (
     <div className="mx-auto flex min-h-[calc(100vh-80px)] max-w-2xl flex-col items-center justify-center px-4 pb-24 text-center">
+      <nav className="fixed top-4 right-5 flex gap-5 text-sm">
+        <Link to="/about" className="text-ink-soft transition hover:text-brand">
+          About
+        </Link>
+        <Link to="/faq" className="text-ink-soft transition hover:text-brand">
+          FAQ
+        </Link>
+      </nav>
       <img
         src={`${import.meta.env.BASE_URL}BRaVa_logo.svg`}
         alt="BRaVa"
