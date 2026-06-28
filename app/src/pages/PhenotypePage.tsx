@@ -307,6 +307,9 @@ function ResultsTable({
         id: 'loc',
         header: 'Location',
         accessorFn: (r) => locusKey(r.chr, r.start),
+        // Invert so the down arrow (the default first-click for a numeric
+        // column) reads top-down through the genome: chr1 → chrX, not chrX → chr1.
+        invertSorting: true,
         size: 170,
         cell: (c) => (
           <span className="tnum text-ink-soft">
