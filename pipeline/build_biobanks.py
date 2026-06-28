@@ -32,9 +32,17 @@ COORDS: dict[str, tuple[float, float]] = {
     "egcut": (58.38, 26.72),            # Tartu, Estonia
     "genes-and-health": (51.54, -0.05),  # East London
     "gel": (51.50, -0.12),              # London
-    "pmbb": (42.36, -71.06),            # Boston (per S3: Mass General Brigham)
-    "mgbb": (39.95, -75.19),            # Philadelphia (per S3: Penn Medicine)
+    "pmbb": (39.95, -75.19),            # Philadelphia (Penn Medicine BioBank)
+    "mgbb": (42.36, -71.06),            # Boston (Mass General Brigham Biobank)
     "uk-biobank": (53.39, -2.21),       # Stockport / Manchester
+}
+
+# Table S3 swaps the names of these two US biobanks (confirmed with the
+# consortium): pmbb is Penn Medicine, mgbb is Mass General Brigham. Override the
+# S3 "Biobank" text so the catalogue is correct.
+NAME_OVERRIDE: dict[str, str] = {
+    "pmbb": "Penn Medicine BioBank",
+    "mgbb": "Mass General Brigham Biobank",
 }
 
 # Country name (as written in Table S3) -> ISO-3166 alpha-2 (for the flag emoji).
@@ -76,7 +84,7 @@ def main() -> None:
         biobanks.append(
             {
                 "id": bid,
-                "name": str(r["Biobank"]),
+                "name": NAME_OVERRIDE.get(bid, str(r["Biobank"])),
                 "country": country,
                 "iso2": iso,
                 "flag": flag_emoji(iso) if iso else "",

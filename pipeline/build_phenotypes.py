@@ -108,6 +108,9 @@ def load_sample_sizes(supp: Path) -> dict[str, dict]:
     """
     s4 = pd.read_excel(supp, sheet_name="Table S4", header=0)  # binary
     s5 = pd.read_excel(supp, sheet_name="Table S5", header=0)  # continuous
+    # S5 ships duplicate rows per (pheno, ancestry, biobank); drop them so the
+    # per-biobank N isn't double-counted when we sum across biobanks below.
+    s5 = s5.drop_duplicates(["Phenotype ID", "Ancestry", "Biobank ID"])
 
     out: dict[str, dict] = {}
     # Binary: sum cases/controls across biobanks for each (pheno, ancestry).
@@ -140,6 +143,38 @@ def load_sample_sizes(supp: Path) -> dict[str, dict]:
     return out
 
 
+def load_biobank_sizes(supp: Path) -> dict[str, dict]:
+    """Per-(phenotype, ancestry, biobank) N for the five super-populations.
+
+    Powers the per-ancestry sample-size pie charts (one slice per biobank).
+    Returns {pheno_id: {ancestry: [{id, n, case?, ctrl?}, …]}} for ancestries in
+    _SUPER only (the meta strata "All"/"non_EUR" are sums, not pie-able).
+    """
+    s4 = pd.read_excel(supp, sheet_name="Table S4", header=0)  # binary
+    s5 = pd.read_excel(supp, sheet_name="Table S5", header=0)  # continuous
+    s5 = s5.drop_duplicates(["Phenotype ID", "Ancestry", "Biobank ID"])
+
+    out: dict[str, dict] = {}
+    for _, r in s4.iterrows():
+        if r["Ancestry"] not in _SUPER:
+            continue
+        c, k = int(r["N cases"]), int(r["N controls"])
+        out.setdefault(r["Phenotype ID"], {}).setdefault(r["Ancestry"], []).append(
+            {"id": r["Biobank ID"], "n": c + k, "case": c, "ctrl": k}
+        )
+    for _, r in s5.iterrows():
+        if r["Ancestry"] not in _SUPER:
+            continue
+        out.setdefault(r["Phenotype ID"], {}).setdefault(r["Ancestry"], []).append(
+            {"id": r["Biobank ID"], "n": int(r["N"])}
+        )
+    # Largest contributor first so pie slices read big→small.
+    for strata in out.values():
+        for rows in strata.values():
+            rows.sort(key=lambda d: -d["n"])
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="../app/public/data", type=Path)
@@ -148,7 +183,9 @@ def main() -> None:
 
     names, categories, klass = parse_curation()
     detected = detect_phenotypes()
-    sizes = load_sample_sizes(supp_tables(args.supp))
+    supp = supp_tables(args.supp)
+    sizes = load_sample_sizes(supp)
+    biobank_sizes = load_biobank_sizes(supp)
 
     phenotypes = []
     for abbrev in sorted(detected):
@@ -175,8 +212,13 @@ def main() -> None:
     (meta / "phenotypes.json").write_text(
         json.dumps({"phenotypes": phenotypes}, separators=(",", ":"))
     )
+    # Per-biobank breakdown (keyed by the base id, matching the `n` lookup).
+    (meta / "pheno_sizes.json").write_text(
+        json.dumps(biobank_sizes, separators=(",", ":"))
+    )
     cats = sorted({p["category"] for p in phenotypes})
     print(f"Wrote {meta/'phenotypes.json'} ({len(phenotypes)} phenotypes)")
+    print(f"Wrote {meta/'pheno_sizes.json'} ({len(biobank_sizes)} phenotypes)")
     print(f"Categories: {', '.join(cats)}")
 
 
