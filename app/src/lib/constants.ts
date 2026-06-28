@@ -48,6 +48,9 @@ export const ANCESTRY_GROUP_LABEL: Record<string, string> = {
   MID: 'Middle Eastern',
 }
 
+// Super-populations shown as sample-size pies (matches the pipeline's _SUPER).
+export const SUPERPOPS = ['EUR', 'AFR', 'AMR', 'EAS', 'SAS'] as const
+
 // Display labels + the file suffix used in the raw bucket
 // ({PHENO}_..._cutoff{SUFFIX}.tsv.gz). 'All' is the no-suffix cross-ancestry meta.
 export const ANCESTRY_META: Record<
@@ -74,28 +77,56 @@ export const MASKS = [
 ] as const
 export type Mask = (typeof MASKS)[number]
 
-export const MASK_META: { raw: Mask; label: string; short: string }[] = [
-  { raw: 'pLoF', label: 'pLoF', short: 'pLoF' },
+// Per-annotation swatch colors. Composite masks stack the swatches of their
+// constituent annotations (e.g. "pLoF or damaging missense" = two circles).
+export const MASK_ANNOT_COLOR = {
+  pLoF: '#8b0000', // darkred
+  damaging_missense: '#f08080', // lightcoral
+  other_missense: '#ffd700', // gold
+  synonymous: '#87cefa', // lightskyblue
+} as const
+
+export const MASK_META: {
+  raw: Mask
+  label: string
+  short: string
+  colors: string[]
+}[] = [
+  { raw: 'pLoF', label: 'pLoF', short: 'pLoF', colors: [MASK_ANNOT_COLOR.pLoF] },
   {
     raw: 'damaging_missense_or_protein_altering',
     label: 'Damaging missense / protein-altering',
     short: 'Damaging missense',
+    colors: [MASK_ANNOT_COLOR.damaging_missense],
   },
   {
     raw: 'other_missense_or_protein_altering',
     label: 'Other missense / protein-altering',
     short: 'Other missense',
+    colors: [MASK_ANNOT_COLOR.other_missense],
   },
-  { raw: 'synonymous', label: 'Synonymous', short: 'Synonymous' },
+  {
+    raw: 'synonymous',
+    label: 'Synonymous',
+    short: 'Synonymous',
+    colors: [MASK_ANNOT_COLOR.synonymous],
+  },
   {
     raw: 'pLoF;damaging_missense_or_protein_altering',
     label: 'pLoF or damaging missense',
     short: 'pLoF | dmg missense',
+    colors: [MASK_ANNOT_COLOR.pLoF, MASK_ANNOT_COLOR.damaging_missense],
   },
   {
     raw: 'pLoF;damaging_missense_or_protein_altering;other_missense_or_protein_altering;synonymous',
-    label: 'pLoF, missense & synonymous (all variants)',
+    label: 'All variant categories',
     short: 'All variants',
+    colors: [
+      MASK_ANNOT_COLOR.pLoF,
+      MASK_ANNOT_COLOR.damaging_missense,
+      MASK_ANNOT_COLOR.other_missense,
+      MASK_ANNOT_COLOR.synonymous,
+    ],
   },
 ]
 

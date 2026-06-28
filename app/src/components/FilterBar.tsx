@@ -1,4 +1,4 @@
-import { Select } from './ui'
+import Dropdown, { MaskIcon } from './Dropdown'
 import {
   ANCESTRY_META,
   MAF_META,
@@ -39,26 +39,30 @@ export default function FilterBar({
   return (
     <div className="flex flex-wrap items-end gap-2.5 rounded-lg border border-line bg-surface px-3 py-2">
       {!hideAncestry && (
-        <Select
+        <Dropdown
           label="Ancestry"
           value={value.ancestry}
           onChange={(ancestry) => set({ ancestry: ancestry as Ancestry })}
           options={ancOptions}
         />
       )}
-      <Select
+      <Dropdown
         label="Variant mask"
         value={value.maskIndex}
         onChange={(maskIndex) => set({ maskIndex })}
-        options={MASK_META.map((m, i) => ({ value: i, label: m.label }))}
+        options={MASK_META.map((m, i) => ({
+          value: i,
+          label: m.label,
+          icon: <MaskIcon colors={m.colors} />,
+        }))}
       />
-      <Select
+      <Dropdown
         label="Max MAF"
         value={value.mafIndex}
         onChange={(mafIndex) => set({ mafIndex })}
         options={MAF_META.map((m, i) => ({ value: i, label: m.label }))}
       />
-      <Select
+      <Dropdown
         label="Test"
         value={value.test}
         onChange={(test) => set({ test: test as Test })}
