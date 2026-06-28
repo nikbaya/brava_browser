@@ -71,10 +71,10 @@ and browsers decompress transparently.
 
 ## Deploy
 
-1. **CORS (once):** the bucket owner allows the Pages origin to fetch:
-   ```bash
-   gsutil cors set infra/cors.json gs://brava-meta-analysis-public
-   ```
+1. **CORS (once):** allow the Pages origin to fetch. Data is hosted on
+   Cloudflare R2, so set the bucket's CORS policy in the dashboard (R2 →
+   `brava-browser` → Settings → CORS Policy), pasting [infra/cors.json](infra/cors.json).
+   The object-scoped R2 API token cannot edit CORS, so this is dashboard-only.
 2. **Pages:** enable GitHub Pages → *Source: GitHub Actions*. Pushing to `main`
    runs [.github/workflows/deploy.yml](.github/workflows/deploy.yml), which
    builds the app (with `VITE_DATA_BASE_URL` set to the GCS prefix) and deploys.

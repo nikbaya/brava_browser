@@ -1,13 +1,14 @@
 [
   {
-    "origin": [
+    "AllowedOrigins": [
       "https://nikbaya.github.io",
       "https://brava-genetics.github.io",
       "http://localhost:5173",
       "http://localhost:4173"
     ],
-    "method": ["GET", "HEAD"],
-    "responseHeader": ["Content-Type", "Content-Encoding", "Content-Length"],
-    "maxAgeSeconds": 3600
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["Content-Type", "Content-Encoding", "Content-Length"],
+    "MaxAgeSeconds": 3600
   }
 ]
