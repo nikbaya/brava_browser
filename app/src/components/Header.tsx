@@ -12,7 +12,7 @@ export default function Header() {
           aria-label="BRaVa browser home"
         >
           <img
-            src={`${import.meta.env.BASE_URL}brava_popper.png`}
+            src={`${import.meta.env.BASE_URL}brava_logo.png`}
             alt=""
             aria-hidden="true"
             className="h-8 w-auto"
