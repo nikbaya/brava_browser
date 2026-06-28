@@ -15,7 +15,7 @@ import SamplePie, {
  * phenotype-page sample-size pies, but driven by the global biobank ancestry
  * composition rather than one phenotype. Per-ancestry strata pies (slice =
  * contributing biobank, shaded within the ancestry hue) sit left of a separator;
- * the "All" / "non-EUR" meta donuts sit right. Static (non-interactive); biobank
+ * the "All" / "non-EUR" meta pies sit right. Static (non-interactive); biobank
  * / ancestry names + N appear on hover.
  */
 export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
@@ -51,7 +51,7 @@ export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
         fill: lighten(base, rows.length > 1 ? (i / (rows.length - 1)) * 0.62 : 0),
         title: `${r.name}: ${fmtN(r.n)} (${fmtPct(r.n / total)})`,
       }))
-      return { anc: a as Ancestry, slices, total, radius: scaledRadius(total, strataMax), donut: false }
+      return { anc: a as Ancestry, slices, total, radius: scaledRadius(total, strataMax) }
     })
 
     // Meta pies: ancestry slices in the forest-plot colours.
@@ -75,19 +75,18 @@ export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
       })
       .filter((m) => m.slices.length > 0)
     const metaMax = Math.max(...rawMeta.map((m) => m.total), 1)
-    const metaPies = rawMeta.map((m) => ({ ...m, radius: scaledRadius(m.total, metaMax), donut: true }))
+    const metaPies = rawMeta.map((m) => ({ ...m, radius: scaledRadius(m.total, metaMax) }))
 
     return { stratumPies, metaPies }
   }, [biobanks])
 
-  const render = (p: { anc: Ancestry; slices: Slice[]; total: number; radius: number; donut: boolean }) => (
+  const render = (p: { anc: Ancestry; slices: Slice[]; total: number; radius: number }) => (
     <SamplePie
       key={p.anc}
       anc={p.anc}
       slices={p.slices}
       total={p.total}
       radius={p.radius}
-      donut={p.donut}
       interactive={false}
       onHover={showTip}
       onLeave={() => setTip(null)}

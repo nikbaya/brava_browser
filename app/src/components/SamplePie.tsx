@@ -44,16 +44,15 @@ export interface Slice {
 }
 
 /**
- * A donut/pie of pre-computed slices. When `interactive`, it renders as a
- * clickable selector button with hover/selected affordances; otherwise as a
- * static figure. Slices report hover text via `onHover`/`onLeave`.
+ * A pie of pre-computed slices. When `interactive`, it renders as a clickable
+ * selector button with hover/selected affordances; otherwise as a static
+ * figure. Slices report hover text via `onHover`/`onLeave`.
  */
 export default function SamplePie({
   anc,
   slices,
   total,
   radius,
-  donut = false,
   interactive = true,
   selected = false,
   onSelect,
@@ -64,7 +63,6 @@ export default function SamplePie({
   slices: Slice[]
   total: number
   radius: number
-  donut?: boolean
   interactive?: boolean
   selected?: boolean
   onSelect?: () => void
@@ -93,17 +91,6 @@ export default function SamplePie({
           arcs.map(({ s, a0, a1 }) => (
             <path key={s.key} d={arc(c, c, radius, a0, a1)} fill={s.fill} stroke="#fff" strokeWidth={0.75} {...hov(s)} />
           ))
-        )}
-        {/* donut hole marks the meta-analysis pies as aggregates; match the
-            background so it reads as a true hole even when selected */}
-        {donut && (
-          <circle
-            cx={c}
-            cy={c}
-            r={radius * 0.46}
-            pointerEvents="none"
-            className={selected ? 'fill-brand-light' : 'fill-surface'}
-          />
         )}
       </svg>
       <span className={`text-[11px] font-semibold ${selected ? 'text-brand' : 'text-ink'}`}>

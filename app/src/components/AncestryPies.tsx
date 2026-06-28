@@ -16,9 +16,9 @@ import SamplePie, {
 /**
  * Per-ancestry sample-size pies for one phenotype. The per-stratum pies (slice =
  * contributing biobank, shaded within the ancestry's colour) sit left; the two
- * meta-analysis pies — "All" and "non-EUR" — sit right of a separator, rendered
- * as multi-ancestry donuts in the forest-plot colour scheme so they read as
- * aggregates. Every pie doubles as the ancestry selector; the active stratum is
+ * meta-analysis pies — "All" and "non-EUR" — sit right of a separator, their
+ * slices coloured by the forest-plot ancestry scheme. Every pie doubles as the
+ * ancestry selector; the active stratum is
  * subtly highlighted. Biobank / ancestry names + N appear on hover.
  */
 export default function AncestryPies({
@@ -77,7 +77,6 @@ export default function AncestryPies({
         slices,
         total: ancTotal(a),
         radius: scaledRadius(ancTotal(a), strataMax),
-        donut: false,
       }
     })
 
@@ -107,7 +106,6 @@ export default function AncestryPies({
     const metaPies = rawMeta.map((m) => ({
       ...m,
       radius: scaledRadius(m.total, metaMax),
-      donut: true,
     }))
 
     return { stratumPies, metaPies }
@@ -130,7 +128,6 @@ export default function AncestryPies({
     slices: Slice[]
     total: number
     radius: number
-    donut: boolean
   }) => (
     <SamplePie
       key={p.anc}
@@ -138,7 +135,6 @@ export default function AncestryPies({
       slices={p.slices}
       total={p.total}
       radius={p.radius}
-      donut={p.donut}
       selected={selected === p.anc}
       onSelect={() => onSelect(p.anc)}
       onHover={showTip}
