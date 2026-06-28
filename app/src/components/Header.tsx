@@ -6,17 +6,23 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-2">
-        <Link to="/" className="flex shrink-0 items-center" aria-label="BRaVa browser home">
+        <Link
+          to="/"
+          className="flex shrink-0 items-center gap-2"
+          aria-label="BRaVa browser home"
+        >
           <img
-            src={`${import.meta.env.BASE_URL}BRaVa_logo.svg`}
-            alt="BRaVa"
-            className="h-10 w-auto"
+            src={`${import.meta.env.BASE_URL}brava_popper.png`}
+            alt=""
+            aria-hidden="true"
+            className="h-8 w-auto"
           />
+          <span className="text-xl font-bold tracking-tight text-ink">BRaVa</span>
         </Link>
-        <div className="mx-auto min-w-0 max-w-md flex-1">
+        <div className="min-w-0 w-full max-w-md">
           <SearchBar />
         </div>
-        <nav className="flex shrink-0 items-center gap-4 text-sm">
+        <nav className="ml-auto flex shrink-0 items-center gap-4 text-sm">
           <Link to="/about" className="text-ink-soft hover:text-brand">
             About
           </Link>
