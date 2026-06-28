@@ -19,9 +19,26 @@ const LP_SUGGEST = 4 // p < 1e-4
 const SIG_GENE_COLOR = 'bg-protective/55'
 const SIG_MASK_COLOR = 'bg-protective/30'
 const SIG_SUGGEST_COLOR = 'bg-accent/55'
-// β > 0 (risk / higher) = red, β < 0 (protective / lower) = blue.
-const DIR_POS_COLOR = 'bg-[#c0392b]/50'
-const DIR_NEG_COLOR = 'bg-[#2563a8]/50'
+// β > 0 (risk / higher) = red, β < 0 (protective / lower) = blue. The dot's
+// opacity scales with |β| so larger burden effects read as deeper colour.
+const DIR_POS = '#c0392b'
+const DIR_NEG = '#2563a8'
+
+function rgba(hex: string, a: number) {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a.toFixed(3)})`
+}
+
+/**
+ * Fill opacity from relative magnitude (|β| ÷ the column's max |β|, 0..1).
+ * Absolute β scales differ wildly by phenotype, so we normalise per column; the
+ * √ lifts mid-range values so differences stay visible. Undefined → mid tone.
+ */
+function dirAlpha(intensity: number | undefined) {
+  if (intensity == null) return 0.55
+  const i = Math.max(0, Math.min(1, intensity))
+  return 0.28 + 0.67 * Math.sqrt(i) // ~0.28 (smallest) … 0.95 (largest)
+}
 
 export function SigDot({ lp }: { lp: number | null | undefined }) {
   let cls = 'border border-ink-faint/40'
@@ -47,51 +64,33 @@ export function SigDot({ lp }: { lp: number | null | undefined }) {
 }
 
 /**
- * Effect-direction dot: red = positive β, blue = negative β. The tooltip
+ * Effect-direction dot: red = positive β, blue = negative β, with the dot's
+ * opacity scaled by |β| so larger burden effects appear deeper. The tooltip
  * carries the trait-aware meaning (risk/protective vs higher/lower).
  */
 export function DirDot({
   beta,
   type,
+  intensity,
 }: {
   beta: number | null | undefined
   type: PhenotypeMeta['type']
+  /** |β| ÷ column max (0..1); drives opacity. Omit for a neutral mid tone. */
+  intensity?: number
 }) {
   const e = effectInfo(beta, type)
   if (!e)
     return (
       <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-ink-faint/40" />
     )
-  const color = (beta as number) > 0 ? DIR_POS_COLOR : DIR_NEG_COLOR
+  const b = beta as number
+  const fill = rgba(b > 0 ? DIR_POS : DIR_NEG, dirAlpha(intensity))
   return (
     <span
       title={e.label}
-      className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${color}`}
+      style={{ backgroundColor: fill }}
+      className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
     />
   )
 }
 
-function Swatch({ cls }: { cls: string }) {
-  return <span className={`inline-block h-2.5 w-2.5 rounded-full ${cls}`} />
-}
-
-/** Compact key explaining the table indicator dots. */
-export function IndicatorLegend() {
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-faint">
-      <span className="inline-flex items-center gap-1">
-        <Swatch cls={SIG_GENE_COLOR} /> P &lt; 2.5×10⁻⁶
-      </span>
-      <span className="inline-flex items-center gap-1">
-        <Swatch cls={SIG_SUGGEST_COLOR} /> P &lt; 1×10⁻⁴
-      </span>
-      <span className="text-line">|</span>
-      <span className="inline-flex items-center gap-1">
-        <Swatch cls={DIR_POS_COLOR} /> β &gt; 0
-      </span>
-      <span className="inline-flex items-center gap-1">
-        <Swatch cls={DIR_NEG_COLOR} /> β &lt; 0
-      </span>
-    </div>
-  )
-}

@@ -16,7 +16,7 @@ import {
 import { fmtBeta, fmtPLog, fmtPos } from '../lib/format'
 import type { PhenotypeMeta } from '../data/types'
 import { Notice, Spinner } from '../components/ui'
-import { DirDot, IndicatorLegend, SigDot } from '../components/indicators'
+import { DirDot, SigDot } from '../components/indicators'
 import FilterBar, { type FilterState } from '../components/FilterBar'
 import ManhattanPlot from '../components/ManhattanPlot'
 import ForestPlot from '../components/ForestPlot'
@@ -121,11 +121,10 @@ export default function PhenotypePage() {
             </p>
           </section>
 
-          <div className="mb-1.5 flex items-center justify-between">
+          <div className="mb-1.5">
             <p className="text-[11px] text-ink-faint">
               {rows.length.toLocaleString()} genes · click a row for the forest
             </p>
-            <IndicatorLegend />
           </div>
           <ResultsTable
             rows={rows}
@@ -237,6 +236,20 @@ interface TableRow extends PhenoRow {
   start: number
 }
 
+/** Karyotype order: 1..22, X, Y, M, then anything else. */
+function chromRank(chr: string): number {
+  const c = chr.toUpperCase().replace(/^CHR/, '')
+  const n = parseInt(c, 10)
+  if (!Number.isNaN(n)) return n
+  if (c === 'X') return 23
+  if (c === 'Y') return 24
+  if (c === 'M' || c === 'MT') return 25
+  return 99
+}
+
+/** Sortable genomic key: chromosome dominates, then base-pair position. */
+const locusKey = (chr: string, start: number) => chromRank(chr) * 1e9 + start
+
 function ResultsTable({
   rows,
   traitType,
@@ -266,6 +279,14 @@ function ResultsTable({
     }))
   }, [rows, geneIndex])
 
+  // Column max |β| for the magnitude-scaled direction dots (all rows share the
+  // selected ancestry → one trait type, so a single max is valid here).
+  const maxAbsBeta = useMemo(() => {
+    let m = 0
+    for (const r of tableRows) if (r.beta != null) m = Math.max(m, Math.abs(r.beta))
+    return m
+  }, [tableRows])
+
   const columns = useMemo<ColumnDef<TableRow, any>[]>(
     () => [
       {
@@ -285,7 +306,7 @@ function ResultsTable({
       {
         id: 'loc',
         header: 'Location',
-        accessorFn: (r) => r.start,
+        accessorFn: (r) => locusKey(r.chr, r.start),
         size: 170,
         cell: (c) => (
           <span className="tnum text-ink-soft">
@@ -309,15 +330,22 @@ function ResultsTable({
         accessorKey: 'beta',
         header: 'Beta (Burden)',
         size: 120,
-        cell: (c) => (
-          <span className="tnum inline-flex items-center gap-1.5">
-            <DirDot beta={c.getValue<number | null>()} type={traitType} />
-            {fmtBeta(c.getValue<number | null>())}
-          </span>
-        ),
+        cell: (c) => {
+          const b = c.getValue<number | null>()
+          return (
+            <span className="tnum inline-flex items-center gap-1.5">
+              <DirDot
+                beta={b}
+                type={traitType}
+                intensity={b != null && maxAbsBeta > 0 ? Math.abs(b) / maxAbsBeta : undefined}
+              />
+              {fmtBeta(b)}
+            </span>
+          )
+        },
       },
     ],
-    [traitType],
+    [traitType, maxAbsBeta],
   )
 
   const caption = (

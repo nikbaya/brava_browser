@@ -15,7 +15,7 @@ import {
 } from '../lib/constants'
 import { fmtBeta, fmtPLog, fmtPos } from '../lib/format'
 import { Notice, Spinner } from '../components/ui'
-import { DirDot, IndicatorLegend, SigDot } from '../components/indicators'
+import { DirDot, SigDot } from '../components/indicators'
 import FilterBar, { type FilterState } from '../components/FilterBar'
 import PheWASPlot, { type PheWASPoint } from '../components/PheWASPlot'
 import ForestPlot from '../components/ForestPlot'
@@ -200,11 +200,10 @@ export default function GenePage() {
             </section>
           )}
 
-          <div className="mb-1.5 flex items-center justify-between">
+          <div className="mb-1.5">
             <p className="text-[11px] text-ink-faint">
               Click a row to focus the forest plot above
             </p>
-            <IndicatorLegend />
           </div>
           <GeneTable
             data={data}
@@ -275,6 +274,15 @@ function GeneTable({
       .filter((r): r is GTRow => r != null)
   }, [data, filters.test, filters.maskIndex, filters.mafIndex, ancIdx, phenotypes])
 
+  // Max |β| per trait type — this table mixes binary (log-OR) and quantitative
+  // (SD) phenotypes, whose β scales aren't comparable, so normalise within type.
+  const maxAbsByType = useMemo(() => {
+    const m: Record<string, number> = { binary: 0, quantitative: 0 }
+    for (const r of rows)
+      if (r.beta != null) m[r.traitType] = Math.max(m[r.traitType] ?? 0, Math.abs(r.beta))
+    return m
+  }, [rows])
+
   const columns = useMemo<ColumnDef<GTRow, any>[]>(
     () => [
       {
@@ -312,15 +320,24 @@ function GeneTable({
         accessorKey: 'beta',
         header: 'Beta (Burden)',
         size: 130,
-        cell: (c) => (
-          <span className="tnum inline-flex items-center gap-1.5">
-            <DirDot beta={c.getValue<number | null>()} type={c.row.original.traitType} />
-            {fmtBeta(c.getValue<number | null>())}
-          </span>
-        ),
+        cell: (c) => {
+          const b = c.getValue<number | null>()
+          const t = c.row.original.traitType
+          const mx = maxAbsByType[t] ?? 0
+          return (
+            <span className="tnum inline-flex items-center gap-1.5">
+              <DirDot
+                beta={b}
+                type={t}
+                intensity={b != null && mx > 0 ? Math.abs(b) / mx : undefined}
+              />
+              {fmtBeta(b)}
+            </span>
+          )
+        },
       },
     ],
-    [],
+    [maxAbsByType],
   )
 
   const caption = (
