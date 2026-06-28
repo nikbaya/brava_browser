@@ -69,7 +69,7 @@ export default function PhenotypePage() {
     return (
       <div className="px-4 py-16">
         <Notice title="Unknown phenotype">
-          “{id}” is not in the BRaVa gene-level release.
+          “{id}” is not in the BRaVa release.
         </Notice>
       </div>
     )

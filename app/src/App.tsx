@@ -39,23 +39,14 @@ function Footer() {
   return (
     <footer className="border-t border-line bg-surface px-4 py-6 text-center text-xs text-ink-faint">
       <p>
-        BRaVa — Biobank Rare Variant Analysis consortium · gene-level
-        meta-analysis of ~1.2M individuals across 10 biobanks.
+        BRaVa — Biobank Rare Variant Analysis consortium · meta-analysis of
+        ~1.2M individuals across 10 biobanks.
       </p>
       <p className="mt-1">
         Summary statistics only · not for clinical use ·{' '}
         <Link to={{ pathname: '/faq', hash: '#cite' }} className="text-brand hover:underline">
           How to cite
-        </Link>{' '}
-        ·{' '}
-        <a
-          href="https://github.com/BRaVa-genetics"
-          target="_blank"
-          rel="noreferrer"
-          className="text-brand hover:underline"
-        >
-          BRaVa-genetics on GitHub
-        </a>
+        </Link>
       </p>
     </footer>
   )

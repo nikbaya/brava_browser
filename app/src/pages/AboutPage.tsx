@@ -161,7 +161,7 @@ function Participating({ biobanks }: { biobanks: Biobank[] }) {
     <section>
       <p className="mb-4 max-w-3xl text-sm text-ink-soft">
         BRaVa unites {COHORTS.length} biobanks and cohorts worldwide. Cohorts with
-        results in this gene-level release show their sample size and ancestry
+        results in this release show their sample size and ancestry
         composition; others are founding members whose data is not in this release.
       </p>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

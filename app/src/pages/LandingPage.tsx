@@ -30,7 +30,7 @@ export default function LandingPage() {
         Biobank Rare Variant Analysis
       </h1>
       <p className="mt-2 max-w-xl text-sm text-ink-soft md:text-base">
-        Explore gene-level rare coding-variant associations across 44 traits and
+        Explore rare coding-variant associations across 44 traits and
         ~1.2 million individuals from 10 global biobanks.
       </p>
 
