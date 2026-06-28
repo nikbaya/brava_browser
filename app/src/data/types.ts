@@ -65,11 +65,13 @@ export interface GeneData {
   anc: number[]
   mask: number[]
   maf: number[]
-  lp_burden: number[]
-  lp_skat: number[]
-  lp_skato: number[]
+  // lp_* / beta / se are null for cells where that test/estimate is missing or
+  // non-finite (e.g. a degenerate SAIGE stratum); the pipeline emits JSON null.
+  lp_burden: (number | null)[]
+  lp_skat: (number | null)[]
+  lp_skato: (number | null)[]
   lp_het: (number | null)[]
-  beta: number[]
+  beta: (number | null)[]
   se: (number | null)[]
 }
 
@@ -85,10 +87,10 @@ export interface PhenotypeData {
   gene_idx: number[]
   mask: number[]
   maf: number[]
-  lp_burden: number[]
-  lp_skat: number[]
-  lp_skato: number[]
+  lp_burden: (number | null)[]
+  lp_skat: (number | null)[]
+  lp_skato: (number | null)[]
   lp_het: (number | null)[]
-  beta: number[]
+  beta: (number | null)[]
   se: (number | null)[]
 }

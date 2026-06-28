@@ -17,8 +17,14 @@ export function fmtPLog(lp: number | null | undefined): string {
   if (lp == null || Number.isNaN(lp)) return '—'
   if (lp <= 3) return format('.3f')(Math.pow(10, -lp)) // p ≥ 1e-3: plain decimal
   const logp = -lp // = log10(p)
-  const exp = Math.floor(logp)
-  const mantissa = Math.pow(10, logp - exp) // in [1, 10)
+  let exp = Math.floor(logp)
+  let mantissa = Math.pow(10, logp - exp) // in [1, 10)
+  // Rounding the mantissa to 2 dp can bump it to 10.00; renormalise so it stays
+  // in [1, 10) (e.g. 9.999e-206 -> 1.00e-205) rather than printing "10.00e-206".
+  if (Number(mantissa.toFixed(2)) >= 10) {
+    mantissa /= 10
+    exp += 1
+  }
   return eNotation(mantissa, exp)
 }
 

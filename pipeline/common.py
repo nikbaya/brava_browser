@@ -145,7 +145,17 @@ def read_gene_tsv(pheno: str, suffix: str) -> pl.DataFrame | None:
     proc = subprocess.run(["gsutil", "cat", url], capture_output=True)
     if proc.returncode != 0:
         return None
-    raw = gzip.decompress(proc.stdout)
+    return parse_gene_tsv(gzip.decompress(proc.stdout))
+
+
+def parse_gene_tsv(raw: bytes) -> pl.DataFrame:
+    """Parse the *decompressed* bytes of a gene TSV into a tidy Polars frame.
+
+    Pure transform (no IO), so it is unit-testable against synthetic input.
+    Returns one row per (gene, mask, maf, test-class): ensg, mask_idx, maf_idx,
+    cls, typ, lp (=-log10 Pvalue), lp_het, beta, se. Rows whose Group/max_MAF
+    are not in the canonical lists are dropped.
+    """
     df = pl.read_csv(
         io.BytesIO(raw),
         separator="\t",
