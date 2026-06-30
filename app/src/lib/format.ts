@@ -50,6 +50,14 @@ export function fmtBeta(b: number | null | undefined): string {
   return fixed2(b)
 }
 
+/** Odds ratio from the Burden log-odds β (exp β). Null-safe. */
+export function fmtOR(b: number | null | undefined): string {
+  if (b == null || Number.isNaN(b)) return '—'
+  const or = Math.exp(b)
+  if (or !== 0 && (or < 0.01 || or >= 1000)) return sci2(or)
+  return fixed2(or)
+}
+
 /** -log10(p), for plotting / sorting; null-safe. */
 export function neglog10(p: number | null | undefined): number | null {
   if (p == null || p <= 0 || Number.isNaN(p)) return null

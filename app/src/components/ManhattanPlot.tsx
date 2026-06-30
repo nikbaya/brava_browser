@@ -104,7 +104,7 @@ export default function ManhattanPlot({
       ctx.fillText(String(t), M.left - 6, y + 3)
     }
 
-    // Significance thresholds
+    // Significance thresholds (distinct colors; explained in the legend below)
     const drawThresh = (p: number, color: string, dash: number[]) => {
       const y = yScale(-Math.log10(p))
       if (y < M.top || y > HEIGHT - M.bottom) return
@@ -117,8 +117,10 @@ export default function ManhattanPlot({
       ctx.stroke()
       ctx.restore()
     }
-    drawThresh(SIG_GENE_CAUCHY, '#c0392b', [4, 3])
-    drawThresh(SIG_GENE_MASK_BONFERRONI, '#e08a1e', [2, 3])
+    // Okabe-Ito colorblind-safe palette + distinct dash patterns (long-dash vs
+    // fine-dots) so the two lines are separable by pattern alone.
+    drawThresh(SIG_GENE_CAUCHY, '#d55e00', [7, 4])
+    drawThresh(SIG_GENE_MASK_BONFERRONI, '#0072b2', [2, 4])
 
     // Points
     for (const p of points) {

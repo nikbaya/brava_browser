@@ -13,9 +13,9 @@ import {
   SIG_GENE_CAUCHY,
   type Ancestry,
 } from '../lib/constants'
-import { fmtBeta, fmtPLog, fmtPos } from '../lib/format'
+import { fmtBeta, fmtOR, fmtPLog, fmtPos } from '../lib/format'
 import type { PhenotypeMeta } from '../data/types'
-import { Notice, Spinner } from '../components/ui'
+import { Notice, Spinner, ThresholdLegend } from '../components/ui'
 import { DirDot, SigDot } from '../components/indicators'
 import FilterBar, { type FilterState } from '../components/FilterBar'
 import ManhattanPlot from '../components/ManhattanPlot'
@@ -114,11 +114,13 @@ export default function PhenotypePage() {
                 })
               }
             />
-            <p className="mt-0.5 px-2 text-[11px] text-ink-faint">
-              {MASK_META[filters.maskIndex].label} · {filters.test} · red line =
-              gene-level, amber = gene-mask significance · click a gene for its
-              cross-ancestry forest
-            </p>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 px-2 text-[11px] text-ink-faint">
+              <span>
+                {MASK_META[filters.maskIndex].label} · {filters.test}
+              </span>
+              <ThresholdLegend />
+              <span>· click a gene for its cross-ancestry forest</span>
+            </div>
           </section>
 
           <div className="mb-1.5">
@@ -347,6 +349,20 @@ function ResultsTable({
           )
         },
       },
+      // OR = exp(β) is only interpretable for binary (log-odds) traits.
+      ...(traitType === 'binary'
+        ? [
+            {
+              id: 'or',
+              header: 'OR (Burden)',
+              accessorFn: (r: TableRow) => r.beta,
+              size: 110,
+              cell: (c: any) => (
+                <span className="tnum">{fmtOR(c.getValue() as number | null)}</span>
+              ),
+            } as ColumnDef<TableRow, any>,
+          ]
+        : []),
     ],
     [traitType, maxAbsBeta],
   )

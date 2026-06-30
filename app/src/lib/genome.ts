@@ -1,8 +1,10 @@
 import type { GeneIndex } from '../data/types'
 
+// chrY is omitted: the BRaVa meta-analysis has no chrY gene results, so it
+// would only add an empty band/tick to the Manhattan axis.
 const CHR_ORDER = [
   '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12',
-  '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', 'X', 'Y',
+  '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', 'X',
 ]
 
 export interface GenomeLayout {

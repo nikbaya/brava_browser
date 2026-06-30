@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { scaleLinear } from 'd3-scale'
 import type { PhenotypeMeta } from '../data/types'
 import { fmtBeta, fmtPLog } from '../lib/format'
-import { SIG_GENE_CAUCHY } from '../lib/constants'
+import { SIG_GENE_CAUCHY, SIG_GENE_MASK_BONFERRONI } from '../lib/constants'
+import { THRESH_GENE, THRESH_GENE_MASK, ThresholdLegend } from './ui'
 
 export interface PheWASPoint {
   phenoIdx: number
@@ -101,9 +102,10 @@ export default function PheWASPlot({
     )
 
   const sigY = y(-Math.log10(SIG_GENE_CAUCHY))
+  const maskY = y(-Math.log10(SIG_GENE_MASK_BONFERRONI))
 
   return (
-    <div ref={wrapRef} className="relative w-full overflow-x-auto">
+    <div ref={wrapRef} className="relative w-full">
       {/* category legend (key for point colors + bands) */}
       <div className="flex flex-wrap gap-x-3 gap-y-1 px-1 pb-2 text-[11px] text-ink-soft">
         {Array.from(catColorMap).map(([cat, color]) => (
@@ -116,6 +118,7 @@ export default function PheWASPlot({
           </span>
         ))}
       </div>
+      <div className="overflow-x-auto">
       <svg width={width} height={HEIGHT}>
         {/* category bands (behind everything) */}
         {bands.map((b) => (
@@ -149,15 +152,25 @@ export default function PheWASPlot({
             </text>
           </g>
         ))}
-        {/* significance line */}
+        {/* significance lines (gene-level + gene-mask) */}
         {sigY > M.top && sigY < HEIGHT - M.bottom && (
           <line
             x1={M.left}
             x2={width - M.right}
             y1={sigY}
             y2={sigY}
-            stroke="#c0392b"
-            strokeDasharray="4 3"
+            stroke={THRESH_GENE.color}
+            strokeDasharray={THRESH_GENE.dash}
+          />
+        )}
+        {maskY > M.top && maskY < HEIGHT - M.bottom && (
+          <line
+            x1={M.left}
+            x2={width - M.right}
+            y1={maskY}
+            y2={maskY}
+            stroke={THRESH_GENE_MASK.color}
+            strokeDasharray={THRESH_GENE_MASK.dash}
           />
         )}
         {/* points + labels */}
@@ -208,6 +221,11 @@ export default function PheWASPlot({
           -log₁₀(p)
         </text>
       </svg>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pt-1 text-[11px] text-ink-faint">
+        <ThresholdLegend />
+      </div>
 
       {hover != null && ordered[hover] && (
         <div className="pointer-events-none absolute top-2 right-2 rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-lg">

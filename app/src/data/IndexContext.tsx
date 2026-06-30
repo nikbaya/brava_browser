@@ -13,7 +13,8 @@ export interface SearchResult {
   kind: 'gene' | 'phenotype'
   id: string // ENSG or phenotype abbrev
   primary: string // gene symbol or phenotype name
-  secondary: string // ENSG / category
+  tag: string // chip label: chromosome (gene) / category (phenotype)
+  secondary: string // right-aligned detail: ENSG / trait type
 }
 
 interface IndexValue {
@@ -97,41 +98,40 @@ export function IndexProvider({ children }: { children: ReactNode }) {
             kind: 'phenotype',
             id: p.id,
             primary: p.name,
-            secondary: p.category,
+            tag: p.category,
+            secondary: p.type === 'binary' ? 'Binary' : 'Quantitative',
           })
         }
       }
 
-      // Genes: prefix matches on symbol rank above substring matches.
+      // Genes: rank by best hit on symbol OR ENSG id (exact=0, prefix=1,
+      // substring=2). Prefix-tier hits rank above substring-tier.
       if (geneIndex) {
+        const rank = (s: string) =>
+          !s ? -1 : s === q ? 0 : s.startsWith(q) ? 1 : s.includes(q) ? 2 : -1
         const prefix: SearchResult[] = []
         const contains: SearchResult[] = []
-        for (let i = 0; i < symbolLower.length; i++) {
-          const s = symbolLower[i]
-          if (!s) continue
+        for (let i = 0; i < geneIndex.ids.length; i++) {
+          const symHit = rank(symbolLower[i])
+          const ensgHit = rank(geneIndex.ids[i].toLowerCase())
           const hit =
-            s === q ? 0 : s.startsWith(q) ? 1 : s.includes(q) ? 2 : -1
+            symHit < 0
+              ? ensgHit
+              : ensgHit < 0
+                ? symHit
+                : Math.min(symHit, ensgHit)
           if (hit < 0) continue
           const r: SearchResult = {
             kind: 'gene',
             id: geneIndex.ids[i],
             primary: geneIndex.symbols[i] || geneIndex.ids[i],
+            tag: 'gene',
             secondary: geneIndex.ids[i],
           }
           ;(hit <= 1 ? prefix : contains).push(r)
           if (prefix.length >= limit) break
         }
         out.push(...prefix, ...contains)
-        // ENSG direct hit
-        if (q.startsWith('ensg') && byEnsg.has(raw.trim())) {
-          const idx = byEnsg.get(raw.trim())!
-          out.unshift({
-            kind: 'gene',
-            id: geneIndex.ids[idx],
-            primary: geneIndex.symbols[idx] || geneIndex.ids[idx],
-            secondary: geneIndex.ids[idx],
-          })
-        }
       }
       return out.slice(0, limit)
     }

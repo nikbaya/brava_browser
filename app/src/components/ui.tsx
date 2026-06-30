@@ -1,4 +1,10 @@
 import type { ReactNode } from 'react'
+import { SIG_GENE_CAUCHY, SIG_GENE_MASK_BONFERRONI } from '../lib/constants'
+import { fmtP } from '../lib/format'
+
+// Shared significance-threshold styling, mirrored by the Manhattan/PheWAS lines.
+export const THRESH_GENE = { color: '#d55e00', dash: '7 4' }
+export const THRESH_GENE_MASK = { color: '#0072b2', dash: '2 4' }
 
 /** Centered spinner with optional label. */
 export function Spinner({ label }: { label?: string }) {
@@ -57,6 +63,85 @@ export function Select<T extends string | number>({
         ))}
       </select>
     </label>
+  )
+}
+
+/**
+ * Lightweight hover tooltip. Appears instantly (no browser `title` delay) via
+ * CSS group-hover; the child is the trigger, `label` the floating content.
+ */
+export function Tooltip({
+  label,
+  align = 'center',
+  children,
+}: {
+  label: ReactNode
+  /** Which edge of the bubble anchors to the trigger (controls overflow dir). */
+  align?: 'left' | 'center' | 'right'
+  children: ReactNode
+}) {
+  const pos =
+    align === 'left'
+      ? 'left-0'
+      : align === 'right'
+        ? 'right-0'
+        : 'left-1/2 -translate-x-1/2'
+  return (
+    <span className="group relative inline-flex">
+      {children}
+      <span
+        role="tooltip"
+        className={`pointer-events-none absolute bottom-full z-50 mb-1 rounded-md bg-ink px-2 py-1 text-[11px] whitespace-nowrap text-surface opacity-0 shadow-lg transition-opacity duration-75 group-hover:opacity-100 ${pos}`}
+      >
+        {label}
+      </span>
+    </span>
+  )
+}
+
+/** Small dashed-line swatch matching a Manhattan/PheWAS significance line. */
+export function ThreshSwatch({ color, dash }: { color: string; dash: string }) {
+  return (
+    <svg width="16" height="6" aria-hidden className="shrink-0">
+      <line
+        x1="0"
+        y1="3"
+        x2="16"
+        y2="3"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeDasharray={dash}
+      />
+    </svg>
+  )
+}
+
+/**
+ * Legend keys for the two significance thresholds (swatch + label + fast
+ * tooltip with the exact p-value). Returns inline items for a flex parent.
+ */
+export function ThresholdLegend() {
+  return (
+    <>
+      <Tooltip
+        align="left"
+        label={`Gene-level Bonferroni · P < ${fmtP(SIG_GENE_CAUCHY)}`}
+      >
+        <span className="inline-flex cursor-help items-center gap-1">
+          <ThreshSwatch {...THRESH_GENE} />
+          gene-level
+        </span>
+      </Tooltip>
+      <Tooltip
+        align="left"
+        label={`Gene × Mask Bonferroni · P < ${fmtP(SIG_GENE_MASK_BONFERRONI)}`}
+      >
+        <span className="inline-flex cursor-help items-center gap-1">
+          <ThreshSwatch {...THRESH_GENE_MASK} />
+          gene-mask
+        </span>
+      </Tooltip>
+    </>
   )
 }
 

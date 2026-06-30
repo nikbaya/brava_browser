@@ -68,10 +68,13 @@ export default function FaqPage() {
         </Faq>
 
         <Faq q="What significance thresholds are used?">
-          Two exome-wide thresholds from the flagship paper are drawn on the
-          plots: gene-level (Cauchy) P &lt; {SIG_GENE_CAUCHY.toExponential(1)} and
-          the stricter per-gene-mask Bonferroni P &lt;{' '}
-          {SIG_GENE_MASK_BONFERRONI.toExponential(2)}.
+          Two Bonferroni thresholds from the flagship paper are drawn on the
+          plots. The gene-level threshold, P &lt;{' '}
+          {SIG_GENE_CAUCHY.toExponential(1)}, is 0.05 corrected for ~20,000 genes
+          (one combined test per gene). The stricter gene × mask threshold, P
+          &lt; {SIG_GENE_MASK_BONFERRONI.toExponential(2)}, additionally corrects
+          for the multiple masks tested within each gene, and applies to each
+          individual (gene × mask) test.
         </Faq>
 
         <Faq q="What do the forest plots show?">
@@ -79,6 +82,11 @@ export default function FaqPage() {
           effect size (β ± 95% CI) and the cross-ancestry meta (“All”, shown as a
           diamond), annotated with each stratum’s sample size and a heterogeneity
           p-value flagging when effects differ across ancestries.
+        </Faq>
+
+        <Faq q="Which genome build are positions on?">
+          All gene coordinates and chromosomal positions in this browser are on
+          GRCh38 (hg38), annotated from Ensembl release 110.
         </Faq>
 
         <Faq q="Can I use these data clinically?">

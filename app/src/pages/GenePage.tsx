@@ -13,7 +13,7 @@ import {
   MASK_META,
   MAF_META,
 } from '../lib/constants'
-import { fmtBeta, fmtPLog, fmtPos } from '../lib/format'
+import { fmtBeta, fmtOR, fmtPLog, fmtPos } from '../lib/format'
 import { Notice, Spinner } from '../components/ui'
 import { DirDot, SigDot } from '../components/indicators'
 import FilterBar, { type FilterState } from '../components/FilterBar'
@@ -274,12 +274,12 @@ function GeneTable({
       .filter((r): r is GTRow => r != null)
   }, [data, filters.test, filters.maskIndex, filters.mafIndex, ancIdx, phenotypes])
 
-  // Max |β| per trait type — this table mixes binary (log-OR) and quantitative
-  // (SD) phenotypes, whose β scales aren't comparable, so normalise within type.
-  const maxAbsByType = useMemo(() => {
-    const m: Record<string, number> = { binary: 0, quantitative: 0 }
-    for (const r of rows)
-      if (r.beta != null) m[r.traitType] = Math.max(m[r.traitType] ?? 0, Math.abs(r.beta))
+  // Single column max |β| so the direction-dot shading is monotonic with the β
+  // values shown beside it (a per-type max made the gradient non-monotonic:
+  // a small quantitative β could out-shade a larger binary one).
+  const maxAbsBeta = useMemo(() => {
+    let m = 0
+    for (const r of rows) if (r.beta != null) m = Math.max(m, Math.abs(r.beta))
     return m
   }, [rows])
 
@@ -323,21 +323,35 @@ function GeneTable({
         cell: (c) => {
           const b = c.getValue<number | null>()
           const t = c.row.original.traitType
-          const mx = maxAbsByType[t] ?? 0
           return (
             <span className="tnum inline-flex items-center gap-1.5">
               <DirDot
                 beta={b}
                 type={t}
-                intensity={b != null && mx > 0 ? Math.abs(b) / mx : undefined}
+                intensity={b != null && maxAbsBeta > 0 ? Math.abs(b) / maxAbsBeta : undefined}
               />
               {fmtBeta(b)}
             </span>
           )
         },
       },
+      {
+        id: 'or',
+        header: 'OR (Burden)',
+        accessorFn: (r) => r.beta,
+        size: 110,
+        cell: (c) => {
+          // OR = exp(β) is only interpretable for binary (log-odds) traits.
+          const b = c.getValue<number | null>()
+          return (
+            <span className="tnum">
+              {c.row.original.traitType === 'binary' ? fmtOR(b) : '—'}
+            </span>
+          )
+        },
+      },
     ],
-    [maxAbsByType],
+    [maxAbsBeta],
   )
 
   const caption = (
