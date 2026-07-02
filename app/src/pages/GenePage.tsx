@@ -17,6 +17,11 @@ import { fmtBeta, fmtOR, fmtPLog, fmtPos } from '../lib/format'
 import { Notice, Spinner } from '../components/ui'
 import { DirDot, SigDot } from '../components/indicators'
 import FilterBar, { type FilterState } from '../components/FilterBar'
+import TableFilters, {
+  NO_TABLE_FILTER,
+  passesTableFilter,
+  type TableFilter,
+} from '../components/TableFilters'
 import PheWASPlot, { type PheWASPoint } from '../components/PheWASPlot'
 import ForestPlot from '../components/ForestPlot'
 import PhenoPicker from '../components/PhenoPicker'
@@ -200,11 +205,6 @@ export default function GenePage() {
             </section>
           )}
 
-          <div className="mb-1.5">
-            <p className="text-[11px] text-ink-faint">
-              Click a row to focus the forest plot above
-            </p>
-          </div>
           <GeneTable
             data={data}
             filters={filters}
@@ -250,9 +250,10 @@ function GeneTable({
 }) {
   const { phenotypes } = useIndex()
   const [sorting, setSorting] = useState<SortingState>([{ id: 'lp', desc: true }])
+  const [tableFilter, setTableFilter] = useState<TableFilter>(NO_TABLE_FILTER)
 
   // One row per phenotype for the selected ancestry / mask / MAF.
-  const rows = useMemo<GTRow[]>(() => {
+  const allRows = useMemo<GTRow[]>(() => {
     return geneRows(data, {
       test: filters.test,
       ancIdx,
@@ -273,6 +274,22 @@ function GeneTable({
       })
       .filter((r): r is GTRow => r != null)
   }, [data, filters.test, filters.maskIndex, filters.mafIndex, ancIdx, phenotypes])
+
+  // Slider domains span the full (unfiltered) result set for this gene view.
+  const { maxLp, maxAbsBeta: betaDomain } = useMemo(() => {
+    let lp = 0
+    let b = 0
+    for (const r of allRows) {
+      if (r.lp != null) lp = Math.max(lp, r.lp)
+      if (r.beta != null) b = Math.max(b, Math.abs(r.beta))
+    }
+    return { maxLp: lp, maxAbsBeta: b }
+  }, [allRows])
+
+  const rows = useMemo(
+    () => allRows.filter((r) => passesTableFilter(tableFilter, r.lp, r.beta)),
+    [allRows, tableFilter],
+  )
 
   // Single column max |β| so the direction-dot shading is monotonic with the β
   // values shown beside it (a per-type max made the gradient non-monotonic:
@@ -364,13 +381,29 @@ function GeneTable({
   )
 
   return (
-    <VirtualTable
-      data={rows}
-      columns={columns}
-      sorting={sorting}
-      onSortingChange={setSorting}
-      onRowClick={(r) => onFocus(r.phenoIdx)}
-      caption={caption}
-    />
+    <>
+      <div className="mb-1.5">
+        <TableFilters
+          value={tableFilter}
+          onChange={setTableFilter}
+          maxLp={maxLp}
+          maxAbsBeta={betaDomain}
+        >
+          {rows.length.toLocaleString()}
+          {rows.length !== allRows.length &&
+            ` of ${allRows.length.toLocaleString()}`}{' '}
+          phenotypes · click a row to focus the forest
+        </TableFilters>
+      </div>
+      <VirtualTable
+        data={rows}
+        columns={columns}
+        sorting={sorting}
+        onSortingChange={setSorting}
+        onRowClick={(r) => onFocus(r.phenoIdx)}
+        caption={caption}
+        reservedRows={allRows.length}
+      />
+    </>
   )
 }

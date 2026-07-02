@@ -18,6 +18,11 @@ import type { PhenotypeMeta } from '../data/types'
 import { Notice, Spinner, ThresholdLegend } from '../components/ui'
 import { DirDot, SigDot } from '../components/indicators'
 import FilterBar, { type FilterState } from '../components/FilterBar'
+import TableFilters, {
+  NO_TABLE_FILTER,
+  passesTableFilter,
+  type TableFilter,
+} from '../components/TableFilters'
 import ManhattanPlot from '../components/ManhattanPlot'
 import ForestPlot from '../components/ForestPlot'
 import VirtualTable from '../components/VirtualTable'
@@ -55,6 +60,8 @@ export default function PhenotypePage() {
     [id, ancestry],
   )
 
+  const [tableFilter, setTableFilter] = useState<TableFilter>(NO_TABLE_FILTER)
+
   const rows = useMemo<PhenoRow[]>(
     () => (data ? phenoRows(data, filters) : []),
     [data, filters],
@@ -62,6 +69,20 @@ export default function PhenotypePage() {
   const nSig = useMemo(
     () => rows.filter((r) => r.lp != null && r.lp >= -Math.log10(SIG_GENE_CAUCHY)).length,
     [rows],
+  )
+  // Slider domains + filtered table rows (the Manhattan plot keeps all rows).
+  const { maxLp, maxAbsBeta } = useMemo(() => {
+    let lp = 0
+    let b = 0
+    for (const r of rows) {
+      if (r.lp != null) lp = Math.max(lp, r.lp)
+      if (r.beta != null) b = Math.max(b, Math.abs(r.beta))
+    }
+    return { maxLp: lp, maxAbsBeta: b }
+  }, [rows])
+  const tableRows = useMemo(
+    () => rows.filter((r) => passesTableFilter(tableFilter, r.lp, r.beta)),
+    [rows, tableFilter],
   )
 
   if (idxLoading) return <Spinner label="Loading…" />
@@ -124,12 +145,21 @@ export default function PhenotypePage() {
           </section>
 
           <div className="mb-1.5">
-            <p className="text-[11px] text-ink-faint">
-              {rows.length.toLocaleString()} genes · click a row for the forest
-            </p>
+            <TableFilters
+              value={tableFilter}
+              onChange={setTableFilter}
+              maxLp={maxLp}
+              maxAbsBeta={maxAbsBeta}
+            >
+              {tableRows.length.toLocaleString()}
+              {tableRows.length !== rows.length &&
+                ` of ${rows.length.toLocaleString()}`}{' '}
+              genes · click a row for the forest
+            </TableFilters>
           </div>
           <ResultsTable
-            rows={rows}
+            rows={tableRows}
+            reservedRows={rows.length}
             traitType={pheno.type}
             filters={filters}
             ancestry={ancestry}
@@ -254,6 +284,7 @@ const locusKey = (chr: string, start: number) => chromRank(chr) * 1e9 + start
 
 function ResultsTable({
   rows,
+  reservedRows,
   traitType,
   filters,
   ancestry,
@@ -261,6 +292,7 @@ function ResultsTable({
   onOpenForest,
 }: {
   rows: PhenoRow[]
+  reservedRows?: number
   traitType: PhenotypeMeta['type']
   filters: FilterState
   ancestry: Ancestry
@@ -398,6 +430,7 @@ function ResultsTable({
       onSortingChange={setSorting}
       onRowClick={(r) => onOpenForest({ ensg: r.ensg, symbol: r.symbol })}
       caption={caption}
+      reservedRows={reservedRows}
     />
   )
 }

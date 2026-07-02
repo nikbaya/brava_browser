@@ -49,3 +49,50 @@ body {
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum';
 }
+
+/*
+ * Compact range slider used by the table threshold filters. The filled portion
+ * of the track is painted via an inline linear-gradient background (see
+ * RangeSlider), so the base rule only styles the unfilled track + thumb.
+ */
+.brava-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  background: var(--color-line);
+  cursor: pointer;
+  outline: none;
+}
+.brava-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 13px;
+  width: 13px;
+  border-radius: 9999px;
+  background: var(--color-brand);
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 0 0 1px var(--color-line);
+  transition: transform 0.1s ease;
+}
+.brava-range::-moz-range-thumb {
+  height: 13px;
+  width: 13px;
+  border-radius: 9999px;
+  background: var(--color-brand);
+  border: 2px solid var(--color-surface);
+  box-shadow: 0 0 0 1px var(--color-line);
+  transition: transform 0.1s ease;
+}
+.brava-range:hover::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+.brava-range:hover::-moz-range-thumb {
+  transform: scale(1.15);
+}
+.brava-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--color-brand-light);
+}
+.brava-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px var(--color-brand-light);
+}

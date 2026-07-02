@@ -23,6 +23,7 @@ export default function VirtualTable<T>({
   rowHeight = 30,
   onRowClick,
   caption,
+  reservedRows,
 }: {
   data: T[]
   columns: ColumnDef<T, any>[]
@@ -32,6 +33,12 @@ export default function VirtualTable<T>({
   onRowClick?: (row: T) => void
   /** Pinned summary (e.g. active filters) shown above the column headers. */
   caption?: React.ReactNode
+  /**
+   * Unfiltered row count. When a table can be filtered, pass the pre-filter
+   * count so the scroll region reserves a stable height: filtering rows out
+   * then no longer collapses the container and yanks the page scroll upward.
+   */
+  reservedRows?: number
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -55,10 +62,18 @@ export default function VirtualTable<T>({
 
   const cellBasis = (size: number) => ({ flex: `${size} 0 0`, minWidth: 0 })
 
+  // Reserve height for the unfiltered set (capped) so filtering doesn't shrink
+  // the container. Below the cap, height stays content-driven (compact) and any
+  // filter-induced shift is small enough not to fling the page scroll.
+  const CAP = 600
+  const reserve = Math.max(reservedRows ?? data.length, data.length)
+  const fixedHeight = reserve * rowHeight >= CAP - 60 ? CAP : undefined
+
   return (
     <div
       ref={containerRef}
-      className="max-h-[600px] overflow-auto rounded-lg border border-line bg-surface text-[13px]"
+      style={{ maxHeight: CAP, height: fixedHeight }}
+      className="overflow-auto rounded-lg border border-line bg-surface text-[13px]"
     >
       {/* Pinned caption + column headers stick together. */}
       <div className="sticky top-0 z-10">
