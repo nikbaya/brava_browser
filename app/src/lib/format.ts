@@ -28,6 +28,40 @@ export function fmtPLog(lp: number | null | undefined): string {
   return eNotation(mantissa, exp)
 }
 
+/**
+ * Ultra-compact p-value from its stored -log10(p), for the dense per-ancestry
+ * grid: a 1-significant-figure mantissa (e.g. "2e-205", "8e-6") and a plain
+ * 2-decimal form for p ≥ 0.01. The full-precision value lives in the cell's
+ * title attribute.
+ */
+export function fmtPCompact(lp: number | null | undefined): string {
+  if (lp == null || Number.isNaN(lp)) return '—'
+  if (lp <= 2) return format('.2f')(Math.pow(10, -lp)) // p ≥ 0.01: "0.03"
+  const logp = -lp
+  let exp = Math.floor(logp)
+  let mantissa = Math.pow(10, logp - exp) // [1, 10)
+  if (Math.round(mantissa) >= 10) {
+    mantissa /= 10
+    exp += 1
+  }
+  return `${Math.round(mantissa)}e${exp}`
+}
+
+/**
+ * Compact β for the dense grid: drops the leading zero (".03", "-.12") and
+ * uses 3 dp below 0.1 so typical small burden effects stay legible without
+ * scientific notation (which truncated in the narrow columns). Falls back to
+ * 1-sig-fig sci only for |β| < 0.001 or ≥ 100. Full value is in the title attr.
+ */
+export function fmtBetaCompact(b: number | null | undefined): string {
+  if (b == null || Number.isNaN(b)) return '—'
+  const a = Math.abs(b)
+  if (a === 0) return '0'
+  if (a < 0.001 || a >= 100) return format('.0e')(b) // 1 sig fig: fits "-5e-4"
+  const s = a >= 0.1 ? b.toFixed(2) : b.toFixed(3)
+  return s.replace(/^(-?)0\./, '$1.')
+}
+
 /** Format a raw p-value (when -log10 isn't already available). */
 export function fmtP(p: number | null | undefined): string {
   if (p == null || Number.isNaN(p)) return '—'

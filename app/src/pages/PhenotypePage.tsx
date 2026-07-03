@@ -1,11 +1,19 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { ColumnDef, SortingState } from '@tanstack/react-table'
 import { useIndex } from '../data/IndexContext'
 import { fetchGene, fetchPhenotype } from '../data/client'
 import { useAsync } from '../lib/useAsync'
-import { forestSeries, phenoRows, type PhenoRow } from '../lib/select'
 import {
+  forestSeries,
+  phenoLookup,
+  phenoRows,
+  type GridRow,
+  type PhenoRow,
+} from '../lib/select'
+import {
+  ANCESTRIES,
+  ANCESTRY_INDEX,
   ANCESTRY_META,
   DEFAULTS,
   MAF_META,
@@ -13,10 +21,10 @@ import {
   SIG_GENE_CAUCHY,
   type Ancestry,
 } from '../lib/constants'
-import { fmtBeta, fmtOR, fmtPLog, fmtPos } from '../lib/format'
-import type { PhenotypeMeta } from '../data/types'
+import { fmtPos } from '../lib/format'
+import type { PhenotypeData, PhenotypeMeta } from '../data/types'
 import { Notice, Spinner, ThresholdLegend } from '../components/ui'
-import { DirDot, SigDot } from '../components/indicators'
+import { ancestryGridColumns, BetaLegend } from '../components/ancestryColumns'
 import FilterBar, { type FilterState } from '../components/FilterBar'
 import TableFilters, {
   NO_TABLE_FILTER,
@@ -61,7 +69,32 @@ export default function PhenotypePage() {
   )
 
   const [tableFilter, setTableFilter] = useState<TableFilter>(NO_TABLE_FILTER)
+  const ancIdx = ANCESTRY_INDEX[ancestry]
 
+  // Lazy-load every available ancestry file so the table can show a P + β
+  // column per ancestry. The selected ancestry (already fetched above for the
+  // Manhattan) fills immediately; the rest arrive in the background. getJSON
+  // caches, so switching ancestry re-uses these.
+  const [ancData, setAncData] = useState<Record<number, PhenotypeData>>({})
+  const availKey = available.join(',')
+  useEffect(() => {
+    setAncData({})
+    if (!id) return
+    let alive = true
+    for (const a of available) {
+      fetchPhenotype(id, ANCESTRY_META[a].suffix)
+        .then((d) => {
+          if (alive) setAncData((prev) => ({ ...prev, [ANCESTRY_INDEX[a]]: d }))
+        })
+        .catch(() => {})
+    }
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, availKey])
+
+  // Selected-ancestry rows drive the Manhattan plot + significance count.
   const rows = useMemo<PhenoRow[]>(
     () => (data ? phenoRows(data, filters) : []),
     [data, filters],
@@ -70,7 +103,7 @@ export default function PhenotypePage() {
     () => rows.filter((r) => r.lp != null && r.lp >= -Math.log10(SIG_GENE_CAUCHY)).length,
     [rows],
   )
-  // Slider domains + filtered table rows (the Manhattan plot keeps all rows).
+  // The P/β threshold + slider domains apply to the selected ancestry column.
   const { maxLp, maxAbsBeta } = useMemo(() => {
     let lp = 0
     let b = 0
@@ -80,9 +113,47 @@ export default function PhenotypePage() {
     }
     return { maxLp: lp, maxAbsBeta: b }
   }, [rows])
+
+  // geneIdx → {lp, β} per loaded ancestry, for the selected mask/maf/test.
+  const lookups = useMemo(() => {
+    const m: Record<number, ReturnType<typeof phenoLookup>> = {}
+    for (const [aStr, d] of Object.entries(ancData))
+      m[Number(aStr)] = phenoLookup(d, filters)
+    return m
+  }, [ancData, filters])
+
+  // Grid rows: one per gene (from the selected ancestry), a P + β per ancestry.
+  const gridRows = useMemo<PhenoGridRow[]>(() => {
+    return rows.map((br) => {
+      const lp = new Array(ANCESTRIES.length).fill(null)
+      const beta = new Array(ANCESTRIES.length).fill(null)
+      for (const aStr in lookups) {
+        const a = Number(aStr)
+        const hit = lookups[a].get(br.geneIdx)
+        if (hit) {
+          lp[a] = hit.lp
+          beta[a] = hit.beta
+        }
+      }
+      return { key: br.geneIdx, geneIdx: br.geneIdx, lp, beta }
+    })
+  }, [rows, lookups])
+
   const tableRows = useMemo(
-    () => rows.filter((r) => passesTableFilter(tableFilter, r.lp, r.beta)),
-    [rows, tableFilter],
+    () =>
+      gridRows.filter((r) =>
+        passesTableFilter(tableFilter, r.lp[ancIdx], r.beta[ancIdx]),
+      ),
+    [gridRows, tableFilter, ancIdx],
+  )
+  // Ancestry columns to render (all available), and which have loaded.
+  const ancIdxs = useMemo(
+    () => available.map((a) => ANCESTRY_INDEX[a]).sort((x, y) => x - y),
+    [availKey], // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  const loadedAnc = useMemo(
+    () => new Set(Object.keys(ancData).map(Number)),
+    [ancData],
   )
 
   if (idxLoading) return <Spinner label="Loading…" />
@@ -159,8 +230,10 @@ export default function PhenotypePage() {
           </div>
           <ResultsTable
             rows={tableRows}
-            reservedRows={rows.length}
-            traitType={pheno.type}
+            reservedRows={gridRows.length}
+            ancIdxs={ancIdxs}
+            selAncIdx={ancIdx}
+            loadedAnc={loadedAnc}
             filters={filters}
             ancestry={ancestry}
             ancestryN={pheno.n?.[ancestry]}
@@ -261,7 +334,11 @@ function ForestDrawer({
   )
 }
 
-interface TableRow extends PhenoRow {
+interface PhenoGridRow extends GridRow {
+  geneIdx: number
+}
+
+interface TableRow extends PhenoGridRow {
   symbol: string
   ensg: string
   chr: string
@@ -285,22 +362,28 @@ const locusKey = (chr: string, start: number) => chromRank(chr) * 1e9 + start
 function ResultsTable({
   rows,
   reservedRows,
-  traitType,
+  ancIdxs,
+  selAncIdx,
+  loadedAnc,
   filters,
   ancestry,
   ancestryN,
   onOpenForest,
 }: {
-  rows: PhenoRow[]
+  rows: PhenoGridRow[]
   reservedRows?: number
-  traitType: PhenotypeMeta['type']
+  ancIdxs: number[]
+  selAncIdx: number
+  loadedAnc: Set<number>
   filters: FilterState
   ancestry: Ancestry
   ancestryN?: { n: number; case?: number; ctrl?: number }
   onOpenForest: (g: { ensg: string; symbol: string }) => void
 }) {
   const { geneIndex } = useIndex()
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'lp', desc: true }])
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: `p${selAncIdx}`, desc: true },
+  ])
 
   const tableRows = useMemo<TableRow[]>(() => {
     if (!geneIndex) return []
@@ -313,20 +396,20 @@ function ResultsTable({
     }))
   }, [rows, geneIndex])
 
-  // Column max |β| for the magnitude-scaled direction dots (all rows share the
-  // selected ancestry → one trait type, so a single max is valid here).
-  const maxAbsBeta = useMemo(() => {
+  // Largest |β| across every ancestry cell — scales the effect triangles.
+  const betaGridMax = useMemo(() => {
     let m = 0
-    for (const r of tableRows) if (r.beta != null) m = Math.max(m, Math.abs(r.beta))
+    for (const r of rows)
+      for (const bt of r.beta) if (bt != null) m = Math.max(m, Math.abs(bt))
     return m
-  }, [tableRows])
+  }, [rows])
 
   const columns = useMemo<ColumnDef<TableRow, any>[]>(
     () => [
       {
         accessorKey: 'symbol',
         header: 'Gene',
-        size: 140,
+        size: 120,
         cell: (c) => (
           <Link
             to={`/gene/${c.row.original.ensg}`}
@@ -344,65 +427,29 @@ function ResultsTable({
         // Invert so the down arrow (the default first-click for a numeric
         // column) reads top-down through the genome: chr1 → chrX, not chrX → chr1.
         invertSorting: true,
-        size: 170,
+        size: 150,
         cell: (c) => (
           <span className="tnum text-ink-soft">
             chr{c.row.original.chr}:{fmtPos(c.row.original.start)}
           </span>
         ),
       },
-      {
-        accessorKey: 'lp',
-        header: 'P-value',
-        size: 120,
-        sortUndefined: 'last',
-        cell: (c) => (
-          <span className="tnum inline-flex items-center gap-1.5">
-            <SigDot lp={c.getValue<number | null>()} />
-            {fmtPLog(c.getValue<number | null>())}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'beta',
-        header: 'Beta (Burden)',
-        size: 120,
-        cell: (c) => {
-          const b = c.getValue<number | null>()
-          return (
-            <span className="tnum inline-flex items-center gap-1.5">
-              <DirDot
-                beta={b}
-                type={traitType}
-                intensity={b != null && maxAbsBeta > 0 ? Math.abs(b) / maxAbsBeta : undefined}
-              />
-              {fmtBeta(b)}
-            </span>
-          )
-        },
-      },
-      // OR = exp(β) is only interpretable for binary (log-odds) traits.
-      ...(traitType === 'binary'
-        ? [
-            {
-              id: 'or',
-              header: 'OR (Burden)',
-              accessorFn: (r: TableRow) => r.beta,
-              size: 110,
-              cell: (c: any) => (
-                <span className="tnum">{fmtOR(c.getValue() as number | null)}</span>
-              ),
-            } as ColumnDef<TableRow, any>,
-          ]
-        : []),
+      ...ancestryGridColumns<TableRow>(ancIdxs, {
+        highlight: selAncIdx,
+        pending: (_r, a) => !loadedAnc.has(a),
+        betaMax: betaGridMax,
+      }),
     ],
-    [traitType, maxAbsBeta],
+    [ancIdxs, selAncIdx, loadedAnc, betaGridMax],
   )
 
   const caption = (
     <span>
-      <span className="font-semibold text-ink-soft">Filters</span> ·{' '}
-      {ANCESTRY_META[ancestry].long}
+      <span className="font-semibold text-ink-soft">
+        {MASK_META[filters.maskIndex].label}
+      </span>{' '}
+      · MAF {MAF_META[filters.mafIndex].label} · {filters.test} · filter on{' '}
+      {ANCESTRY_META[ancestry].label}
       {ancestryN && (
         <>
           {' '}
@@ -417,8 +464,7 @@ function ResultsTable({
           )
         </>
       )}{' '}
-      · {MASK_META[filters.maskIndex].label} · MAF {MAF_META[filters.mafIndex].label} ·{' '}
-      {filters.test}
+      · <BetaLegend />
     </span>
   )
 

@@ -5,7 +5,7 @@ import { useIndex } from '../data/IndexContext'
 import { fetchGene, HttpError } from '../data/client'
 import type { GeneData, PhenotypeMeta } from '../data/types'
 import { useAsync } from '../lib/useAsync'
-import { forestSeries, geneRows, type GeneRow } from '../lib/select'
+import { forestSeries, geneAncestryGrid, geneRows, type GridRow } from '../lib/select'
 import {
   ANCESTRY_INDEX,
   ANCESTRY_META,
@@ -13,15 +13,15 @@ import {
   MASK_META,
   MAF_META,
 } from '../lib/constants'
-import { fmtBeta, fmtOR, fmtPLog, fmtPos } from '../lib/format'
+import { fmtPos } from '../lib/format'
 import { Notice, Spinner } from '../components/ui'
-import { DirDot, SigDot } from '../components/indicators'
 import FilterBar, { type FilterState } from '../components/FilterBar'
 import TableFilters, {
   NO_TABLE_FILTER,
   passesTableFilter,
   type TableFilter,
 } from '../components/TableFilters'
+import { ancestryGridColumns, BetaLegend } from '../components/ancestryColumns'
 import PheWASPlot, { type PheWASPoint } from '../components/PheWASPlot'
 import ForestPlot from '../components/ForestPlot'
 import PhenoPicker from '../components/PhenoPicker'
@@ -230,7 +230,7 @@ function Ext({ href, children }: { href: string; children: React.ReactNode }) {
   )
 }
 
-interface GTRow extends GeneRow {
+interface GTGridRow extends GridRow {
   phenoId: string
   phenoName: string
   category: string
@@ -249,19 +249,18 @@ function GeneTable({
   onFocus: (phenoIdx: number) => void
 }) {
   const { phenotypes } = useIndex()
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'lp', desc: true }])
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'p0', desc: true }])
   const [tableFilter, setTableFilter] = useState<TableFilter>(NO_TABLE_FILTER)
 
-  // One row per phenotype for the selected ancestry / mask / MAF.
-  const allRows = useMemo<GTRow[]>(() => {
-    return geneRows(data, {
+  // One row per phenotype, carrying every ancestry's P + β (mask/maf/test).
+  const allRows = useMemo<GTGridRow[]>(() => {
+    return geneAncestryGrid(data, {
       test: filters.test,
-      ancIdx,
       maskIndex: filters.maskIndex,
       mafIndex: filters.mafIndex,
     })
       .map((r) => {
-        const meta = phenotypes[r.phenoIdx]
+        const meta = phenotypes[r.key]
         return meta
           ? {
               ...r,
@@ -272,40 +271,54 @@ function GeneTable({
             }
           : null
       })
-      .filter((r): r is GTRow => r != null)
-  }, [data, filters.test, filters.maskIndex, filters.mafIndex, ancIdx, phenotypes])
+      .filter((r): r is GTGridRow => r != null)
+  }, [data, filters.test, filters.maskIndex, filters.mafIndex, phenotypes])
 
-  // Slider domains span the full (unfiltered) result set for this gene view.
-  const { maxLp, maxAbsBeta: betaDomain } = useMemo(() => {
+  // Ancestries actually present for this gene (canonical order, All first).
+  const ancIdxs = useMemo(() => {
+    const present = new Set<number>()
+    for (const r of allRows)
+      r.lp.forEach((v, a) => {
+        if (v != null || r.beta[a] != null) present.add(a)
+      })
+    return [...present].sort((a, b) => a - b)
+  }, [allRows])
+
+  // Slider domains + the P/β threshold apply to the selected ancestry column.
+  const { maxLp, maxAbsBeta } = useMemo(() => {
     let lp = 0
     let b = 0
     for (const r of allRows) {
-      if (r.lp != null) lp = Math.max(lp, r.lp)
-      if (r.beta != null) b = Math.max(b, Math.abs(r.beta))
+      const l = r.lp[ancIdx]
+      const bt = r.beta[ancIdx]
+      if (l != null) lp = Math.max(lp, l)
+      if (bt != null) b = Math.max(b, Math.abs(bt))
     }
     return { maxLp: lp, maxAbsBeta: b }
+  }, [allRows, ancIdx])
+
+  // Largest |β| across every ancestry cell — scales the effect triangles.
+  const betaGridMax = useMemo(() => {
+    let m = 0
+    for (const r of allRows)
+      for (const bt of r.beta) if (bt != null) m = Math.max(m, Math.abs(bt))
+    return m
   }, [allRows])
 
   const rows = useMemo(
-    () => allRows.filter((r) => passesTableFilter(tableFilter, r.lp, r.beta)),
-    [allRows, tableFilter],
+    () =>
+      allRows.filter((r) =>
+        passesTableFilter(tableFilter, r.lp[ancIdx], r.beta[ancIdx]),
+      ),
+    [allRows, tableFilter, ancIdx],
   )
 
-  // Single column max |β| so the direction-dot shading is monotonic with the β
-  // values shown beside it (a per-type max made the gradient non-monotonic:
-  // a small quantitative β could out-shade a larger binary one).
-  const maxAbsBeta = useMemo(() => {
-    let m = 0
-    for (const r of rows) if (r.beta != null) m = Math.max(m, Math.abs(r.beta))
-    return m
-  }, [rows])
-
-  const columns = useMemo<ColumnDef<GTRow, any>[]>(
+  const columns = useMemo<ColumnDef<GTGridRow, any>[]>(
     () => [
       {
         accessorKey: 'phenoName',
         header: 'Phenotype',
-        size: 230,
+        size: 200,
         cell: (c) => (
           <Link
             to={`/phenotype/${c.row.original.phenoId}`}
@@ -319,64 +332,22 @@ function GeneTable({
       {
         accessorKey: 'category',
         header: 'Category',
-        size: 170,
+        size: 130,
         cell: (c) => <span className="text-ink-soft">{c.getValue<string>()}</span>,
       },
-      {
-        accessorKey: 'lp',
-        header: 'P-value',
-        size: 120,
-        cell: (c) => (
-          <span className="tnum inline-flex items-center gap-1.5">
-            <SigDot lp={c.getValue<number | null>()} />
-            {fmtPLog(c.getValue<number | null>())}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'beta',
-        header: 'Beta (Burden)',
-        size: 130,
-        cell: (c) => {
-          const b = c.getValue<number | null>()
-          const t = c.row.original.traitType
-          return (
-            <span className="tnum inline-flex items-center gap-1.5">
-              <DirDot
-                beta={b}
-                type={t}
-                intensity={b != null && maxAbsBeta > 0 ? Math.abs(b) / maxAbsBeta : undefined}
-              />
-              {fmtBeta(b)}
-            </span>
-          )
-        },
-      },
-      {
-        id: 'or',
-        header: 'OR (Burden)',
-        accessorFn: (r) => r.beta,
-        size: 110,
-        cell: (c) => {
-          // OR = exp(β) is only interpretable for binary (log-odds) traits.
-          const b = c.getValue<number | null>()
-          return (
-            <span className="tnum">
-              {c.row.original.traitType === 'binary' ? fmtOR(b) : '—'}
-            </span>
-          )
-        },
-      },
+      ...ancestryGridColumns<GTGridRow>(ancIdxs, {
+        highlight: ancIdx,
+        betaMax: betaGridMax,
+      }),
     ],
-    [maxAbsBeta],
+    [ancIdxs, ancIdx, betaGridMax],
   )
 
   const caption = (
     <span>
-      <span className="font-semibold text-ink-soft">Filters</span> ·{' '}
-      {ANCESTRY_META[filters.ancestry].long} ·{' '}
-      {MASK_META[filters.maskIndex].label} · MAF{' '}
-      {MAF_META[filters.mafIndex].label} · {filters.test}
+      <span className="font-semibold text-ink-soft">{MASK_META[filters.maskIndex].label}</span> · MAF{' '}
+      {MAF_META[filters.mafIndex].label} · {filters.test} · filter on{' '}
+      {ANCESTRY_META[filters.ancestry].label} · <BetaLegend />
     </span>
   )
 
@@ -387,7 +358,7 @@ function GeneTable({
           value={tableFilter}
           onChange={setTableFilter}
           maxLp={maxLp}
-          maxAbsBeta={betaDomain}
+          maxAbsBeta={maxAbsBeta}
         >
           {rows.length.toLocaleString()}
           {rows.length !== allRows.length &&
@@ -400,7 +371,7 @@ function GeneTable({
         columns={columns}
         sorting={sorting}
         onSortingChange={setSorting}
-        onRowClick={(r) => onFocus(r.phenoIdx)}
+        onRowClick={(r) => onFocus(r.key)}
         caption={caption}
         reservedRows={allRows.length}
       />

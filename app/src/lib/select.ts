@@ -1,5 +1,5 @@
 import type { GeneData, PhenotypeData } from '../data/types'
-import type { Test } from './constants'
+import { ANCESTRIES, type Test } from './constants'
 
 /** Pick the -log10(p) array for a given test from a columnar payload. */
 export function lpArray(
@@ -96,6 +96,74 @@ export interface GeneRow {
   lp: number | null
   beta: number | null
   se: number | null
+}
+
+// --- per-ancestry grid (the P + β table) -------------------------------------
+
+const N_ANC = ANCESTRIES.length
+
+/**
+ * One table row of the per-ancestry grid: a p-value (for the chosen test) and
+ * an IVW Burden β per ancestry, indexed by the canonical ancestry order
+ * (0 = All meta … 6 = non_EUR). Missing strata are null.
+ */
+export interface GridRow {
+  /** Row key: phenotype index (gene page) or gene index (phenotype page). */
+  key: number
+  lp: (number | null)[]
+  beta: (number | null)[]
+}
+
+const emptyGridRow = (key: number): GridRow => ({
+  key,
+  lp: new Array(N_ANC).fill(null),
+  beta: new Array(N_ANC).fill(null),
+})
+
+/**
+ * Gene page: pivot one gene's payload into per-phenotype rows carrying every
+ * ancestry's p-value + β for the selected mask + maf + test. All ancestries are
+ * already in the gene file, so this needs no extra fetch.
+ */
+export function geneAncestryGrid(
+  d: GeneData,
+  f: Filters,
+): GridRow[] {
+  const lp = lpArray(d, f.test)
+  const byPheno = new Map<number, GridRow>()
+  for (let i = 0; i < d.n; i++) {
+    if (d.mask[i] !== f.maskIndex || d.maf[i] !== f.mafIndex) continue
+    const p = d.pheno[i]
+    let row = byPheno.get(p)
+    if (!row) {
+      row = emptyGridRow(p)
+      byPheno.set(p, row)
+    }
+    const a = d.anc[i]
+    if (a >= 0 && a < N_ANC) {
+      row.lp[a] = lp[i] ?? null
+      row.beta[a] = d.beta[i] ?? null
+    }
+  }
+  return [...byPheno.values()]
+}
+
+/**
+ * Phenotype page: build a geneIdx → {lp, β} lookup for one ancestry's payload
+ * (selected mask + maf + test). The page fetches each ancestry file separately,
+ * then merges these lookups column-by-column into the grid.
+ */
+export function phenoLookup(
+  d: PhenotypeData,
+  f: Filters,
+): Map<number, { lp: number | null; beta: number | null }> {
+  const lp = lpArray(d, f.test)
+  const m = new Map<number, { lp: number | null; beta: number | null }>()
+  for (let i = 0; i < d.n; i++) {
+    if (d.mask[i] !== f.maskIndex || d.maf[i] !== f.mafIndex) continue
+    m.set(d.gene_idx[i], { lp: lp[i] ?? null, beta: d.beta[i] ?? null })
+  }
+  return m
 }
 
 /** Filter a gene payload; pass null for a dimension to leave it unconstrained. */

@@ -5,9 +5,18 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type RowData,
   type SortingState,
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
+
+declare module '@tanstack/react-table' {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData extends RowData, TValue> {
+    /** Draw a left border on this column (header + body) to start a block. */
+    divider?: boolean
+  }
+}
 
 /**
  * Sortable, row-virtualized table. Header and body share a div/flex layout so
@@ -75,32 +84,68 @@ export default function VirtualTable<T>({
       style={{ maxHeight: CAP, height: fixedHeight }}
       className="overflow-auto rounded-lg border border-line bg-surface text-[13px]"
     >
-      {/* Pinned caption + column headers stick together. */}
+      {/* Pinned caption + column headers stick together. Header groups render
+          one flex row per level, so spanning group labels (e.g. "P-value" over
+          the ancestry sub-columns) line up over their children. */}
       <div className="sticky top-0 z-10">
         {caption && (
           <div className="border-b border-line bg-surface-soft px-2.5 py-1 text-[11px] text-ink-faint">
             {caption}
           </div>
         )}
-        <div className="flex border-b border-line bg-surface-soft">
-          {table.getFlatHeaders().map((h) => (
-          <div
-            key={h.id}
-            onClick={h.column.getToggleSortingHandler()}
-            style={cellBasis(h.getSize())}
-            className={`flex items-center gap-0.5 px-2.5 py-1.5 text-[11px] font-semibold tracking-wide text-ink-soft uppercase select-none ${
-              h.column.getCanSort() ? 'cursor-pointer hover:text-ink' : ''
-            }`}
-          >
-            <span className="truncate">
-              {flexRender(h.column.columnDef.header, h.getContext())}
-            </span>
-              <span className="text-[9px]">
-                {{ asc: '▲', desc: '▼' }[h.column.getIsSorted() as string] ?? ''}
-              </span>
+        {table.getHeaderGroups().map((hg) => {
+          return (
+            <div
+              key={hg.id}
+              className="flex border-b border-line bg-surface-soft"
+            >
+              {hg.headers.map((h) => {
+                const isLeaf = h.subHeaders.length === 0
+                const canSort = isLeaf && h.column.getCanSort()
+                // A group header (spanning ≥1 leaf) marks a block; so does a
+                // leaf flagged with meta.divider. Both draw a left rule that
+                // lines up with the body cell dividers below.
+                const divider =
+                  !isLeaf || h.column.columnDef.meta?.divider
+                return (
+                  // Padding lives on the inner wrapper, never the flex item:
+                  // group and leaf rows have different cell counts, and per-cell
+                  // padding on a flex-basis:0 item would skew each row's width
+                  // distribution, so the two header rows wouldn't line up.
+                  <div
+                    key={h.id}
+                    onClick={canSort ? h.column.getToggleSortingHandler() : undefined}
+                    style={cellBasis(h.getSize())}
+                    className={`flex min-w-0 select-none ${
+                      divider ? 'border-l border-line' : ''
+                    } ${canSort ? 'cursor-pointer' : ''}`}
+                  >
+                    {h.isPlaceholder ? null : (
+                      <div
+                        className={`flex w-full min-w-0 items-center gap-0.5 px-2 py-1 text-[11px] font-semibold tracking-wide ${
+                          isLeaf
+                            ? 'text-ink-soft uppercase'
+                            : 'justify-center text-ink normal-case'
+                        } ${canSort ? 'hover:text-ink' : ''}`}
+                      >
+                        <span className="truncate">
+                          {flexRender(h.column.columnDef.header, h.getContext())}
+                        </span>
+                        {canSort && (
+                          <span className="text-[9px]">
+                            {{ asc: '▲', desc: '▼' }[
+                              h.column.getIsSorted() as string
+                            ] ?? ''}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
-          ))}
-        </div>
+          )
+        })}
       </div>
 
       {/* Body */}
@@ -120,14 +165,22 @@ export default function VirtualTable<T>({
               } ${onRowClick ? 'cursor-pointer hover:bg-brand-light' : ''}`}
             >
               {row.getVisibleCells().map((cell) => (
+                // Padding on the inner wrapper (not the flex item) so body
+                // columns line up with the header rows — see header note above.
                 <div
                   key={cell.id}
                   style={cellBasis(cell.column.getSize())}
-                  className="flex items-center px-2.5 whitespace-nowrap"
+                  className={`flex min-w-0 ${
+                    cell.column.columnDef.meta?.divider
+                      ? 'border-l border-line/70'
+                      : ''
+                  }`}
                 >
-                  <span className="truncate">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </span>
+                  <div className="flex w-full min-w-0 items-center px-2 whitespace-nowrap">
+                    <span className="truncate">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
