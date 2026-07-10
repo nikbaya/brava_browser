@@ -218,10 +218,12 @@ function VariantTable({
         header: 'I²',
         size: 70,
         cell: (c) => {
+          // i2 is Cochran's I² already in percent (0–100); '—' when a single
+          // biobank contributes (heterogeneity undefined for one study).
           const v = c.getValue<number | null>()
           return (
             <span className="tnum text-ink-soft">
-              {v == null ? '—' : `${Math.round(v * 100)}%`}
+              {v == null ? '—' : `${Math.round(v)}%`}
             </span>
           )
         },

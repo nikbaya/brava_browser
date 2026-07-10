@@ -1,7 +1,8 @@
 import type { ColumnDef } from '@tanstack/react-table'
 import { ANCESTRIES, ANCESTRY_META } from '../lib/constants'
 import { fmtBeta, fmtPCompact, fmtPLog } from '../lib/format'
-import { DIR_NEG, DIR_POS, EffectTriangle, sigTextClass } from './indicators'
+import { DIR_NEG, DIR_POS, EffectTriangle, isSig, sigTextClass } from './indicators'
+import Tip from './Tip'
 
 /** Inline key for the Burden β triangles, for a table caption. */
 export function BetaLegend() {
@@ -84,13 +85,17 @@ export function ancestryGridColumns<T extends GridRowLike>(
       const b = c.row.original.beta[a]
       if (b == null && pending?.(c.row.original, a))
         return <span className="text-ink-faint/50">…</span>
+      // Tie the β to its p-value: β's whose association clears the gene-level
+      // significance line stay vivid; the rest fade back so the eye lands on
+      // the significant hits (mirrors the p-value column's fade).
+      const sig = isSig(c.row.original.lp[a])
       return (
-        <span
+        <Tip
+          label={b != null ? `β = ${fmtBeta(b)}` : 'no data'}
           className="flex w-full justify-center"
-          title={b != null ? `β = ${fmtBeta(b)}` : 'no data'}
         >
-          <EffectTriangle beta={b} max={betaMax} />
-        </span>
+          <EffectTriangle beta={b} max={betaMax} dim={!sig} />
+        </Tip>
       )
     },
   }))

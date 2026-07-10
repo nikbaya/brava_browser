@@ -136,6 +136,9 @@ export default function AncestryPies({
       total={p.total}
       radius={p.radius}
       selected={selected === p.anc}
+      // A stratum can have sample size but no association results — those are
+      // shown faded and non-clickable rather than leading to an empty table.
+      disabled={!available.includes(p.anc)}
       onSelect={() => onSelect(p.anc)}
       onHover={showTip}
       onLeave={() => setTip(null)}

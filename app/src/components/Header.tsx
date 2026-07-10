@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom'
 import SearchBar from './SearchBar'
 
-/** Top bar shown on every page except the landing page. */
+/** Top bar shown on every page except the landing page. Fixed height (h-14) so
+ *  the grey StickyTitle sub-bar can pin directly beneath it (top-14). */
 export default function Header() {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-2">
+      <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-4">
         <Link
           to="/"
           className="flex shrink-0 items-center gap-2"

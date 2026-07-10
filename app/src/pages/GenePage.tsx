@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import StickyTitle from '../components/StickyTitle'
 import type { ColumnDef, SortingState } from '@tanstack/react-table'
 import { useIndex } from '../data/IndexContext'
 import { fetchGene, fetchVariantSplit, HttpError } from '../data/client'
@@ -93,6 +94,17 @@ export default function GenePage() {
     return best >= 0 ? best : (availablePhenos[0]?.idx ?? null)
   }, [phewasPoints, availablePhenos])
 
+  // Seed the forest to the gene's top hit once its data loads, then keep that
+  // phenotype fixed. Otherwise `topHitIdx` (filter-derived) would hijack the
+  // forest whenever the user changed a mask/MAF/test/ancestry filter — the
+  // filters should update the shown phenotype's numbers, not swap phenotypes.
+  useEffect(() => {
+    if (data && topHitIdx != null) setForestPheno(topHitIdx)
+    // Runs once per gene load (data changes only when the gene does); filter
+    // changes must NOT re-seed, so they're intentionally excluded from deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data])
+
   const forestIdx = forestPheno ?? topHitIdx
   const forest = useMemo(
     () =>
@@ -124,38 +136,41 @@ export default function GenePage() {
   const forestTrait = forestIdx != null ? phenotypes[forestIdx] : undefined
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-4">
-      <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-baseline gap-x-2">
-          <h1 className="text-xl font-semibold text-ink">{symbol}</h1>
-          <span className="tnum text-[11px] text-ink-faint">
-            {ensg}
-            {chr && start && end && (
-              <>
-                {' · '}chr{chr}:{fmtPos(start)}–{fmtPos(end)}
-              </>
-            )}
-          </span>
+    <>
+      <StickyTitle>
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <h1 className="text-xl font-semibold text-ink">{symbol}</h1>
+              <span className="tnum text-[11px] text-ink-faint">
+                {ensg}
+                {chr && start && end && (
+                  <>
+                    {' · '}chr{chr}:{fmtPos(start)}–{fmtPos(end)}
+                  </>
+                )}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1.5 text-[11px]">
+              <Ext href={`https://gnomad.broadinstitute.org/gene/${ensg}?dataset=gnomad_r4`}>
+                gnomAD
+              </Ext>
+              <Ext href={`https://app.genebass.org/gene/${ensg}`}>Genebass</Ext>
+              <Ext href={`https://www.ensembl.org/Homo_sapiens/Gene/Summary?g=${ensg}`}>
+                Ensembl
+              </Ext>
+              {symbol !== ensg && (
+                <Ext href={`https://www.genecards.org/cgi-bin/carddisp.pl?gene=${symbol}`}>
+                  GeneCards
+                </Ext>
+              )}
+            </div>
+          </div>
+          <FilterBar value={filters} onChange={setFilters} />
         </div>
-        <div className="flex flex-wrap gap-1.5 text-[11px]">
-          <Ext href={`https://gnomad.broadinstitute.org/gene/${ensg}?dataset=gnomad_r4`}>
-            gnomAD
-          </Ext>
-          <Ext href={`https://app.genebass.org/gene/${ensg}`}>Genebass</Ext>
-          <Ext href={`https://www.ensembl.org/Homo_sapiens/Gene/Summary?g=${ensg}`}>
-            Ensembl
-          </Ext>
-          {symbol !== ensg && (
-            <Ext href={`https://www.genecards.org/cgi-bin/carddisp.pl?gene=${symbol}`}>
-              GeneCards
-            </Ext>
-          )}
-        </div>
-      </header>
+      </StickyTitle>
 
-      <div className="mb-3">
-        <FilterBar value={filters} onChange={setFilters} />
-      </div>
+      <div className="mx-auto max-w-7xl px-4 py-4">
 
       {loading && <Spinner label="Loading associations…" />}
       {error &&
@@ -217,6 +232,13 @@ export default function GenePage() {
             </section>
           )}
 
+          <GeneTable
+            data={data}
+            filters={filters}
+            ancIdx={ancIdx}
+            onFocus={setForestPheno}
+          />
+
           {forestIdx != null && forestTrait && (
             <section className="mb-3 rounded-lg border border-line bg-surface p-2">
               <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-1">
@@ -245,16 +267,10 @@ export default function GenePage() {
               />
             </section>
           )}
-
-          <GeneTable
-            data={data}
-            filters={filters}
-            ancIdx={ancIdx}
-            onFocus={setForestPheno}
-          />
         </>
       )}
-    </div>
+      </div>
+    </>
   )
 }
 

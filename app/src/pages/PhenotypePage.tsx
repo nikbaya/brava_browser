@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { ColumnDef, SortingState } from '@tanstack/react-table'
 import { useIndex } from '../data/IndexContext'
+import StickyTitle from '../components/StickyTitle'
 import { fetchGene, fetchPhenotype } from '../data/client'
 import { useAsync } from '../lib/useAsync'
 import {
@@ -167,26 +168,31 @@ export default function PhenotypePage() {
     )
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-4">
-      <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h1 className="text-xl font-semibold text-ink">{pheno.name}</h1>
-        <span className="rounded bg-surface-soft px-1.5 py-0.5 text-[11px] font-medium text-ink-soft">
-          {pheno.category}
-        </span>
-        <span className="text-[11px] text-ink-faint">
-          {pheno.id} · {pheno.type === 'binary' ? 'binary' : 'quantitative'} ·{' '}
-          <span className="tnum">{nSig}</span> genes past significance (P &lt;
-          2.5×10⁻⁶) here
-        </span>
-      </div>
+    <>
+      <StickyTitle>
+        <div className="flex items-start justify-between gap-x-4">
+          <div className="flex min-w-0 flex-col gap-1">
+            <h1 className="text-xl font-semibold text-ink">{pheno.name}</h1>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+              <span className="rounded bg-surface px-1.5 py-0.5 font-medium text-ink-soft">
+                {pheno.category}
+              </span>
+              <span className="text-ink-faint">
+                {pheno.id} · {pheno.type === 'binary' ? 'binary' : 'quantitative'} ·{' '}
+                <span className="tnum">{nSig}</span> genes past significance (P &lt;
+                2.5×10⁻⁶) here
+              </span>
+            </div>
+          </div>
+          <FilterBar
+            value={{ ...filters, ancestry }}
+            onChange={setFilters}
+            ancestries={available}
+          />
+        </div>
+      </StickyTitle>
 
-      <div className="mb-3">
-        <FilterBar
-          value={{ ...filters, ancestry }}
-          onChange={setFilters}
-          ancestries={available}
-        />
-      </div>
+      <div className="mx-auto max-w-7xl px-4 py-4">
 
       {loading && <Spinner label="Loading association results…" />}
       {error && (
@@ -261,7 +267,8 @@ export default function PhenotypePage() {
           onOpenGene={() => navigate(`/gene/${drawer.ensg}`)}
         />
       )}
-    </div>
+      </div>
+    </>
   )
 }
 

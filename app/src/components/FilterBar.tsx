@@ -41,6 +41,7 @@ export default function FilterBar({
       {!hideAncestry && (
         <Dropdown
           label="Ancestry"
+          width="w-52"
           value={value.ancestry}
           onChange={(ancestry) => set({ ancestry: ancestry as Ancestry })}
           options={ancOptions}
@@ -48,6 +49,7 @@ export default function FilterBar({
       )}
       <Dropdown
         label="Variant mask"
+        width="w-56"
         value={value.maskIndex}
         onChange={(maskIndex) => set({ maskIndex })}
         options={MASK_META.map((m, i) => ({
@@ -58,12 +60,14 @@ export default function FilterBar({
       />
       <Dropdown
         label="Max MAF"
+        width="w-24"
         value={value.mafIndex}
         onChange={(mafIndex) => set({ mafIndex })}
         options={MAF_META.map((m, i) => ({ value: i, label: m.label }))}
       />
       <Dropdown
         label="Test"
+        width="w-24"
         value={value.test}
         onChange={(test) => set({ test: test as Test })}
         options={TESTS.map((t) => ({ value: t, label: t }))}

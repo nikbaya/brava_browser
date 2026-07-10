@@ -53,6 +53,12 @@ export function sigTextClass(lp: number | null | undefined): string {
   return 'text-ink-faint'
 }
 
+/** Whether a −log10 p clears the gene-level significance line (i.e. is one of
+ *  the "highlighted" hits — matches the bold styling in `sigTextClass`). */
+export function isSig(lp: number | null | undefined): boolean {
+  return lp != null && lp >= LP_GENE
+}
+
 /** Inline colour for a β in the grid: red = positive, blue = negative. */
 export function dirTextColor(beta: number | null | undefined): string | undefined {
   if (beta == null || Number.isNaN(beta) || beta === 0) return undefined
@@ -68,9 +74,13 @@ export function dirTextColor(beta: number | null | undefined): string | undefine
 export function EffectTriangle({
   beta,
   max,
+  dim = false,
 }: {
   beta: number | null | undefined
   max: number
+  /** Fade the triangle back (e.g. the association isn't significant), so the
+   *  significant hits read as the vivid ones. */
+  dim?: boolean
 }) {
   if (beta == null || Number.isNaN(beta) || beta === 0)
     return <span className="text-ink-faint/40">·</span>
@@ -91,6 +101,7 @@ export function EffectTriangle({
         borderLeft: side,
         borderRight: side,
         ...(up ? { borderBottom: base } : { borderTop: base }),
+        opacity: dim ? 0.3 : 1,
       }}
     />
   )

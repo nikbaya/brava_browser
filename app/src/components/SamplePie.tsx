@@ -55,6 +55,7 @@ export default function SamplePie({
   radius,
   interactive = true,
   selected = false,
+  disabled = false,
   onSelect,
   onHover,
   onLeave,
@@ -65,6 +66,9 @@ export default function SamplePie({
   radius: number
   interactive?: boolean
   selected?: boolean
+  /** Stratum has sample size but no association results — shown faded and not
+   *  clickable. */
+  disabled?: boolean
   onSelect?: () => void
   onHover: (e: ReactMouseEvent, text: string) => void
   onLeave: () => void
@@ -102,6 +106,19 @@ export default function SamplePie({
 
   if (!interactive)
     return <div className="flex flex-col items-center gap-1 px-2 py-1.5">{inner}</div>
+
+  // Sample size exists but no association results for this stratum: keep it
+  // visible (it still conveys N) but faded and clearly not clickable.
+  if (disabled)
+    return (
+      <div
+        aria-disabled
+        title={`No association results for ${ANCESTRY_META[anc].long}`}
+        className="flex cursor-not-allowed flex-col items-center gap-1 rounded-lg px-2 py-1.5 opacity-40 grayscale"
+      >
+        {inner}
+      </div>
+    )
 
   return (
     <button

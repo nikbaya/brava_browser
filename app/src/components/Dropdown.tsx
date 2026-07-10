@@ -32,11 +32,16 @@ export default function Dropdown<T extends string | number>({
   value,
   onChange,
   options,
+  width,
 }: {
   label: string
   value: T
   onChange: (v: T) => void
   options: DropdownOption<T>[]
+  /** Fixed width (Tailwind class, e.g. `w-52`) so the control doesn't resize —
+   *  and shift the toolbar — when the selected label changes. The popup menu
+   *  stays `min-w-full`, so long labels remain fully readable there. */
+  width?: string
 }) {
   const [open, setOpen] = useState(false)
   const boxRef = useRef<HTMLDivElement>(null)
@@ -57,7 +62,9 @@ export default function Dropdown<T extends string | number>({
   }
 
   return (
-    <div className="flex flex-col gap-0.5 text-[11px] font-medium tracking-wide text-ink-faint uppercase">
+    <div
+      className={`flex flex-col gap-0.5 text-[11px] font-medium tracking-wide text-ink-faint uppercase ${width ?? ''}`}
+    >
       {label && <span>{label}</span>}
       <div ref={boxRef} className="relative">
         <button
