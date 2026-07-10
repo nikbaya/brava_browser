@@ -190,27 +190,65 @@ files are huge (AFib×EUR alone = **1.84M variants**), so v2 must serve by
 phenotype files. **Before uploading v2, build the variant data and re-measure
 the actual gzipped output to confirm total stays comfortably under 10 GB.**
 
-## Current state / open items (as of 2026-06-28)
+## Current state / open items (as of 2026-07-10)
 
-- App is feature-complete for v1; production build ~360 KB JS / 113 KB gzipped,
-  no console errors. Two commits on `main` (`d7234fe` latest), **not pushed**.
-- **Hosting decided: Cloudflare R2** (free tier — see ceilings above). GCS
-  upload was abandoned (403: `nbaya@broadinstitute.org` lacked write access).
-- **Local data is INCONSISTENT** and must be rebuilt: `pipeline/build/gene`
-  holds the old 38-phenotype indexing while committed
-  `meta/phenotypes.json` lists 44 (the 6 `_F_` strata were added). Fix =
-  re-run `cd pipeline && make full` (~45 min, network-bound on the ~9 GB raw
-  TSV download) → regenerates clean 44-pheno data with `finite_round`.
-- **TODO to go live (next wifi-heavy session, Claude drives):**
-  1. `cd pipeline && make full` → clean 44-pheno data in `pipeline/build/`.
-  2. Install `rclone` (none of rclone/wrangler/aws installed) → configure with
-     R2 S3-compatible API token → **gzip-compress + upload**
-     `build/{gene,phenotype,meta}` to the `brava-browser` bucket (mind the
-     10 GB / 1M-Class-A ceilings — sync, don't blind re-copy).
-  3. Set the bucket's r2.dev URL as `VITE_DATA_BASE_URL` in deploy.yml; set R2
-     CORS for nikbaya.github.io + localhost.
-  4. Enable GitHub Pages (Settings → Pages → Source: GitHub Actions).
-  5. `git push origin main` → Actions builds + deploys.
-- **Waiting on user:** the bucket's public **r2.dev URL** (to wire into
-  deploy.yml) and the R2 **API token** (for the upload).
+### v1 (gene-level) — live
+- App is feature-complete and deployed to GitHub Pages via GitHub Actions.
+- Gene + phenotype JSON hosted on Cloudflare R2 (`brava-browser` bucket,
+  `pub-70f6a636186f47b2a7dbb9547de34be8.r2.dev`). `VITE_DATA_BASE_URL` is
+  wired in [deploy.yml](.github/workflows/deploy.yml).
+- Local dev: `cd app && npm run dev -- --host`; `.env.local` has both
+  `VITE_DATA_BASE_URL` and `VITE_VARIANT_BASE_URL` pointing at R2.
+
+### v2 (variant-level) — code complete, data build + upload pending
+
+**What was done (2026-07-10, commit `d43f82e`):**
+- All frontend code is committed and ready: `GeneVariants`, `LocusZoom`,
+  `VariantForest` components; data types, fetchers, `variantRows` /
+  `variantForest` selectors; `VITE_VARIANT_BASE_URL` wired into
+  `config.ts` and `deploy.yml` (points to `…r2.dev/v2`).
+- `pipeline/build_variants.py` (508 lines): streaming two-pass VCF→JSON ETL.
+- `pipeline/Makefile` updated with `full-variants`, `copy-variant-split`,
+  `upload-variants` (rclone→R2) targets.
+- `app/public/data/meta/variant_split.json` committed as placeholder
+  `{"split":[]}` — must be updated after the full pipeline run.
+- Production build: 390 KB JS / 122 KB gzipped, TypeScript clean.
+
+**Remaining steps (requires network + R2 credentials, user runs these):**
+
+1. **Build variant data** (~1–2 h, needs GCS access + ~6 GB download):
+   ```bash
+   cd pipeline
+   make full-variants
+   # uses app/public/data/meta/ as meta-dir fallback (no need to re-run make full)
+   ```
+   After: `du -sh build/variant/` — confirm gzipped total (gene+variant) stays
+   under 10 GB R2 free-tier ceiling.
+
+2. **Update bundled split manifest:**
+   ```bash
+   make copy-variant-split
+   # cp build/meta/variant_split.json → app/public/data/meta/variant_split.json
+   ```
+
+3. **Upload to R2** (rclone must be configured with R2 S3-compatible token):
+   ```bash
+   make upload-variants
+   # rclone copy … build/variant → r2:brava-browser/v2/variant
+   # prints total R2 usage at end — must stay under 10 GB
+   ```
+
+4. **Commit + push:**
+   ```bash
+   git add app/public/data/meta/variant_split.json
+   git commit -m "variant: update split manifest after full build"
+   git push origin main
+   # GitHub Actions deploys automatically
+   ```
+
+**Not yet built (deferred to v2.1):**
+- Phenotype-page variant Manhattan (uses `fetchVariantOverview`; overview
+  JSON files are emitted by the pipeline but no UI component consumes them yet).
+- Idle/hover prefetch of `.anc.json` files.
+- rsID / coordinate search (VCFs have no rsIDs; dbSNP map not available).
 
