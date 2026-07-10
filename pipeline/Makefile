@@ -20,6 +20,8 @@ BUCKET   ?= gs://brava-meta-analysis-public/browser
 # R2 target (rclone remote:bucket/prefix).
 R2_REMOTE ?= r2
 R2_BUCKET ?= brava-browser
+# Gzip-transcode staging dir (see upload-variants).
+VARIANT_GZ := $(OUT_FULL)/variant.gz
 
 SAMPLE_PHENOS ?= LDLC,T2Diab,Height,CAD,AFib
 SAMPLE_GENES  ?= PCSK9,LDLR,APOB,TTN,GIGYF1,BRCA2,APOC3,ANGPTL3,ASGR1,GCK,PCSK1,MC4R
@@ -77,13 +79,27 @@ copy-variant-split:
 
 # Upload variant JSON to Cloudflare R2 (immutable caching; served at VITE_VARIANT_BASE_URL/v2/).
 # Requires rclone configured with an R2 S3-compatible remote (R2_REMOTE=r2 by default).
+#
+# rclone (unlike `gsutil -Z`) has no gzip-transcode, so we compress a staging
+# copy and upload it with `Content-Encoding: gzip` — matching how v1 objects are
+# stored on R2 (browsers decompress transparently; keeps storage ~4x smaller,
+# under the 10 GB free-tier ceiling). Build output stays plain JSON for local dev.
 # --checksum skips re-uploading unchanged files; --transfers 16 saturates bandwidth.
 upload-variants:
+	@echo "Gzip-transcoding $(OUT_FULL)/variant -> $(VARIANT_GZ) ..."
+	rm -rf $(VARIANT_GZ)
+	@cd $(OUT_FULL)/variant && find . -type d -print0 | \
+	  xargs -0 -I{} mkdir -p "$(abspath $(VARIANT_GZ))/{}"
+	@cd $(OUT_FULL)/variant && find . -type f -name '*.json' -print0 | \
+	  xargs -0 -P 8 sh -c 'for f; do gzip -9 -c "$$f" > "$(abspath $(VARIANT_GZ))/$$f"; done' _
+	@echo "Staged $$(find $(VARIANT_GZ) -type f | wc -l | tr -d ' ') gzipped files ($$(du -sh $(VARIANT_GZ) | cut -f1))."
 	rclone copy --progress --checksum --transfers 16 \
-	  --header-upload "Cache-Control:public,max-age=31536000,immutable" \
-	  $(OUT_FULL)/variant $(R2_REMOTE):$(R2_BUCKET)/v2/variant
+	  --header-upload "Content-Encoding: gzip" \
+	  --header-upload "Content-Type: application/json" \
+	  --header-upload "Cache-Control: public, max-age=31536000, immutable" \
+	  $(VARIANT_GZ) $(R2_REMOTE):$(R2_BUCKET)/v2/variant
 	@echo "Upload complete. Total R2 usage:"
 	rclone size $(R2_REMOTE):$(R2_BUCKET)
 
 clean:
-	rm -rf $(OUT_FULL) _tmp _tmp_variant
+	rm -rf $(OUT_FULL) $(VARIANT_GZ) _tmp _tmp_variant

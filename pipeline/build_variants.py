@@ -61,8 +61,11 @@ CHROM_ORDER = {str(c): i for i, c in enumerate(list(range(1, 23)) + ["X", "Y"])}
 
 FILE_TMPL = "{stem}_variant_meta_analysis_100_cutoff{suffix}.vcf.gz"
 
-# FORMAT field order in the SAMPLE column: NS:NC:ES:SE:LP:NE:I2:CQ:ED
-F_NS, F_NC, F_ES, F_SE, F_LP, F_NE, F_I2, F_CQ, F_ED = range(9)
+# The SAMPLE column's subfields are named by the per-row FORMAT column (f[8]).
+# The order/subset VARIES by phenotype — quantitative traits omit NC (number of
+# cases) — so positions must be resolved per file from FORMAT, never hard-coded.
+# Fields we read: ES (beta), SE, LP (-log10 p), NC (cases), NE (effective N),
+# I2 (heterogeneity), CQ (Cochran's Q -> -log10), ED (per-cohort direction).
 
 # Overview decimation: retain every variant with lp >= this at full resolution;
 # thin the null band to one point per (chrom, POS_BIN, lp rounded to 0.1).
@@ -287,22 +290,33 @@ def _stream_file(it, pidx, aidx, gidx, allow_gidx, shard_files, shards, ov):
     """Stream one VCF (position-sorted), sweep-join per chromosome, stash rows."""
     n = 0
     cur_chrom: str | None = None
-    buf: list[tuple] = []  # (pos, ref, alt, tokens) for current chromosome
+    # (pos, ref, alt, tokens, fpos) for current chromosome; fpos is the
+    # FORMAT->index map in effect for that row (shared object, negligible cost).
+    buf: list[tuple] = []
+    fpos: dict[str, int] = {}
+    cur_fmt: str | None = None
+
+    def val(t: list[str], fp: dict[str, int], name: str) -> str:
+        """SAMPLE subfield by FORMAT name; '.' if absent (missing = null)."""
+        i = fp.get(name, -1)
+        return t[i] if 0 <= i < len(t) else "."
 
     def flush(chrom):
         nonlocal n
         chrom_genes = gidx.by_chrom.get(chrom, [])
         positions = [b[0] for b in buf]
         for vi, genes in sweep_overlaps(chrom_genes, positions):
-            pos, ref, alt, t = buf[vi]
-            beta = sig3(t[F_ES]); se = sig3(t[F_SE]); lp = lp2(t[F_LP])
+            pos, ref, alt, t, fp = buf[vi]
+            beta = sig3(val(t, fp, "ES")); se = sig3(val(t, fp, "SE"))
+            lp = lp2(val(t, fp, "LP"))
             if ov is not None:
                 g0 = genes[0] if genes else None
                 ov.add(CHROM_ORDER[chrom], pos, lp, beta, g0)
             if not genes:
                 continue
-            nc = as_int(t[F_NC]); ne = as_int(t[F_NE])
-            i2 = sig3(t[F_I2]); cq = lp2(t[F_CQ]); ed = t[F_ED]
+            nc = as_int(val(t, fp, "NC")); ne = as_int(val(t, fp, "NE"))
+            i2 = sig3(val(t, fp, "I2")); cq = lp2(val(t, fp, "CQ"))
+            ed = val(t, fp, "ED")
             for gi in genes:
                 if allow_gidx is not None and gi not in allow_gidx:
                     continue
@@ -321,12 +335,15 @@ def _stream_file(it, pidx, aidx, gidx, allow_gidx, shard_files, shards, ov):
         chrom = raw_chrom[3:] if raw_chrom.startswith("chr") else raw_chrom
         if chrom not in CHROM_ORDER:
             continue
+        if f[8] != cur_fmt:  # resolve SAMPLE field positions from FORMAT
+            cur_fmt = f[8]
+            fpos = {name: i for i, name in enumerate(cur_fmt.split(":"))}
         if chrom != cur_chrom:
             if cur_chrom is not None:
                 flush(cur_chrom)
             buf = []
             cur_chrom = chrom
-        buf.append((int(f[1]), f[3], f[4], f[9].split(":")))
+        buf.append((int(f[1]), f[3], f[4], f[9].split(":"), fpos))
     if cur_chrom is not None and buf:
         flush(cur_chrom)
     return n

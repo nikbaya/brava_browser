@@ -19,6 +19,8 @@ public/data/gene
 public/data/gene.sample
 public/data/phenotype
 public/data/phenotype.sample
+public/data/variant
+public/data/variant.sample
 public/data/meta/*.parquet
 public/data/_tmp/
 
