@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import type { ColumnDef, SortingState } from '@tanstack/react-table'
 import { useIndex } from '../data/IndexContext'
-import { fetchGene, HttpError } from '../data/client'
+import { fetchGene, fetchVariantSplit, HttpError } from '../data/client'
 import type { GeneData, PhenotypeMeta } from '../data/types'
 import { useAsync } from '../lib/useAsync'
 import { forestSeries, geneAncestryGrid, geneRows, type GridRow } from '../lib/select'
@@ -26,6 +26,7 @@ import PheWASPlot, { type PheWASPoint } from '../components/PheWASPlot'
 import ForestPlot from '../components/ForestPlot'
 import PhenoPicker from '../components/PhenoPicker'
 import VirtualTable from '../components/VirtualTable'
+import GeneVariants from '../components/GeneVariants'
 
 export default function GenePage() {
   const { id } = useParams()
@@ -48,6 +49,17 @@ export default function GenePage() {
   const { data, loading, error } = useAsync(
     () => (ensg ? fetchGene(ensg) : Promise.reject(new Error('unknown gene'))),
     [ensg],
+  )
+
+  // Manifest of genes whose variant data is split per-phenotype (tiny, cached).
+  // Absent in releases without variant data -> treat as no genes split.
+  const { data: variantSplit } = useAsync(
+    () => fetchVariantSplit().catch(() => ({ split: [] })),
+    [],
+  )
+  const splitSet = useMemo(
+    () => new Set(variantSplit?.split ?? []),
+    [variantSplit],
   )
 
   const ancIdx = ANCESTRY_INDEX[filters.ancestry]
@@ -201,6 +213,35 @@ export default function GenePage() {
                 trait={forestTrait}
                 maskLabel={MASK_META[filters.maskIndex].label}
                 mafLabel={MAF_META[filters.mafIndex].label}
+              />
+            </section>
+          )}
+
+          {forestIdx != null && forestTrait && (
+            <section className="mb-3 rounded-lg border border-line bg-surface p-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-[13px] font-semibold text-ink">
+                    Variants
+                  </h2>
+                  <PhenoPicker
+                    value={forestIdx}
+                    options={availablePhenos}
+                    onChange={setForestPheno}
+                  />
+                </div>
+                <span className="text-[11px] text-ink-faint">
+                  single-variant meta · overlapping this gene by position
+                </span>
+              </div>
+              <GeneVariants
+                ensg={ensg}
+                phenoIdx={forestIdx}
+                trait={forestTrait}
+                split={splitSet.has(ensg)}
+                start={start}
+                end={end}
+                chr={chr}
               />
             </section>
           )}

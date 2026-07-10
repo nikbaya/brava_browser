@@ -21,5 +21,22 @@ export const DATA_BASE = envBase && envBase.length > 0 ? envBase : bundled
 /** Base for the bundled metadata indexes — always shipped with the app. */
 export const META_BASE = bundled
 
+/**
+ * Base for the variant-level (v2) data. Controlled by its OWN env var
+ * (VITE_VARIANT_BASE_URL) rather than VITE_DATA_BASE_URL, because variant data
+ * ships/uploads independently of the v1 gene-level data: until it's uploaded to
+ * the host (versioned `v2/` prefix, immutable caching — see
+ * docs/variant-v2-design.md), this falls back to the bundled public/data so the
+ * variant views work locally without a remote. In production set
+ * VITE_VARIANT_BASE_URL to e.g. `${R2}/v2`.
+ */
+const envVariant = (
+  import.meta.env.VITE_VARIANT_BASE_URL as string | undefined
+)?.replace(/\/$/, '')
+export const VARIANT_BASE =
+  envVariant && envVariant.length > 0 ? envVariant : bundled
+
 export const dataUrl = (path: string) => `${DATA_BASE}/${path.replace(/^\//, '')}`
 export const metaUrl = (path: string) => `${META_BASE}/${path.replace(/^\//, '')}`
+export const variantUrl = (path: string) =>
+  `${VARIANT_BASE}/${path.replace(/^\//, '')}`

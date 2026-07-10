@@ -29,6 +29,9 @@ jobs:
       # bucket (brava-browser) via its r2.dev URL (CORS-enabled in the R2
       # dashboard). The search indexes (meta/*.json) ship bundled with the app.
       VITE_DATA_BASE_URL: https://pub-70f6a636186f47b2a7dbb9547de34be8.r2.dev
+      # Variant-level (v2) data lives under the versioned v2/ prefix in the same
+      # R2 bucket (immutable caching). Falls back to bundled public/data in dev.
+      VITE_VARIANT_BASE_URL: https://pub-70f6a636186f47b2a7dbb9547de34be8.r2.dev/v2
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

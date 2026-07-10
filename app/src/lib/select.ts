@@ -1,4 +1,9 @@
-import type { GeneData, PhenotypeData } from '../data/types'
+import type {
+  GeneData,
+  GeneVariantAncData,
+  GeneVariantData,
+  PhenotypeData,
+} from '../data/types'
 import { ANCESTRIES, type Test } from './constants'
 
 /** Pick the -log10(p) array for a given test from a columnar payload. */
@@ -85,6 +90,109 @@ export function forestSeries(
   }
   const rows = [...byAnc.values()].sort((a, b) => a.ancIdx - b.ancIdx)
   return { rows, hetLp }
+}
+
+// --- variant-level (v2) -------------------------------------------------------
+
+/** One variant's meta association for a phenotype (a table row / Manhattan pt). */
+export interface VariantRow {
+  pos: number
+  ref: string
+  alt: string
+  beta: number | null
+  se: number | null
+  lp: number | null
+  nc: number | null
+  ne: number | null
+  i2: number | null
+  cq: number | null
+  ed: string | null
+}
+
+/** Reconstruct the All-meta variants for one phenotype from a gene variant file. */
+export function variantRows(d: GeneVariantData, phenoIdx: number): VariantRow[] {
+  const sl = d.by_pheno[String(phenoIdx)]
+  if (!sl) return []
+  const out: VariantRow[] = new Array(sl.idx.length)
+  for (let i = 0; i < sl.idx.length; i++) {
+    const v = sl.idx[i]
+    out[i] = {
+      pos: d.pos[v],
+      ref: d.ref[v],
+      alt: d.alt[v],
+      beta: sl.beta[i] ?? null,
+      se: sl.se[i] ?? null,
+      lp: sl.lp[i] ?? null,
+      nc: sl.nc[i] ?? null,
+      ne: sl.ne[i] ?? null,
+      i2: sl.i2[i] ?? null,
+      cq: sl.cq[i] ?? null,
+      ed: sl.ed[i] ?? null,
+    }
+  }
+  return out
+}
+
+/** Effect estimate for one variant in one ancestry, for the forest plot. */
+export interface VariantForestRow {
+  ancIdx: number
+  beta: number | null
+  se: number | null
+  lp: number | null
+}
+
+/**
+ * Per-ancestry effect sizes for a single variant (matched by pos/ref/alt) for a
+ * phenotype: `All` (index 0) from the meta file, the rest from the lazy anc
+ * file. Returned in canonical ancestry order.
+ */
+export function variantForest(
+  meta: GeneVariantData,
+  anc: GeneVariantAncData | null,
+  phenoIdx: number,
+  pos: number,
+  ref: string,
+  alt: string,
+): VariantForestRow[] {
+  const rows: VariantForestRow[] = []
+  const key = `${pos}\t${ref}\t${alt}`
+
+  const metaSl = meta.by_pheno[String(phenoIdx)]
+  if (metaSl) {
+    for (let i = 0; i < metaSl.idx.length; i++) {
+      const v = metaSl.idx[i]
+      if (`${meta.pos[v]}\t${meta.ref[v]}\t${meta.alt[v]}` === key) {
+        rows.push({
+          ancIdx: 0,
+          beta: metaSl.beta[i] ?? null,
+          se: metaSl.se[i] ?? null,
+          lp: metaSl.lp[i] ?? null,
+        })
+        break
+      }
+    }
+  }
+
+  if (anc) {
+    for (const [ancIdxStr, byPheno] of Object.entries(anc.by_anc)) {
+      const sl = byPheno[String(phenoIdx)]
+      if (!sl) continue
+      for (let i = 0; i < sl.idx.length; i++) {
+        const v = sl.idx[i]
+        if (`${anc.pos[v]}\t${anc.ref[v]}\t${anc.alt[v]}` === key) {
+          rows.push({
+            ancIdx: Number(ancIdxStr),
+            beta: sl.beta[i] ?? null,
+            se: sl.se[i] ?? null,
+            lp: sl.lp[i] ?? null,
+          })
+          break
+        }
+      }
+    }
+  }
+
+  return rows.sort((a, b) => a.ancIdx - b.ancIdx)
 }
 
 /** One row of the gene table / PheWAS point. */

@@ -107,3 +107,79 @@ export interface PhenotypeData {
   beta: (number | null)[]
   se: (number | null)[]
 }
+
+// --- variant-level (v2) -------------------------------------------------------
+// See docs/variant-v2-design.md. These files live under the versioned v2/ data
+// prefix; coordinates are stored once per file (shared table) and each slice
+// references them by integer index. Numbers are aggressively rounded for
+// display: beta/se to 3 sig figs, lp (=-log10 p) to 2 dp.
+
+/** Sparse All-meta slice for one phenotype within a gene variant file. */
+export interface VariantMetaSlice {
+  idx: number[] // indices into the file's pos/ref/alt coord table
+  beta: (number | null)[]
+  se: (number | null)[]
+  lp: (number | null)[]
+  nc: (number | null)[] // n cases (binary traits)
+  ne: (number | null)[] // effective sample size
+  i2: (number | null)[] // Cochran's I^2 (heterogeneity)
+  cq: (number | null)[] // Cochran's Q, -log10 p
+  ed: (string | null)[] // per-biobank effect-direction string (+/-/?)
+}
+
+/**
+ * variant/gene/{ENSG}.json — All-meta variants overlapping a gene, keyed by
+ * phenotype index. For oversized genes (see meta/variant_split.json) this is
+ * instead served per-phenotype as {ENSG}.{pheno_idx}.json holding a single key.
+ */
+export interface GeneVariantData {
+  id: string
+  chr: string | null
+  nv: number // number of variants in the coord table
+  pos: number[]
+  ref: string[]
+  alt: string[]
+  by_pheno: Record<string, VariantMetaSlice> // key = pheno_idx (stringified)
+}
+
+/** Per-ancestry slice (beta/se/lp only) for the forest plot. */
+export interface VariantAncSlice {
+  idx: number[]
+  beta: (number | null)[]
+  se: (number | null)[]
+  lp: (number | null)[]
+}
+
+/**
+ * variant/gene/{ENSG}.anc.json — the 6 non-meta ancestries for a gene, lazy.
+ * by_anc[ancestry_idx][pheno_idx] -> slice. Powers per-variant forest plots.
+ */
+export interface GeneVariantAncData {
+  id: string
+  nv: number
+  pos: number[]
+  ref: string[]
+  alt: string[]
+  by_anc: Record<string, Record<string, VariantAncSlice>>
+}
+
+/**
+ * variant/overview/{PHENO}.json — pixel-decimated genome-wide Manhattan for a
+ * phenotype (meta). All variants with lp >= keep_lp retained at full res; the
+ * null band thinned to one point per (chrom, position-bin, lp-bin).
+ */
+export interface VariantOverview {
+  pheno: string
+  n: number
+  keep_lp: number
+  chr: number[] // chromosome index 0..23
+  pos: number[]
+  lp: number[]
+  dir: number[] // sign(beta): 1 (risk↑) / -1 (protective) / 0
+  gene_idx: number[] // gene for click-through, -1 if none
+}
+
+/** meta/variant_split.json — ENSG ids whose variant data is split per-phenotype. */
+export interface VariantSplit {
+  split: string[]
+}

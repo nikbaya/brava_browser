@@ -1,11 +1,15 @@
-import { dataUrl, metaUrl } from './config'
+import { dataUrl, metaUrl, variantUrl } from './config'
 import type {
   BiobankIndex,
   GeneData,
   GeneIndex,
+  GeneVariantAncData,
+  GeneVariantData,
   PhenoSizes,
   PhenotypeData,
   PhenotypeIndex,
+  VariantOverview,
+  VariantSplit,
 } from './types'
 
 // In-memory cache keyed by URL. Files are immutable per data release, so once
@@ -49,3 +53,41 @@ export const fetchGene = (ensg: string) =>
 
 export const fetchPhenotype = (pheno: string, ancestrySuffix: string) =>
   getJSON<PhenotypeData>(dataUrl(`phenotype/${pheno}.${ancestrySuffix || 'All'}.json`))
+
+// --- variant-level (v2) -------------------------------------------------------
+
+export const fetchVariantSplit = () =>
+  getJSON<VariantSplit>(metaUrl('meta/variant_split.json'))
+
+/**
+ * All-meta variants for a gene. Small genes have one file with every phenotype
+ * (fetched once, reused as the user switches phenotype); oversized genes (in the
+ * variant_split manifest) are fetched per-phenotype, so pass `phenoIdx`+`split`.
+ */
+export const fetchGeneVariants = (
+  ensg: string,
+  phenoIdx?: number,
+  split = false,
+) =>
+  getJSON<GeneVariantData>(
+    variantUrl(
+      split ? `variant/gene/${ensg}.${phenoIdx}.json` : `variant/gene/${ensg}.json`,
+    ),
+  )
+
+/** Non-meta ancestry data for a gene (lazy; powers the per-variant forest). */
+export const fetchGeneVariantsAnc = (
+  ensg: string,
+  phenoIdx?: number,
+  split = false,
+) =>
+  getJSON<GeneVariantAncData>(
+    variantUrl(
+      split
+        ? `variant/gene/${ensg}.${phenoIdx}.anc.json`
+        : `variant/gene/${ensg}.anc.json`,
+    ),
+  )
+
+export const fetchVariantOverview = (pheno: string) =>
+  getJSON<VariantOverview>(variantUrl(`variant/overview/${pheno}.json`))
