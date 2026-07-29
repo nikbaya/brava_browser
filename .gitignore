@@ -1,4 +1,6 @@
 .DS_Store
+# Notes we keep out of the public repo (e.g. which data buckets are free).
+docs/local-notes.md
 # Supplementary tables are fetched from medRxiv by the pipeline, not committed.
 media-2*.xlsx
 supp_tables.xlsx

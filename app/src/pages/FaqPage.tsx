@@ -48,7 +48,15 @@ export default function FaqPage() {
           SKAT-O, Burden, and SKAT p-values from the cross-ancestry meta-analysis
           (and each ancestry stratum), plus the inverse-variance-weighted Burden
           effect size (β), its standard error, and a cross-cohort heterogeneity
-          test. Variant-level results are not included in this version.
+          test. Single-variant results are also available within each gene.
+        </Faq>
+
+        <Faq q="Why are there so few variant-level results?">
+          Single-variant tests, unlike gene-based tests, cannot pool information
+          across a gene, so the variant-level meta-analysis was restricted to
+          variants with sufficient power to be tested on their own. Every
+          qualifying variant still contributes to its gene's mask-based results,
+          but only that powered subset is reported as individual variants.
         </Faq>
 
         <Faq q="What are the variant masks?">

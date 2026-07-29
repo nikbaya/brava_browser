@@ -5,6 +5,14 @@ reflects but that may warrant follow-up with the data producers. These are NOT
 browser/pipeline bugs — the pipeline reads whatever fields the source files
 contain and shows `—`/null when a field is absent.
 
+## GPT is highly significant for alanine transaminase for all non-EUR but completely missing in EUR.
+
+It does have a defined burden beta so I suspect it's simply an underflow error with the EUR and ALL p-values. In this case, we should represent it as <1e-300 in tables and -log10p = 300 in the Manhattan (with label showing p<1e-300).
+
+## Check sample counts
+- In overview, meta-analysis shows 1.119 million individuals in total. But the headline number is 1.25M participants. Why the discrepancy? Could it be that the 1.119M is based on summing up the per-ancestry strata, but the meta-analysis includes more individuals?
+
+
 ## FemInf_F (female infertility): missing NS / NC / NE at variant level
 
 **Observed:** N-effective (NEFF) is blank for variant-level female-infertility

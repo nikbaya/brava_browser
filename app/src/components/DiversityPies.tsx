@@ -1,12 +1,14 @@
-import { useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useMemo } from 'react'
 import { ANCESTRY_COLOR, ANCESTRY_META, SUPERPOPS, type Ancestry } from '../lib/constants'
 import type { Biobank } from '../data/types'
 import SamplePie, {
   NON_EUR,
+  PieTip,
   fmtN,
   fmtPct,
   lighten,
   scaledRadius,
+  usePieTip,
   type Slice,
 } from './SamplePie'
 
@@ -19,12 +21,7 @@ import SamplePie, {
  * / ancestry names + N appear on hover.
  */
 export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
-  const sectionRef = useRef<HTMLDivElement>(null)
-  const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null)
-  const showTip = (e: ReactMouseEvent, text: string) => {
-    const r = sectionRef.current?.getBoundingClientRect()
-    if (r) setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text })
-  }
+  const { tip, show, hide } = usePieTip()
 
   const { stratumPies, metaPies } = useMemo(() => {
     // ancestry -> [{ id, name, n }] across biobanks.
@@ -88,13 +85,13 @@ export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
       total={p.total}
       radius={p.radius}
       interactive={false}
-      onHover={showTip}
-      onLeave={() => setTip(null)}
+      onHover={show}
+      onLeave={hide}
     />
   )
 
   return (
-    <div ref={sectionRef} className="relative">
+    <div>
       <div className="flex flex-wrap items-stretch gap-x-1 gap-y-2">
         <div className="flex flex-col">
           <span className="mb-0.5 pl-2 text-[10px] font-medium tracking-wide text-ink-faint uppercase">
@@ -113,14 +110,7 @@ export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
         )}
       </div>
 
-      {tip && (
-        <div
-          className="pointer-events-none absolute z-30 -translate-y-1/2 rounded-md border border-line bg-surface px-2 py-1 text-[11px] whitespace-nowrap text-ink shadow-lg"
-          style={{ left: tip.x + 14, top: tip.y }}
-        >
-          {tip.text}
-        </div>
-      )}
+      <PieTip tip={tip} />
     </div>
   )
 }

@@ -58,8 +58,9 @@ export function fmtBetaCompact(b: number | null | undefined): string {
   const a = Math.abs(b)
   if (a === 0) return '0'
   if (a < 0.001 || a >= 100) return format('.0e')(b) // 1 sig fig: fits "-5e-4"
-  const s = a >= 0.1 ? b.toFixed(2) : b.toFixed(3)
-  return s.replace(/^(-?)0\./, '$1.')
+  // Keep the leading zero ("0.42", never ".42") — the bare decimal point is
+  // easy to miss and isn't standard for reported effect sizes.
+  return a >= 0.1 ? b.toFixed(2) : b.toFixed(3)
 }
 
 /** Format a raw p-value (when -log10 isn't already available). */

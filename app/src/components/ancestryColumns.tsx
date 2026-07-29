@@ -22,6 +22,28 @@ export interface GridRowLike {
   beta: (number | null)[]
 }
 
+/**
+ * Hover target for a grid cell. `Tip` attaches its listeners to this element,
+ * so it must NOT be sized by its contents: a small-|β| triangle is only ~5px
+ * tall and a few px wide, which would make its tooltip far harder to hit than a
+ * large one's. `h-full w-full` claims the entire cell instead — identical for
+ * every value — which only works because these columns set `meta.fill`, giving
+ * the cell renderer the whole box (see VirtualTable). Padding moves in here so
+ * contents still sit where they did.
+ */
+const CELL_HIT = 'flex h-full w-full min-w-0 items-center px-2'
+
+/**
+ * Column width for one ancestry. Driven by the HEADER, not the data: labels
+ * render uppercase at 11px with `tracking-wide`, inside the header's own `px-2`,
+ * next to a sort-arrow slot. "NON-EUR" needs ~62px of text box for that, so its
+ * columns get 80 — at 68 it clipped to "NON-EU…" once sorted. Every other label
+ * ("All", "EUR", "AFR", …) is three characters and fits `base`, which is set by
+ * the cell contents instead (p-values need more room than a triangle).
+ */
+const ancSize = (a: number, base: number) =>
+  ANCESTRY_META[ANCESTRIES[a]].label.length > 4 ? 80 : base
+
 function ancHeader(a: number, highlight?: number, center = false) {
   const label = ANCESTRY_META[ANCESTRIES[a]].label
   const cls = [center ? 'w-full text-center' : '', a === highlight ? 'text-brand' : '']
@@ -53,19 +75,23 @@ export function ancestryGridColumns<T extends GridRowLike>(
     header: ancHeader(a, highlight),
     accessorFn: (r: T) => r.lp[a] ?? undefined,
     sortUndefined: 'last',
-    meta: i === 0 ? { divider: true } : undefined,
-    size: 68, // room for bold 3-digit exponents, e.g. "2e-156"
+    meta: { divider: i === 0, fill: true },
+    size: ancSize(a, 68), // 68 = room for bold 3-digit exponents, e.g. "2e-156"
     cell: (c) => {
       const lp = c.getValue() as number | null | undefined
       if (lp == null && pending?.(c.row.original, a))
-        return <span className="text-ink-faint/50">…</span>
+        return <span className={`${CELL_HIT} text-ink-faint/50`}>…</span>
+      // Full-precision p in the tooltip; the cell itself is abbreviated to
+      // keep the grid dense. Uses Tip, not a native `title`, for a fast reveal.
       return (
-        <span
-          className={`tnum ${sigTextClass(lp)}`}
-          title={lp != null ? `P = ${fmtPLog(lp)}` : 'no data'}
+        <Tip
+          label={lp != null ? `P = ${fmtPLog(lp)}` : 'no data'}
+          className={CELL_HIT}
         >
-          {fmtPCompact(lp)}
-        </span>
+          <span className={`truncate tnum ${sigTextClass(lp)}`}>
+            {fmtPCompact(lp)}
+          </span>
+        </Tip>
       )
     },
   }))
@@ -79,12 +105,14 @@ export function ancestryGridColumns<T extends GridRowLike>(
       return v == null ? undefined : Math.abs(v)
     },
     sortUndefined: 'last',
-    meta: i === 0 ? { divider: true } : undefined,
-    size: 52,
+    meta: { divider: i === 0, fill: true },
+    size: ancSize(a, 52), // a triangle needs no more than 52
     cell: (c) => {
       const b = c.row.original.beta[a]
       if (b == null && pending?.(c.row.original, a))
-        return <span className="text-ink-faint/50">…</span>
+        return (
+          <span className={`${CELL_HIT} justify-center text-ink-faint/50`}>…</span>
+        )
       // Tie the β to its p-value: β's whose association clears the gene-level
       // significance line stay vivid; the rest fade back so the eye lands on
       // the significant hits (mirrors the p-value column's fade).
@@ -92,7 +120,7 @@ export function ancestryGridColumns<T extends GridRowLike>(
       return (
         <Tip
           label={b != null ? `β = ${fmtBeta(b)}` : 'no data'}
-          className="flex w-full justify-center"
+          className={`${CELL_HIT} justify-center`}
         >
           <EffectTriangle beta={b} max={betaMax} dim={!sig} />
         </Tip>

@@ -1,4 +1,5 @@
-import type { MouseEvent as ReactMouseEvent } from 'react'
+import { useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { ANCESTRY_META, type Ancestry } from '../lib/constants'
 
 // Shared sample-size pie used by the phenotype page (interactive ancestry
@@ -41,6 +42,46 @@ export interface Slice {
   n: number
   fill: string
   title: string
+}
+
+export interface PieTipState {
+  x: number
+  y: number
+  text: string
+}
+
+/**
+ * Hover state for pie-slice tooltips. Paired with `PieTip` so that every pie in
+ * the browser — phenotype page, About overview, participating biobanks — shares
+ * one tooltip implementation and cannot drift apart in style.
+ *
+ * Coordinates are viewport (`clientX/Y`) and `PieTip` portals to the body, so a
+ * tooltip is never clipped by a card or a scrolling ancestor and no call site
+ * needs a `relative` wrapper or its own bounding-rect maths.
+ */
+export function usePieTip() {
+  const [tip, setTip] = useState<PieTipState | null>(null)
+  return {
+    tip,
+    show: (e: ReactMouseEvent, text: string) =>
+      setTip({ x: e.clientX, y: e.clientY, text }),
+    hide: () => setTip(null),
+  }
+}
+
+/** The one and only pie tooltip: sits to the right of the cursor, vertically
+ *  centred on it, so it never covers the slice being pointed at. */
+export function PieTip({ tip }: { tip: PieTipState | null }) {
+  if (!tip) return null
+  return createPortal(
+    <div
+      style={{ position: 'fixed', left: tip.x + 14, top: tip.y }}
+      className="pointer-events-none z-[100] -translate-y-1/2 rounded-md border border-line bg-surface px-2 py-1 text-[11px] whitespace-nowrap text-ink shadow-lg"
+    >
+      {tip.text}
+    </div>,
+    document.body,
+  )
 }
 
 /**

@@ -51,6 +51,23 @@ body {
 }
 
 /*
+ * Backdrop for a frozen (sticky) table cell. The cell slides over its
+ * neighbours during horizontal scroll, so it needs an OPAQUE fill: it can't
+ * inherit the row's alternating `bg-surface-soft/40` tint, which is
+ * translucent. `-alt` flattens that 40% tint into a solid colour so frozen and
+ * scrolling halves of the same row match exactly.
+ *
+ * Kept as plain classes (not inline styles) so Tailwind's `group-hover:` row
+ * highlight, which has higher specificity, still overrides them on hover.
+ */
+.frozen-cell {
+  background: var(--color-surface);
+}
+.frozen-cell-alt {
+  background: color-mix(in srgb, var(--color-surface-soft) 40%, var(--color-surface));
+}
+
+/*
  * Compact range slider used by the table threshold filters. The filled portion
  * of the track is painted via an inline linear-gradient background (see
  * RangeSlider), so the base rule only styles the unfilled track + thumb.

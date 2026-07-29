@@ -24,6 +24,9 @@ export default function Header() {
           <SearchBar />
         </div>
         <nav className="ml-auto flex shrink-0 items-center gap-4 text-sm">
+          <Link to="/downloads" className="text-ink-soft hover:text-brand">
+            Downloads
+          </Link>
           <Link to="/about" className="text-ink-soft hover:text-brand">
             About
           </Link>

@@ -36,8 +36,8 @@ export default function Tip({
       {xy &&
         createPortal(
           <span
-            style={{ position: 'fixed', left: xy.x, top: xy.y - 4 }}
-            className="pointer-events-none z-[100] -translate-x-1/2 -translate-y-full whitespace-nowrap rounded bg-ink px-1.5 py-0.5 text-[10px] font-medium text-surface shadow-lg"
+            style={{ position: 'fixed', left: xy.x, top: xy.y - 6 }}
+            className="pointer-events-none z-[100] block -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md bg-ink px-2 py-1 text-[11px] leading-snug font-medium text-surface shadow-lg"
           >
             {label}
           </span>,

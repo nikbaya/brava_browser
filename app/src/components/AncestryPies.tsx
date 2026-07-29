@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useMemo } from 'react'
 import { fetchBiobankIndex, fetchPhenoSizes } from '../data/client'
 import { useAsync } from '../lib/useAsync'
 import { ANCESTRY_COLOR, ANCESTRY_META, SUPERPOPS, type Ancestry } from '../lib/constants'
@@ -6,10 +6,12 @@ import type { BiobankN, PhenotypeMeta } from '../data/types'
 import { Spinner } from './ui'
 import SamplePie, {
   NON_EUR,
+  PieTip,
   fmtN,
   fmtPct,
   lighten,
   scaledRadius,
+  usePieTip,
   type Slice,
 } from './SamplePie'
 
@@ -112,13 +114,7 @@ export default function AncestryPies({
   }, [strata, available, binary, name])
 
   // Custom hover tooltip — instant, unlike the native <title> delay.
-  const sectionRef = useRef<HTMLElement>(null)
-  const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null)
-  const showTip = (e: ReactMouseEvent, text: string) => {
-    const r = sectionRef.current?.getBoundingClientRect()
-    if (!r) return
-    setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text })
-  }
+  const { tip, show, hide } = usePieTip()
 
   if (sizes.loading) return <Spinner label="Loading sample sizes…" />
   if (!built || built.stratumPies.length === 0) return null
@@ -140,13 +136,13 @@ export default function AncestryPies({
       // shown faded and non-clickable rather than leading to an empty table.
       disabled={!available.includes(p.anc)}
       onSelect={() => onSelect(p.anc)}
-      onHover={showTip}
-      onLeave={() => setTip(null)}
+      onHover={show}
+      onLeave={hide}
     />
   )
 
   return (
-    <section ref={sectionRef} className="relative mt-4 rounded-lg border border-line bg-surface p-3">
+    <section className="mt-4 rounded-lg border border-line bg-surface p-3">
       <h2 className="mb-2 text-[13px] font-semibold text-ink">
         Sample size by ancestry
         <span className="ml-1.5 font-normal text-ink-faint">
@@ -176,14 +172,7 @@ export default function AncestryPies({
         )}
       </div>
 
-      {tip && (
-        <div
-          className="pointer-events-none absolute z-30 -translate-y-1/2 rounded-md border border-line bg-surface px-2 py-1 text-[11px] whitespace-nowrap text-ink shadow-lg"
-          style={{ left: tip.x + 14, top: tip.y }}
-        >
-          {tip.text}
-        </div>
-      )}
+      <PieTip tip={tip} />
     </section>
   )
 }

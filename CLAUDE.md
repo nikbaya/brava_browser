@@ -166,31 +166,51 @@ Class A $4.50/M, Class B $0.36/M.
 
 Implications baked into the design: keep emitting compact columnar JSON; upload
 compressed; never duplicate the dataset across buckets; if storage approaches
-10 GB (e.g. when variant-level data is added in v2), prune or re-evaluate the
-host **before** uploading.
+10 GB, prune or re-evaluate the host **before** uploading. Current usage is
+measured in the next section.
 
-### Variant-level (v2) feasibility — fits R2 free tier (measured 2026-06-28)
+### Actual R2 usage — 3.749 GiB / 10 GB (measured 2026-07-29)
 
-Checked whether adding variant-level results stays under the ceilings:
+Both v1 and v2 data are uploaded. Measured stored bytes (gzipped, as served):
+
+| Prefix | Objects | Stored (gzip) |
+|---|---|---|
+| `gene/` (v1) | 19,541 | 663.1 MiB |
+| `phenotype/` (v1) | 280 | 596.9 MiB |
+| `v2/` (variant) | 175,911 | 2.519 GiB |
+| **Bucket total** | **195,732** | **3.749 GiB (4.03 GB)** |
+
+**~40% of the 10 GB storage ceiling — comfortable headroom.** The v2 estimate
+below (~2.7 GB) proved accurate; gene-level came in under its ~1.5 GB estimate
+at 1.23 GiB.
+
+**Re-measure after any upload that adds or replaces data**, and update the table
+above (with the date) so the headroom figure never goes stale:
+
+```bash
+rclone size r2:brava-browser                 # whole bucket (~1 min, lists 196k objects)
+rclone size r2:brava-browser/v2              # or any single prefix
+```
+
+Note on **Class A ops**: the bucket is now 195,732 objects, so a *full* blind
+re-upload costs ~196k Class A ops — five of those in one month would approach
+the 1M ceiling. Always upload incrementally (`rclone copy --checksum`, which
+skips unchanged objects) rather than re-copying everything.
+
+#### Original v2 feasibility estimate (2026-06-28, kept for reference)
 
 | | Raw on GCS (gzip) | Browser footprint on R2 (gzip) |
 |---|---|---|
-| Gene-level (shipped v1) | 7.8 GiB | **~1.5 GB** (706 MB gene + 780 MB phenotype) |
-| Variant-level | 5.95 GiB (273 `.vcf.gz`) | **~1.5–3 GB est.** |
+| Gene-level (shipped v1) | 7.8 GiB | ~1.5 GB est. (actual: 1.23 GiB) |
+| Variant-level | 5.95 GiB (273 `.vcf.gz`) | ~1.5–3 GB est. (actual: 2.52 GiB) |
 
-The gene transform achieved ≈5× shrink (7.8 GiB raw → 1.5 GB browser-gz) by
-pivoting + keeping only displayed numeric fields. Variant VCFs are more verbose
-(per-biobank INFO subfields we'd strip to meta β/SE/p), so a similar reduction
-is expected. **Storage:** gene+variant ≈ 3–4.5 GB (pessimistic ~7.5 GB) — under
-10 GB. **Class A:** variant adds ~20k objects (per-gene shards) or ~273
-(per-pheno×ancestry) — negligible. **Class B:** a few reads/pageview — fine.
-So **cost is not the blocker.** The real constraint is UX/architecture: variant
-files are huge (AFib×EUR alone = **1.84M variants**), so v2 must serve by
-**region/locus-window slicing** (per-gene-region variant shards), not whole-
-phenotype files. **Before uploading v2, build the variant data and re-measure
-the actual gzipped output to confirm total stays comfortably under 10 GB.**
+The gene transform achieved ≈5× shrink by pivoting + keeping only displayed
+numeric fields; the variant transform landed in the same range. Cost was never
+the blocker. The real constraint was UX/architecture: variant files are huge
+(AFib×EUR alone = **1.84M variants**), so v2 serves by **region/locus-window
+slicing** (per-gene-region variant shards), not whole-phenotype files.
 
-## Current state / open items (as of 2026-07-10)
+## Current state / open items (as of 2026-07-29)
 
 ### v1 (gene-level) — live
 - App is feature-complete and deployed to GitHub Pages via GitHub Actions.
@@ -200,51 +220,27 @@ the actual gzipped output to confirm total stays comfortably under 10 GB.**
 - Local dev: `cd app && npm run dev -- --host`; `.env.local` has both
   `VITE_DATA_BASE_URL` and `VITE_VARIANT_BASE_URL` pointing at R2.
 
-### v2 (variant-level) — code complete, data build + upload pending
+### v2 (variant-level) — live
 
-**What was done (2026-07-10, commit `d43f82e`):**
-- All frontend code is committed and ready: `GeneVariants`, `LocusZoom`,
-  `VariantForest` components; data types, fetchers, `variantRows` /
-  `variantForest` selectors; `VITE_VARIANT_BASE_URL` wired into
+Frontend code, data build, and R2 upload are all **done** (commits `d43f82e`,
+`7478cd7`):
+- `GeneVariants`, `LocusZoom`, `VariantForest` components; data types, fetchers,
+  `variantRows` / `variantForest` selectors; `VITE_VARIANT_BASE_URL` wired into
   `config.ts` and `deploy.yml` (points to `…r2.dev/v2`).
-- `pipeline/build_variants.py` (508 lines): streaming two-pass VCF→JSON ETL.
-- `pipeline/Makefile` updated with `full-variants`, `copy-variant-split`,
-  `upload-variants` (rclone→R2) targets.
-- `app/public/data/meta/variant_split.json` committed as placeholder
-  `{"split":[]}` — must be updated after the full pipeline run.
-- Production build: 390 KB JS / 122 KB gzipped, TypeScript clean.
+- `pipeline/build_variants.py`: streaming two-pass VCF→JSON ETL. Resolves SAMPLE
+  subfield positions from each file's own FORMAT column (fixed indices misalign —
+  quantitative traits omit `NC`, and some files omit `NS`/`NE`).
+- `pipeline/Makefile`: `full-variants`, `copy-variant-split`, `upload-variants`.
+  `upload-variants` gzip-transcodes a staging copy and sets `Content-Encoding`
+  (rclone has no `gsutil -Z` equivalent), matching v1.
+- `app/public/data/meta/variant_split.json` ships the real manifest: **1,586
+  genes** are split per-phenotype (the rest are one file for all phenotypes).
+- Data on R2 under `v2/variant/`: 175,911 objects, 2.519 GiB — see the usage
+  table above.
 
-**Remaining steps (requires network + R2 credentials, user runs these):**
-
-1. **Build variant data** (~1–2 h, needs GCS access + ~6 GB download):
-   ```bash
-   cd pipeline
-   make full-variants
-   # uses app/public/data/meta/ as meta-dir fallback (no need to re-run make full)
-   ```
-   After: `du -sh build/variant/` — confirm gzipped total (gene+variant) stays
-   under 10 GB R2 free-tier ceiling.
-
-2. **Update bundled split manifest:**
-   ```bash
-   make copy-variant-split
-   # cp build/meta/variant_split.json → app/public/data/meta/variant_split.json
-   ```
-
-3. **Upload to R2** (rclone must be configured with R2 S3-compatible token):
-   ```bash
-   make upload-variants
-   # rclone copy … build/variant → r2:brava-browser/v2/variant
-   # prints total R2 usage at end — must stay under 10 GB
-   ```
-
-4. **Commit + push:**
-   ```bash
-   git add app/public/data/meta/variant_split.json
-   git commit -m "variant: update split manifest after full build"
-   git push origin main
-   # GitHub Actions deploys automatically
-   ```
+To rebuild/re-upload variant data: `make full-variants` (~1–2 h, needs GCS access
++ ~6 GB download) → `make copy-variant-split` → `make upload-variants`, then
+commit `variant_split.json` if it changed and re-measure `rclone size`.
 
 **Not yet built (deferred to v2.1):**
 - Phenotype-page variant Manhattan (uses `fetchVariantOverview`; overview

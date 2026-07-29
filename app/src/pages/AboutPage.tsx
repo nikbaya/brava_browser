@@ -79,7 +79,7 @@ function Overview({ biobanks }: { biobanks: Biobank[] }) {
       <h2 className="mb-1 text-lg font-semibold text-ink">Ancestral diversity</h2>
       <p className="mb-4 max-w-3xl text-sm text-ink-soft">
         BRaVa's strength is the breadth of genetic ancestries it brings together.
-        Each donut is one genetic-ancestry group; the slices show how that
+        Each pie is one genetic-ancestry group; the slices show how that
         ancestry's representation is assembled across the contributing biobanks
         (hover for counts).
       </p>

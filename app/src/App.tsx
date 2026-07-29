@@ -10,6 +10,7 @@ import { Spinner } from './components/ui'
 // Lazy-loaded so the world-atlas map data only downloads when needed.
 const AboutPage = lazy(() => import('./pages/AboutPage'))
 const FaqPage = lazy(() => import('./pages/FaqPage'))
+const DownloadsPage = lazy(() => import('./pages/DownloadsPage'))
 
 export default function App() {
   const { pathname } = useLocation()
@@ -26,6 +27,7 @@ export default function App() {
             <Route path="/phenotype/:id" element={<PhenotypePage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/faq" element={<FaqPage />} />
+            <Route path="/downloads" element={<DownloadsPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
@@ -44,6 +46,10 @@ function Footer() {
       </p>
       <p className="mt-1">
         Summary statistics only · not for clinical use ·{' '}
+        <Link to="/downloads" className="text-brand hover:underline">
+          Download the data
+        </Link>{' '}
+        ·{' '}
         <Link to={{ pathname: '/faq', hash: '#cite' }} className="text-brand hover:underline">
           How to cite
         </Link>
