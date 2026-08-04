@@ -36,6 +36,7 @@ META_DIR ?= $(shell [ -f $(OUT_FULL)/meta/genes.json ] && echo $(OUT_FULL)/meta 
 # build_phenotypes / build_biobanks fetch the supp tables from medRxiv (cached).
 meta:
 	python build_annotation.py --out $(OUT_DEV)
+	python build_exons.py --out $(OUT_DEV)
 	python build_phenotypes.py --out $(OUT_DEV)
 	python build_biobanks.py --out $(OUT_DEV)
 
@@ -44,6 +45,7 @@ sample: meta
 
 full:
 	python build_annotation.py --out $(OUT_FULL)
+	python build_exons.py --out $(OUT_FULL)
 	python build_phenotypes.py --out $(OUT_FULL)
 	python build_biobanks.py --out $(OUT_FULL)
 	python build_data.py --out $(OUT_FULL) --phenos all --genes all --gene-shards 16

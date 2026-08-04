@@ -83,6 +83,25 @@ Raw: `{PHENO}_ALL_gene_meta_analysis_100_cutoff.{ANCESTRY}.tsv.gz` (no suffix =
 - **Manhattan:** HTML **canvas** ([ManhattanPlot.tsx](app/src/components/ManhattanPlot.tsx)),
   19k+ points, linear hit-test, significance lines, tight x-axis whitespace.
 - **PheWAS & forest:** SVG.
+- **Gene model track + exon-collapsed axis** (variant view). The VCFs have no
+  functional annotations (variants → genes by position overlap), so exon
+  structure is the only way to see *where* in a gene a variant sits.
+  [GeneTrack.tsx](app/src/components/GeneTrack.tsx) draws the MANE Select
+  transcript under [LocusZoom.tsx](app/src/components/LocusZoom.tsx), sharing its
+  x scale — CDS tall/dark, UTR thin/light (gnomAD's convention).
+  **Do not use the gnomAD API** for this: it's rate-limited to 10 req/60s, and
+  the data is already in the Ensembl GTF we build from.
+  [exonScale.ts](app/src/lib/exonScale.ts) reimplements gnomAD's
+  `regionViewerScale` (`@gnomad/region-viewer`): axis width is allocated *only*
+  to exons ±75 bp and the gaps get **zero width** (introns excised, not
+  compressed — verified against their source, and a unit test asserts agreement
+  with the reference implementation). Positions inside an excised gap pin to the
+  preceding block's trailing edge, matching gnomAD, so intronic variants stack on
+  the exon boundary. Ours uses cumulative offsets + binary search instead of
+  their per-call filter/reduce (thousands of points per frame, plus hover).
+  **Axis defaults to genomic** (exons shaded behind the points) with an
+  `Exons`/`Genomic` toggle — the collapsed view matters because the median gene
+  in our index spends only 12.6% of its span in exons (42% are under 10%).
 - **Multi-ancestry view = forest plot** ([ForestPlot.tsx](app/src/components/ForestPlot.tsx)):
   IVW Burden β ± 1.96·SE per ancestry, `All` rendered last as a meta diamond,
   P_het header (flags "heterogeneous" when <0.05), axis label adapts to trait
@@ -131,6 +150,14 @@ Raw: `{PHENO}_ALL_gene_meta_analysis_100_cutoff.{ANCESTRY}.tsv.gz` (no suffix =
 - [build_phenotypes.py](pipeline/build_phenotypes.py): parses BRaVa_curation r
   file for names/categories/class.
 - [build_annotation.py](pipeline/build_annotation.py): Ensembl 110 gene index.
+- [build_exons.py](pipeline/build_exons.py): gene models (exon + CDS structure)
+  from the same Ensembl 110 GTF — one transcript per gene, **MANE Select** with
+  **Ensembl canonical** as fallback (19,061 / 972 of 20,033 genes). Emits
+  `meta/exons/chr{N}.json`, sharded by chromosome (5.7 MB raw, 1.4 MB gzipped;
+  largest shard chr1 = 604 KB raw / 146 KB gz). Reads `meta/genes.json` (not the
+  parquet), so it runs off a checked-out repo alone. `ensembl_gtf()` lives in
+  [common.py](pipeline/common.py) so the gene index and the gene models are
+  always from the same release.
 - [Makefile](pipeline/Makefile): `make meta|sample|full|upload`. `upload` uses
   `gsutil -m cp -Z -r` (gzip-transcoding; names stay `.json`, browsers
   decompress transparently).
@@ -242,9 +269,16 @@ To rebuild/re-upload variant data: `make full-variants` (~1–2 h, needs GCS acc
 + ~6 GB download) → `make copy-variant-split` → `make upload-variants`, then
 commit `variant_split.json` if it changed and re-measure `rclone size`.
 
+Gene/exon context for the variant view is done (see the gene model track bullet
+under Frontend conventions). `meta/exons/` is **bundled with the app**, not on R2,
+so it costs no Class B reads and needed no re-run of the heavy gene ETL — rebuild
+with `make meta` (or just `python build_exons.py --out ../app/public/data`) and
+commit the shards.
+
 **Not yet built (deferred to v2.1):**
 - Phenotype-page variant Manhattan (uses `fetchVariantOverview`; overview
   JSON files are emitted by the pipeline but no UI component consumes them yet).
+- ClinVar track / "in ClinVar" badge — see [docs/ui-followups.md](docs/ui-followups.md).
 - Idle/hover prefetch of `.anc.json` files.
 - rsID / coordinate search (VCFs have no rsIDs; dbSNP map not available).
 

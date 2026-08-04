@@ -96,6 +96,45 @@ the scrollport width (needs the container's `clientWidth`, e.g. via
 `ResizeObserver`), or move the caption outside the min-width wrapper and stack
 the two sticky bands by measured caption height.
 
+## ClinVar annotations on the variant view
+
+Now that the gene page has a gene-model track and exon-collapsed axis
+([GeneTrack.tsx](../app/src/components/GeneTrack.tsx),
+[exonScale.ts](../app/src/lib/exonScale.ts)), the natural next layer is ClinVar —
+it answers "is this variant already known to be pathogenic?", which is the first
+question a clinical geneticist asks of a rare-variant hit. gnomAD puts it as a
+separate track directly above the variant plot.
+
+**Two UI surfaces, in order of value:**
+
+1. **A ClinVar track** above the LocusZoom, sharing the same x scale (and the
+   same collapsed-axis toggle) — one mark per ClinVar variant in the gene, shaped
+   or colored by clinical significance (P/LP vs VUS vs B/LB) and by review status
+   (stars). This gives the "our signal sits on top of known pathogenic variants"
+   read at a glance.
+2. **A column/badge in the variant table** for BRaVa variants that match a
+   ClinVar record on chr:pos:ref:alt, linking out to the ClinVar entry. Cheaper
+   than the track and useful on its own.
+
+**Data source.** NCBI's `variant_summary.txt.gz` (or the ClinVar VCF) from
+<https://ftp.ncbi.nlm.nih.gov/pub/clinvar/>. Filter to GRCh38, to the ~20k genes
+in our index, and to the fields we'd actually draw: position, ref/alt,
+significance, review status, variation ID. Same shape as the exon build: a
+`build_clinvar.py` emitting per-chromosome or per-gene shards.
+
+**Open questions to settle before building:**
+- **Size.** Unmeasured. ClinVar is ~4M records; even filtered to our genes and
+  five fields this is likely too big to *bundle* the way the exon shards are
+  (1.4 MB gzipped total). Per-gene shards on R2 would cost one extra Class B read
+  per gene page, or per-chromosome bundled shards may work if the filtered set is
+  small enough. Measure before choosing.
+- **Staleness.** ClinVar changes weekly; exon structure doesn't. Whatever we ship
+  needs a stated release date in the UI, and a rebuild story. This is the main
+  argument for linking out rather than embedding a snapshot.
+- **Matching.** ClinVar normalizes indels differently from the BRaVa VCFs, so
+  chr:pos:ref:alt matching will silently miss some indels. Worth quantifying the
+  miss rate on one gene before promising a "in ClinVar" badge.
+
 ## Gene table: header/body cell-divider misalignment
 
 The per-ancestry grid header's group-cell outline doesn't line up with the body

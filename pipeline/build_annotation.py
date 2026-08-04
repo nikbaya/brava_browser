@@ -13,32 +13,17 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import urllib.request
 from pathlib import Path
 
 import polars as pl
 
-from common import CACHE_DIR, CHROM_ORDER
-
-GTF_URL = (
-    "https://ftp.ensembl.org/pub/release-110/gtf/homo_sapiens/"
-    "Homo_sapiens.GRCh38.110.gtf.gz"
-)
+from common import CHROM_ORDER, ensembl_gtf
 
 _ATTR = {
     "gene_id": re.compile(r'gene_id "([^".]+)'),
     "gene_name": re.compile(r'gene_name "([^"]+)"'),
     "gene_biotype": re.compile(r'gene_biotype "([^"]+)"'),
 }
-
-
-def download_gtf() -> Path:
-    CACHE_DIR.mkdir(exist_ok=True)
-    dest = CACHE_DIR / "ensembl_110.gtf.gz"
-    if not dest.exists():
-        print(f"Downloading {GTF_URL} …")
-        urllib.request.urlretrieve(GTF_URL, dest)
-    return dest
 
 
 def parse_genes(gtf: Path) -> pl.DataFrame:
@@ -81,7 +66,7 @@ def main() -> None:
     ap.add_argument("--out", default="../app/public/data", type=Path)
     args = ap.parse_args()
 
-    df = parse_genes(download_gtf())
+    df = parse_genes(ensembl_gtf())
     print(f"{df.height} protein-coding genes")
 
     meta = args.out / "meta"

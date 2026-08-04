@@ -1,6 +1,7 @@
 import { dataUrl, metaUrl, variantUrl } from './config'
 import type {
   BiobankIndex,
+  ExonShard,
   GeneData,
   GeneIndex,
   GeneVariantAncData,
@@ -47,6 +48,14 @@ export const fetchBiobankIndex = () =>
   getJSON<BiobankIndex>(metaUrl('meta/biobanks.json'))
 export const fetchPhenoSizes = () =>
   getJSON<PhenoSizes>(metaUrl('meta/pheno_sizes.json'))
+
+/**
+ * Gene models (exon structure) for one chromosome. Sharded so the gene page
+ * pulls ~50–150 KB gzipped instead of the whole 1.4 MB index; bundled with the
+ * app, so no remote dependency.
+ */
+export const fetchExonShard = (chr: string) =>
+  getJSON<ExonShard>(metaUrl(`meta/exons/chr${chr}.json`))
 
 export const fetchGene = (ensg: string) =>
   getJSON<GeneData>(dataUrl(`gene/${ensg}.json`))

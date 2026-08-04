@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ColumnDef, SortingState } from '@tanstack/react-table'
-import { fetchGeneVariants, fetchGeneVariantsAnc, HttpError } from '../data/client'
+import {
+  fetchExonShard,
+  fetchGeneVariants,
+  fetchGeneVariantsAnc,
+  HttpError,
+} from '../data/client'
 import type { PhenotypeMeta } from '../data/types'
 import { useAsync } from '../lib/useAsync'
 import { variantForest, variantRows, type VariantRow } from '../lib/select'
@@ -38,6 +43,15 @@ export default function GeneVariants({
     () => fetchGeneVariants(ensg, phenoIdx, split),
     [ensg, phenoIdx, split],
   )
+
+  // Exon structure for the gene model track / exon-collapsed axis. Bundled and
+  // chromosome-sharded, so this resolves well before the variant fetch; a miss
+  // just means the plot falls back to a plain genomic axis.
+  const exons = useAsync(
+    () => (chr ? fetchExonShard(chr) : Promise.resolve(null)),
+    [chr],
+  )
+  const model = (chr && exons.data?.genes[ensg]) || null
 
   const rows = useMemo(
     () => (data ? variantRows(data, phenoIdx) : []),
@@ -96,6 +110,7 @@ export default function GeneVariants({
         type={trait.type}
         onSelect={setSelected}
         selected={selected}
+        model={model}
       />
 
       {selected && (

@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { scaleLinear } from 'd3-scale'
 import { fmtBeta, fmtPLog, fmtPos } from '../lib/format'
 import type { VariantRow } from '../lib/select'
+import type { GeneModel } from '../data/types'
+import { collapsedRegions, regionScale, type Span } from '../lib/exonScale'
+import GeneTrack from './GeneTrack'
 
 interface Plotted {
   row: VariantRow
@@ -14,6 +17,9 @@ interface Hover {
   p: Plotted
 }
 
+/** Minimal shape shared by d3's linear scale and our exon-collapsed scale. */
+type XScale = ((pos: number) => number) & { invert(px: number): number }
+
 const M = { top: 12, right: 16, bottom: 30, left: 46 }
 const HEIGHT = 240
 const R = 2.6
@@ -22,11 +28,24 @@ const R = 2.6
 const C_UP = '#c0392b' // beta > 0
 const C_DOWN = '#2f6f9f' // beta < 0
 const C_NULL = '#9aa7b4'
+const C_EXON_BAND = '#eef2f6'
+
+/** Mb decimals needed for tick labels to differ across a span of `bp`. */
+function mbDecimals(bp: number): number {
+  const d = Math.ceil(-Math.log10(Math.max(bp, 1) / 1e6)) + 2
+  return Math.min(6, Math.max(2, d))
+}
 
 /**
  * Gene-region "locuszoom": one point per variant, x = genomic position, y =
  * -log10 p, colored by effect direction. Canvas so it stays smooth for the
  * biggest genes (TTN ≈ 7k variants). Click a point to select the variant.
+ *
+ * The x axis is true genomic position by default, with the gene's exons shaded
+ * behind the points. With a gene model supplied, a toggle switches to
+ * exon-collapsed coordinates — pixel width allocated only to exons ±75 bp, gaps
+ * excised (gnomAD's `regionViewerScale`) — which is the only way coding variants
+ * in a mostly-intronic gene become resolvable.
  */
 export default function LocusZoom({
   variants,
@@ -36,6 +55,7 @@ export default function LocusZoom({
   type,
   onSelect,
   selected,
+  model,
 }: {
   variants: VariantRow[]
   start?: number
@@ -44,11 +64,13 @@ export default function LocusZoom({
   type: 'binary' | 'quantitative'
   onSelect: (v: VariantRow) => void
   selected?: VariantRow | null
+  model?: GeneModel | null
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [width, setWidth] = useState(900)
   const [hover, setHover] = useState<Hover | null>(null)
+  const [collapse, setCollapse] = useState(false)
 
   const points = useMemo<Plotted[]>(() => {
     const out: Plotted[] = []
@@ -77,10 +99,28 @@ export default function LocusZoom({
     [points],
   )
 
-  const xScale = useMemo(
-    () => scaleLinear().domain([xLo, xHi]).range([M.left, width - M.right]),
-    [xLo, xHi, width],
+  // Padded exon regions: the collapsed axis domain, and the shading in genomic
+  // mode. Null when we have no gene model for this gene.
+  const regions = useMemo<Span[] | null>(
+    () => (model ? collapsedRegions(model) : null),
+    [model],
   )
+  const collapsed = collapse && regions != null && regions.length > 0
+
+  const xRange = useMemo<[number, number]>(
+    () => [M.left, width - M.right],
+    [width],
+  )
+  const xScale = useMemo<XScale>(() => {
+    if (collapsed) return regionScale(regions!, xRange) as XScale
+    return scaleLinear().domain([xLo, xHi]).range(xRange) as unknown as XScale
+  }, [collapsed, regions, xLo, xHi, xRange])
+
+  const blocks = useMemo(
+    () => (collapsed ? (xScale as unknown as { blocks: [number, number][] }).blocks : undefined),
+    [collapsed, xScale],
+  )
+
   const yScale = useMemo(
     () => scaleLinear().domain([0, maxY]).range([HEIGHT - M.bottom, M.top]),
     [maxY],
@@ -104,6 +144,22 @@ export default function LocusZoom({
     const ctx = canvas.getContext('2d')!
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, width, HEIGHT)
+
+    // Exon shading (genomic mode only — when collapsed the exons *are* the axis).
+    if (!collapsed && regions) {
+      ctx.fillStyle = C_EXON_BAND
+      for (const r of regions) {
+        const x0 = xScale(r.start)
+        const x1 = xScale(r.stop)
+        if (x1 < M.left || x0 > width - M.right) continue
+        ctx.fillRect(
+          Math.max(M.left, x0),
+          M.top,
+          Math.max(0.75, Math.min(width - M.right, x1) - Math.max(M.left, x0)),
+          HEIGHT - M.bottom - M.top,
+        )
+      }
+    }
 
     // y gridlines + labels
     ctx.strokeStyle = '#e3e8ee'
@@ -146,14 +202,33 @@ export default function LocusZoom({
       }
     }
 
-    // x ticks (genomic position, Mb)
+    // x ticks. Genomic mode uses d3's nice round positions; collapsed mode has a
+    // non-linear axis, so we place ticks at even pixel intervals and invert them
+    // to get the (still exact) genomic position at that point.
     ctx.fillStyle = '#51606e'
-    ctx.textAlign = 'center'
-    for (const t of xScale.ticks(6)) {
-      ctx.fillText((t / 1e6).toFixed(2), xScale(t), HEIGHT - 14)
+    // Nudge the outermost labels inward so they can't overflow the canvas.
+    const tick = (label: string, px: number) => {
+      ctx.textAlign =
+        px < xRange[0] + 16 ? 'left' : px > xRange[1] - 16 ? 'right' : 'center'
+      ctx.fillText(label, px, HEIGHT - 14)
     }
+    if (collapsed) {
+      const dec = mbDecimals(xScale.invert(xRange[1]) - xScale.invert(xRange[0]))
+      const n = Math.max(2, Math.min(6, Math.floor((xRange[1] - xRange[0]) / 90)))
+      for (let i = 0; i <= n; i++) {
+        const px = xRange[0] + ((xRange[1] - xRange[0]) * i) / n
+        tick((xScale.invert(px) / 1e6).toFixed(dec), px)
+      }
+    } else {
+      const ticks = (
+        xScale as unknown as { ticks(n: number): number[] }
+      ).ticks(6)
+      const dec = mbDecimals(xHi - xLo)
+      for (const t of ticks) tick((t / 1e6).toFixed(dec), xScale(t))
+    }
+    ctx.textAlign = 'center'
     ctx.fillText(
-      chr ? `chr${chr} position (Mb)` : 'position (Mb)',
+      `${chr ? `chr${chr}` : ''} position (Mb)${collapsed ? ' — introns removed' : ''}`.trim(),
       width / 2,
       HEIGHT - 2,
     )
@@ -164,7 +239,20 @@ export default function LocusZoom({
     ctx.fillStyle = '#51606e'
     ctx.fillText('-log₁₀(p)', 0, 0)
     ctx.restore()
-  }, [points, width, maxY, xScale, yScale, chr, selected])
+  }, [
+    points,
+    width,
+    maxY,
+    xScale,
+    xRange,
+    yScale,
+    chr,
+    selected,
+    collapsed,
+    regions,
+    xLo,
+    xHi,
+  ])
 
   const onMove = (e: React.MouseEvent) => {
     const rect = canvasRef.current!.getBoundingClientRect()
@@ -189,15 +277,36 @@ export default function LocusZoom({
 
   return (
     <div ref={wrapRef} className="relative w-full">
-      <div className="flex items-center justify-end gap-3 px-1 pb-1 text-[11px] text-ink-soft">
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ background: C_UP }} />
-          {upLabel}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ background: C_DOWN }} />
-          {downLabel}
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-1 text-[11px] text-ink-soft">
+        {model ? (
+          <div className="inline-flex items-center gap-1.5">
+            <span className="text-ink-faint">Axis</span>
+            <div className="inline-flex overflow-hidden rounded border border-line">
+              <AxisButton active={!collapse} onClick={() => setCollapse(false)}>
+                Genomic
+              </AxisButton>
+              <AxisButton active={collapse} onClick={() => setCollapse(true)}>
+                Exons
+              </AxisButton>
+            </div>
+            <span className="tnum text-ink-faint">
+              {model.tx}
+              {model.src === 'mane_select' ? ' (MANE Select)' : ' (Ensembl canonical)'}
+            </span>
+          </div>
+        ) : (
+          <span />
+        )}
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-block h-2 w-2 rounded-full" style={{ background: C_UP }} />
+            {upLabel}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-block h-2 w-2 rounded-full" style={{ background: C_DOWN }} />
+            {downLabel}
+          </span>
+        </div>
       </div>
       <canvas
         ref={canvasRef}
@@ -207,6 +316,16 @@ export default function LocusZoom({
         onMouseLeave={() => setHover(null)}
         onClick={() => hover && onSelect(hover.p.row)}
       />
+      {model && (
+        <GeneTrack
+          model={model}
+          xScale={xScale}
+          width={width}
+          left={M.left}
+          right={M.right}
+          blocks={blocks}
+        />
+      )}
       {hover && (
         <div
           className="pointer-events-none absolute z-10 rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-lg"
@@ -222,5 +341,26 @@ export default function LocusZoom({
         </div>
       )}
     </div>
+  )
+}
+
+function AxisButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-1.5 py-px text-[11px] ${
+        active ? 'bg-ink-soft text-white' : 'bg-surface text-ink-soft hover:bg-surface-alt'
+      }`}
+    >
+      {children}
+    </button>
   )
 }

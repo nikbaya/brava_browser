@@ -71,6 +71,12 @@ def stem_to_id(stem: str) -> str:
 
 CHROM_ORDER = {str(c): i for i, c in enumerate(list(range(1, 23)) + ["X", "Y"])}
 
+# Gene symbols, positions and exon structure all come from this one release.
+GTF_URL = (
+    "https://ftp.ensembl.org/pub/release-110/gtf/homo_sapiens/"
+    "Homo_sapiens.GRCh38.110.gtf.gz"
+)
+
 ROOT = Path(__file__).resolve().parent
 CACHE_DIR = ROOT / ".cache"
 
@@ -90,6 +96,20 @@ def supp_tables(override: Path | None = None) -> Path:
         req = urllib.request.Request(SUPP_URL, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req) as r, open(dest, "wb") as f:
             f.write(r.read())
+    return dest
+
+
+def ensembl_gtf() -> Path:
+    """Path to the cached Ensembl GTF; download it on first use (~51 MB).
+
+    Shared by build_annotation.py (gene index) and build_exons.py (gene models)
+    so both are guaranteed to describe the same Ensembl release.
+    """
+    CACHE_DIR.mkdir(exist_ok=True)
+    dest = CACHE_DIR / "ensembl_110.gtf.gz"
+    if not dest.exists():
+        print(f"Downloading {GTF_URL} …")
+        urllib.request.urlretrieve(GTF_URL, dest)
     return dest
 
 

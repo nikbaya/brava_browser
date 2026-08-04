@@ -11,6 +11,28 @@ export interface GeneIndex {
   end: number[]
 }
 
+/**
+ * One gene's model: the MANE Select transcript (or Ensembl canonical where no
+ * MANE Select exists), as emitted by pipeline/build_exons.py. `exons` and `cds`
+ * are flat [offset, length, offset, length, …] pairs relative to `start`, sorted
+ * ascending by position. CDS spans are a subset of the exons — the difference is
+ * UTR, which is drawn shorter (gnomAD convention).
+ */
+export interface GeneModel {
+  tx: string // Ensembl transcript ID (no version suffix)
+  src: 'mane_select' | 'ensembl_canonical'
+  strand: 1 | -1
+  start: number // GRCh38 bp of the transcript's first exon
+  exons: number[]
+  cds: number[]
+}
+
+/** meta/exons/chr{N}.json — gene models for one chromosome, keyed by ENSG. */
+export interface ExonShard {
+  chr: string
+  genes: Record<string, GeneModel>
+}
+
 /** Sample size for one (phenotype × ancestry); case/ctrl present for binary. */
 export interface AncestryN {
   n: number
