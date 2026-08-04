@@ -13,7 +13,6 @@ const EXAMPLE_TRAITS: { id: string; label: string }[] = [
   { id: 'LDLC', label: 'LDL Cholesterol' },
   { id: 'T2Diab', label: 'Type 2 Diabetes' },
   { id: 'Height', label: 'Height' },
-  { id: 'CAD', label: 'Coronary Artery Disease' },
 ]
 
 export default function LandingPage() {
