@@ -95,5 +95,5 @@ export const COHORTS: Cohort[] = [
   { name: 'Penn Medicine BioBank', country: 'USA', flag: '🇺🇸', id: 'pmbb', people: ['Anurag Verma', 'Daniel Rader', 'Marylyn Ritchie', 'Shefali Verma', 'Scott Damrauer', 'Michael Levin', 'Giorgio Sirugo'] },
   { name: 'Qatar Genome', country: 'Qatar', flag: '🇶🇦', people: ['Said Ismail', 'Hamdi Mbarek', 'Chadi Saad'] },
   { name: 'UK Biobank', country: 'UK', flag: '🇬🇧', id: 'uk-biobank', people: ['Rory Collins', 'Mark Effingham', 'Naomi Allen', 'Cecilia Lindgren', 'Ben Neale', 'Duncan Palmer'] },
-  { name: 'VIKING Genes', country: 'Scotland', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', people: ['Jim Wilson'] },
+  { name: 'Viking Genes', country: 'Scotland', flag: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', people: ['Jim Wilson'] },
 ]
