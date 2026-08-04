@@ -1,5 +1,6 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Link, Route, Routes, useLocation } from 'react-router-dom'
+import { countPageview } from './lib/analytics'
 import Header from './components/Header'
 import LandingPage from './pages/LandingPage'
 import GenePage from './pages/GenePage'
@@ -14,11 +15,15 @@ const DownloadsPage = lazy(() => import('./pages/DownloadsPage'))
 
 export default function App() {
   const { pathname } = useLocation()
-  const isLanding = pathname === '/'
+
+  // One GoatCounter pageview per route, keyed on the router path.
+  useEffect(() => {
+    countPageview(pathname)
+  }, [pathname])
 
   return (
     <div className="flex min-h-full flex-col">
-      {!isLanding && <Header />}
+      <Header />
       <main className="flex-1">
         <Suspense fallback={<Spinner />}>
           <Routes>

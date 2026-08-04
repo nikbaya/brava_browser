@@ -9,6 +9,15 @@
       content="BRaVa browser — rare coding-variant associations across 44 traits and ~1.2M individuals from 10 global biobanks."
     />
     <title>BRaVa browser — rare variant association results</title>
+    <!-- Analytics. no_onload: HashRouter means count.js's automatic pageview
+         would log every route as the same path; src/lib/analytics.ts counts
+         each route change instead. -->
+    <script
+      data-goatcounter="https://n-i-k.goatcounter.com/count"
+      data-goatcounter-settings='{"no_onload":true}'
+      async
+      src="//gc.zgo.at/count.js"
+    ></script>
   </head>
   <body>
     <div id="root"></div>

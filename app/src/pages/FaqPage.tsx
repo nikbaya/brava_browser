@@ -7,7 +7,7 @@ import {
 
 const PAPER_TITLE =
   'The Biobank Rare Variant consortium powers the discovery of rare genetic associations through global collaboration'
-const PAPER_DOI = '10.1101/2026.05.21.26353759'
+const PAPER_DOI = '10.64898/2026.05.21.26353759'
 const PAPER_URL = `https://doi.org/${PAPER_DOI}`
 
 const CITATION = `Biobank Rare Variant Analysis (BRaVa) consortium. ${PAPER_TITLE}. medRxiv (2026). doi:${PAPER_DOI}`

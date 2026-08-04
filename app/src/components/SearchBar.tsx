@@ -12,7 +12,7 @@ interface Props {
 export default function SearchBar({
   autoFocus,
   size = 'md',
-  placeholder = 'Search a gene (e.g. PCSK9) or trait (e.g. LDL Cholesterol)',
+  placeholder = 'Search a gene or trait',
 }: Props) {
   const { search, phenotypes, loading } = useIndex()
   const navigate = useNavigate()
