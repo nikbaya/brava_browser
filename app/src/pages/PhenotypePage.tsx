@@ -23,9 +23,14 @@ import {
   type Ancestry,
 } from '../lib/constants'
 import { fmtPos } from '../lib/format'
+import { slug, type ExportColumn, type TableExport } from '../lib/exportTable'
 import type { PhenotypeData, PhenotypeMeta } from '../data/types'
 import { Notice, Spinner, ThresholdLegend } from '../components/ui'
-import { ancestryGridColumns, BetaLegend } from '../components/ancestryColumns'
+import {
+  ancestryExportColumns,
+  ancestryGridColumns,
+  BetaLegend,
+} from '../components/ancestryColumns'
 import FilterBar, { type FilterState } from '../components/FilterBar'
 import TableFilters, {
   NO_TABLE_FILTER,
@@ -241,6 +246,7 @@ export default function PhenotypePage() {
             selAncIdx={ancIdx}
             loadedAnc={loadedAnc}
             filters={filters}
+            pheno={pheno}
             ancestry={ancestry}
             ancestryN={pheno.n?.[ancestry]}
             onOpenForest={setDrawer}
@@ -373,6 +379,7 @@ function ResultsTable({
   selAncIdx,
   loadedAnc,
   filters,
+  pheno,
   ancestry,
   ancestryN,
   onOpenForest,
@@ -383,6 +390,7 @@ function ResultsTable({
   selAncIdx: number
   loadedAnc: Set<number>
   filters: FilterState
+  pheno: PhenotypeMeta
   ancestry: Ancestry
   ancestryN?: { n: number; case?: number; ctrl?: number }
   onOpenForest: (g: { ensg: string; symbol: string }) => void
@@ -451,6 +459,31 @@ function ResultsTable({
     [ancIdxs, selAncIdx, loadedAnc, betaGridMax, filters.test],
   )
 
+  // Mirrors the gene page's export: the qualifying constants (trait, mask, MAF,
+  // test) become columns, so a row means the same thing outside the page.
+  // Columns not yet loaded export blank, exactly as they render ("…").
+  const exportSpec = useMemo<TableExport<TableRow>>(() => {
+    const mask = MASK_META[filters.maskIndex]
+    return {
+      noun: 'genes',
+      filename: `brava_${slug(pheno.id)}_${slug(mask.short)}_maf${MAF_META[filters.mafIndex].value}_${slug(filters.test)}.tsv`,
+      columns: [
+        { header: 'phenotype_id', value: () => pheno.id },
+        { header: 'phenotype', value: () => pheno.name },
+        { header: 'category', value: () => pheno.category },
+        { header: 'trait_type', value: () => pheno.type },
+        { header: 'gene', value: (r) => r.symbol },
+        { header: 'ensembl_gene_id', value: (r) => r.ensg },
+        { header: 'chrom', value: (r) => r.chr },
+        { header: 'gene_start', value: (r) => r.start },
+        { header: 'variant_mask', value: () => mask.raw },
+        { header: 'max_maf', value: () => MAF_META[filters.mafIndex].value },
+        { header: 'test', value: () => filters.test },
+        ...ancestryExportColumns<TableRow>(ancIdxs),
+      ] satisfies ExportColumn<TableRow>[],
+    }
+  }, [pheno, filters.maskIndex, filters.mafIndex, filters.test, ancIdxs])
+
   const caption = (
     <span>
       <span className="font-semibold text-ink-soft">
@@ -484,6 +517,7 @@ function ResultsTable({
       onSortingChange={setSorting}
       onRowClick={(r) => onOpenForest({ ensg: r.ensg, symbol: r.symbol })}
       caption={caption}
+      exportSpec={exportSpec}
       reservedRows={reservedRows}
     />
   )

@@ -1,6 +1,7 @@
 import type { ColumnDef } from '@tanstack/react-table'
 import { ANCESTRIES, ANCESTRY_META, type Test } from '../lib/constants'
 import { fmtBeta3, fmtPCompact, fmtPLog3 } from '../lib/format'
+import { exportP, type ExportColumn } from '../lib/exportTable'
 import { DIR_NEG, DIR_POS, EffectTriangle, isSig, sigTextClass } from './indicators'
 import Tip from './Tip'
 
@@ -155,4 +156,27 @@ export function ancestryGridColumns<T extends GridRowLike>(
       columns: bCols,
     },
   ]
+}
+
+/**
+ * The export counterpart of `ancestryGridColumns`: three TSV columns per
+ * ancestry — the p-value, its raw −log10 (lossless, and the only safe form deep
+ * in the tail), and the IVW Burden β. Lives here, next to the on-screen columns
+ * it mirrors, so the two can't drift: both pages' grids show exactly these
+ * numbers, and both export them by calling this.
+ *
+ * Headers use the raw ancestry keys (`P_All`, `beta_burden_non_EUR`) rather than
+ * the display labels, so they're valid identifiers in R and pandas.
+ */
+export function ancestryExportColumns<T extends GridRowLike>(
+  ancIdxs: number[],
+): ExportColumn<T>[] {
+  return ancIdxs.flatMap((a) => {
+    const k = ANCESTRIES[a]
+    return [
+      { header: `P_${k}`, value: (r: T) => exportP(r.lp[a]) },
+      { header: `neglog10P_${k}`, value: (r: T) => r.lp[a] },
+      { header: `beta_burden_${k}`, value: (r: T) => r.beta[a] },
+    ]
+  })
 }

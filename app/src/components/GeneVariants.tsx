@@ -16,6 +16,12 @@ import {
 } from '../lib/select'
 import { ANCESTRIES, ANCESTRY_META } from '../lib/constants'
 import { fmtBeta, fmtCount, fmtPLog, fmtPos } from '../lib/format'
+import {
+  exportP,
+  slug,
+  type ExportColumn,
+  type TableExport,
+} from '../lib/exportTable'
 import { Notice, Spinner } from './ui'
 import { DirDot, MagnitudeBar, SigDot } from './indicators'
 import Tip from './Tip'
@@ -42,6 +48,7 @@ import VariantForest from './VariantForest'
  */
 export default function GeneVariants({
   ensg,
+  symbol,
   phenoIdx,
   ancIdx,
   trait,
@@ -51,6 +58,7 @@ export default function GeneVariants({
   chr,
 }: {
   ensg: string
+  symbol: string
   phenoIdx: number
   ancIdx: number
   trait: PhenotypeMeta
@@ -169,6 +177,8 @@ export default function GeneVariants({
 
       <VariantTable
         rows={rows}
+        ensg={ensg}
+        symbol={symbol}
         trait={trait}
         chr={chr}
         ancIdx={ancIdx}
@@ -278,12 +288,16 @@ function columnHelp(
 
 function VariantTable({
   rows,
+  ensg,
+  symbol,
   trait,
   chr,
   ancIdx,
   onSelect,
 }: {
   rows: VariantRow[]
+  ensg: string
+  symbol: string
   trait: PhenotypeMeta
   chr?: string | null
   ancIdx: number
@@ -434,6 +448,43 @@ function VariantTable({
     ]
   }, [chr, trait.type, maxAbsBeta, maxNe, isMeta, ancIdx])
 
+  // The meta-only fields (N, I², Cochran's Q) are exported only in meta mode —
+  // in a stratum the pipeline doesn't emit them, so the columns would be a wall
+  // of blanks, which is also why the table itself drops them (see the note on
+  // this component). `se` and `n_cases` aren't table columns but are already
+  // loaded and are what a reader needs to recompute a CI, so they ship too.
+  const exportSpec = useMemo<TableExport<VariantRow>>(() => {
+    const anc = ANCESTRIES[ancIdx]
+    const metaOnly: ExportColumn<VariantRow>[] = isMeta
+      ? [
+          { header: 'n_cases', value: (r) => r.nc },
+          { header: 'n_eff', value: (r) => r.ne },
+          { header: 'i2', value: (r) => r.i2 },
+          { header: 'cochran_q', value: (r) => r.cq },
+        ]
+      : []
+    return {
+      noun: 'variants',
+      filename: `brava_${slug(symbol)}_${slug(trait.id)}_${slug(anc)}_variants.tsv`,
+      columns: [
+        { header: 'gene', value: () => symbol },
+        { header: 'ensembl_gene_id', value: () => ensg },
+        { header: 'phenotype_id', value: () => trait.id },
+        { header: 'phenotype', value: () => trait.name },
+        { header: 'ancestry', value: () => anc },
+        { header: 'chrom', value: () => chr ?? null },
+        { header: 'pos', value: (r) => r.pos },
+        { header: 'ref', value: (r) => r.ref },
+        { header: 'alt', value: (r) => r.alt },
+        { header: 'P', value: (r) => exportP(r.lp) },
+        { header: 'neglog10P', value: (r) => r.lp },
+        { header: 'beta', value: (r) => r.beta },
+        { header: 'se', value: (r) => r.se },
+        ...metaOnly,
+      ],
+    }
+  }, [symbol, ensg, trait.id, trait.name, chr, ancIdx, isMeta])
+
   const caption = (
     <span>
       <span className="font-semibold text-ink-soft">{rows.length.toLocaleString()}</span>{' '}
@@ -454,6 +505,7 @@ function VariantTable({
       onSortingChange={setSorting}
       onRowClick={onSelect}
       caption={caption}
+      exportSpec={exportSpec}
     />
   )
 }

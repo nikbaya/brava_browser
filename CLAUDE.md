@@ -163,6 +163,33 @@ Raw: `{PHENO}_ALL_gene_meta_analysis_100_cutoff.{ANCESTRY}.tsv.gz` (no suffix =
   Caveat to remember: the pipeline rounds −log10(p) to 2 dp
   ([common.py](pipeline/common.py)), so p carries only ~1.2% relative precision
   (ln10 × 0.005) — the third figure is display convention, not measurement.
+- **Table export = "download what's on screen"** ([exportTable.ts](app/src/lib/exportTable.ts),
+  [DownloadButton.tsx](app/src/components/DownloadButton.tsx)). A table opts in by
+  passing `exportSpec` to [VirtualTable](app/src/components/VirtualTable.tsx),
+  which renders the button in its caption bar **because it owns
+  `getSortedRowModel()`** — the file is the visible rows in the visible order, and
+  a page-level button couldn't do that without duplicating the sort. Both row
+  extraction and serialisation happen **on click** (that bar re-renders every
+  scroll frame). **TSV, not CSV**: phenotype/mask labels contain commas, tabs
+  never occur, so there is no escaping path. Qualifying constants (gene,
+  phenotype, mask, MAF, test, ancestry) are written as **columns, not a `#`
+  header**, so rows are self-describing and `pd.read_csv(sep='\t')` just works.
+  Exports carry **both `P` and `neglog10P`** — `exportP` rebuilds P from the
+  stored −log10 (`10**-lp` underflows past ~1e-308) and the −log10 column is the
+  lossless one. Missing values are **empty cells** (R/pandas NA), never the
+  display em-dash. Per-ancestry triples come from `ancestryExportColumns` in
+  [ancestryColumns.tsx](app/src/components/ancestryColumns.tsx), next to the grid
+  columns they mirror. Costs **zero fetches**, so no R2 read budget.
+- **The About page's "Participants" stat is the hard-coded `~1.2M`**, quoting the
+  flagship paper, NOT `Σ biobank.sample_size` through `fmtCount`. Those Table S3
+  sizes are all round figures (500,000 / 400,000 / …), so summing them to
+  1,247,000 and printing "1.25M" asserts precision the inputs lack — and it
+  contradicted the exact Table S8 total in the pies right below it (1,119,948
+  across the five superpops; +309 MID that `SUPERPOPS` doesn't draw). The two
+  count different things (enrolled participants vs sequenced, ancestry-assigned
+  samples); a computed footnote under the pies reconciles them. Full trace in
+  [docs/data-followups.md](docs/data-followups.md) — **don't "fix" the pie total
+  to match the headline**, they are not the same quantity.
 - **Header** ([Header.tsx](app/src/components/Header.tsx)): icon only, no text.
 - **Defaults** ([constants.ts](app/src/lib/constants.ts)): ancestry `All`, mask
   index 4 (pLoF or DM/PA), MAF index 0 (<0.001), test SKAT-O.

@@ -9,6 +9,8 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import type { TableExport } from '../lib/exportTable'
+import DownloadButton from './DownloadButton'
 import Tip from './Tip'
 
 declare module '@tanstack/react-table' {
@@ -56,6 +58,7 @@ export default function VirtualTable<T>({
   rowHeight = 30,
   onRowClick,
   caption,
+  exportSpec,
   reservedRows,
   minWidth,
 }: {
@@ -67,6 +70,12 @@ export default function VirtualTable<T>({
   onRowClick?: (row: T) => void
   /** Pinned summary (e.g. active filters) shown above the column headers. */
   caption?: React.ReactNode
+  /**
+   * Declare this to get a download button in the caption bar. The export lives
+   * here, rather than on the page, because this component owns the sorted row
+   * model — so the file is exactly the rows on screen, in the order shown.
+   */
+  exportSpec?: TableExport<T>
   /**
    * Unfiltered row count. When a table can be filtered, pass the pre-filter
    * count so the scroll region reserves a stable height: filtering rows out
@@ -142,9 +151,19 @@ export default function VirtualTable<T>({
             one flex row per level, so spanning group labels (e.g. "P-value" over
             the ancestry sub-columns) line up over their children. */}
         <div className="sticky top-0 z-10">
-          {caption && (
-            <div className="border-b border-line bg-surface-soft px-2.5 py-1 text-[11px] text-ink-faint">
-              {caption}
+          {(caption || exportSpec) && (
+            <div className="flex items-center gap-2 border-b border-line bg-surface-soft px-2.5 py-1 text-[11px] text-ink-faint">
+              <span className="min-w-0 flex-1">{caption}</span>
+              {exportSpec && (
+                // Row extraction is deferred to the click: this bar re-renders
+                // on every scroll frame (the virtualizer drives it), and mapping
+                // 20k rows each time would cost more than the download itself.
+                <DownloadButton
+                  count={rows.length}
+                  getRows={() => rows.map((r) => r.original)}
+                  spec={exportSpec}
+                />
+              )}
             </div>
           )}
           {table.getHeaderGroups().map((hg) => {

@@ -15,6 +15,7 @@ import {
   MAF_META,
 } from '../lib/constants'
 import { fmtPos } from '../lib/format'
+import { slug, type ExportColumn, type TableExport } from '../lib/exportTable'
 import { Notice, Spinner } from '../components/ui'
 import FilterBar, { type FilterState } from '../components/FilterBar'
 import TableFilters, {
@@ -22,7 +23,11 @@ import TableFilters, {
   passesTableFilter,
   type TableFilter,
 } from '../components/TableFilters'
-import { ancestryGridColumns, BetaLegend } from '../components/ancestryColumns'
+import {
+  ancestryExportColumns,
+  ancestryGridColumns,
+  BetaLegend,
+} from '../components/ancestryColumns'
 import PheWASPlot, { type PheWASPoint } from '../components/PheWASPlot'
 import ForestPlot from '../components/ForestPlot'
 import PhenoPicker from '../components/PhenoPicker'
@@ -241,6 +246,8 @@ export default function GenePage() {
 
           <GeneTable
             data={data}
+            symbol={symbol}
+            ensg={ensg}
             filters={filters}
             ancIdx={ancIdx}
             onFocus={setForestPheno}
@@ -267,6 +274,7 @@ export default function GenePage() {
               </div>
               <GeneVariants
                 ensg={ensg}
+                symbol={symbol}
                 phenoIdx={forestIdx}
                 ancIdx={ancIdx}
                 trait={forestTrait}
@@ -306,11 +314,15 @@ interface GTGridRow extends GridRow {
 
 function GeneTable({
   data,
+  symbol,
+  ensg,
   filters,
   ancIdx,
   onFocus,
 }: {
   data: GeneData
+  symbol: string
+  ensg: string
   filters: FilterState
   ancIdx: number
   onFocus: (phenoIdx: number) => void
@@ -411,6 +423,29 @@ function GeneTable({
     [ancIdxs, ancIdx, betaGridMax, filters.test],
   )
 
+  // Every constant that qualifies the numbers (gene, mask, MAF, test) is written
+  // into each row rather than a comment header, so the file is self-describing
+  // and still loads with a plain `read.delim` / `pd.read_csv(sep='\t')`.
+  const exportSpec = useMemo<TableExport<GTGridRow>>(() => {
+    const mask = MASK_META[filters.maskIndex]
+    return {
+      noun: 'phenotypes',
+      filename: `brava_${slug(symbol)}_${slug(mask.short)}_maf${MAF_META[filters.mafIndex].value}_${slug(filters.test)}.tsv`,
+      columns: [
+        { header: 'gene', value: () => symbol },
+        { header: 'ensembl_gene_id', value: () => ensg },
+        { header: 'phenotype_id', value: (r) => r.phenoId },
+        { header: 'phenotype', value: (r) => r.phenoName },
+        { header: 'category', value: (r) => r.category },
+        { header: 'trait_type', value: (r) => r.traitType },
+        { header: 'variant_mask', value: () => mask.raw },
+        { header: 'max_maf', value: () => MAF_META[filters.mafIndex].value },
+        { header: 'test', value: () => filters.test },
+        ...ancestryExportColumns<GTGridRow>(ancIdxs),
+      ] satisfies ExportColumn<GTGridRow>[],
+    }
+  }, [symbol, ensg, filters.maskIndex, filters.mafIndex, filters.test, ancIdxs])
+
   const caption = (
     <span>
       <span className="font-semibold text-ink-soft">{MASK_META[filters.maskIndex].label}</span> · MAF{' '}
@@ -441,6 +476,7 @@ function GeneTable({
         onSortingChange={setSorting}
         onRowClick={(r) => onFocus(r.key)}
         caption={caption}
+        exportSpec={exportSpec}
         reservedRows={allRows.length}
       />
     </>

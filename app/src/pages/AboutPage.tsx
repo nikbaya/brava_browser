@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useAsync } from '../lib/useAsync'
 import { useIndex } from '../data/IndexContext'
 import { fetchBiobankIndex } from '../data/client'
 import { fmtCount, fmtPos } from '../lib/format'
+import { SUPERPOPS } from '../lib/constants'
 import { Notice, Pill, Spinner } from '../components/ui'
 import AncestryPie from '../components/AncestryPie'
 import DiversityPies from '../components/DiversityPies'
+import Tip from '../components/Tip'
 import {
   ABOUT_BLURB,
   COHORTS,
@@ -20,6 +22,22 @@ import type { Biobank } from '../data/types'
 const TABS = ['Overview', 'Governing Principles', 'Leadership', 'Participating Biobanks'] as const
 type Tab = (typeof TABS)[number]
 
+/**
+ * Headline participant count, quoted as the flagship paper quotes it.
+ *
+ * Deliberately NOT `Σ biobank.sample_size` rendered through `fmtCount`. Those
+ * per-biobank sizes come from supplementary Table S3 and are every one of them a
+ * round figure (500,000 / 400,000 / 90,000 / 45,000 / …), so summing them to
+ * 1,247,000 and printing "1.25M" claims three significant figures the inputs
+ * don't carry — and it disagreed with the exact ancestry-assigned total in the
+ * pies below (Table S8: 1,119,948 across the five groups shown), which read as a
+ * contradiction on one page. The two count different things; see
+ * docs/data-followups.md.
+ */
+const PARTICIPANTS = '~1.2M'
+const PARTICIPANTS_HELP =
+  'Ten biobanks and cohorts comprising over 1.2 million participants, as reported in the BRaVa flagship paper. Per-biobank totals are published as round figures, so no exact sum is meaningful; the ancestral-diversity pies below give the exact sequenced, ancestry-assigned counts.'
+
 export default function AboutPage() {
   const { data, loading, error } = useAsync(fetchBiobankIndex, [])
   const { phenotypes, geneIndex } = useIndex()
@@ -30,7 +48,6 @@ export default function AboutPage() {
     return <Notice title="Could not load consortium data">{error?.message}</Notice>
 
   const biobanks = data.biobanks
-  const totalN = biobanks.reduce((s, b) => s + b.sample_size, 0)
   const nGenes = geneIndex?.ids.length ?? 0
 
   return (
@@ -39,7 +56,7 @@ export default function AboutPage() {
       <p className="mt-2 max-w-3xl text-sm text-ink-soft">{ABOUT_BLURB}</p>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat value={fmtCount(totalN)} label="Participants" />
+        <Stat value={PARTICIPANTS} label="Participants" help={PARTICIPANTS_HELP} />
         <Stat value={String(COHORTS.length)} label="Cohorts" />
         <Stat value={String(phenotypes.length)} label="Phenotypes" />
         <Stat value={fmtPos(nGenes)} label="Genes tested" />
@@ -74,6 +91,26 @@ export default function AboutPage() {
 }
 
 function Overview({ biobanks }: { biobanks: Biobank[] }) {
+  // Reconcile the pies with the "~1.2M" headline in the same breath the pies are
+  // shown, so the two figures never read as a contradiction. Computed, not
+  // hard-coded, so it can't go stale if biobanks.json is rebuilt: `shown` is what
+  // the pies actually add up to, `other` is any ancestry group outside the five
+  // superpopulations they draw (today: 309 Middle Eastern samples from CCPM).
+  const { shown, other, otherGroups } = useMemo(() => {
+    let shown = 0
+    let other = 0
+    const otherGroups = new Set<string>()
+    for (const b of biobanks)
+      for (const [anc, n] of Object.entries(b.ancestry_n)) {
+        if ((SUPERPOPS as readonly string[]).includes(anc)) shown += n
+        else if (n > 0) {
+          other += n
+          otherGroups.add(anc)
+        }
+      }
+    return { shown, other, otherGroups: [...otherGroups].sort() }
+  }, [biobanks])
+
   return (
     <section>
       <h2 className="mb-1 text-lg font-semibold text-ink">Ancestral diversity</h2>
@@ -86,6 +123,20 @@ function Overview({ biobanks }: { biobanks: Biobank[] }) {
       <div className="rounded-2xl border border-line bg-surface p-4">
         <DiversityPies biobanks={biobanks} />
       </div>
+      <p className="mt-2 max-w-3xl text-xs text-ink-faint">
+        These pies total <span className="tnum">{fmtPos(shown)}</span> sequenced
+        samples assigned to one of the five genetic-ancestry groups shown
+        {other > 0 && (
+          <>
+            {' '}
+            (a further <span className="tnum">{fmtPos(other)}</span> in{' '}
+            {otherGroups.join(', ')} are not plotted)
+          </>
+        )}
+        . That is a different quantity from the ~1.2M participants above, which
+        counts everyone enrolled in the ten biobanks and is published as rounded
+        per-biobank totals.
+      </p>
     </section>
   )
 }
@@ -216,11 +267,30 @@ function CohortCard({ c, b }: { c: Cohort; b?: Biobank }) {
   )
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
+function Stat({
+  value,
+  label,
+  help,
+}: {
+  value: string
+  label: string
+  /** Provenance note. Marked with the same dotted underline as table headers. */
+  help?: string
+}) {
   return (
     <div className="rounded-xl border border-line bg-surface px-4 py-3">
       <div className="text-2xl font-bold tabular-nums text-brand">{value}</div>
-      <div className="text-xs text-ink-faint">{label}</div>
+      {help ? (
+        <Tip
+          label={help}
+          wide
+          className="cursor-help text-xs text-ink-faint underline decoration-ink-faint/70 decoration-dotted underline-offset-[3px]"
+        >
+          {label}
+        </Tip>
+      ) : (
+        <div className="text-xs text-ink-faint">{label}</div>
+      )}
     </div>
   )
 }

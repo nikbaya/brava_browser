@@ -37,25 +37,68 @@ Include actual cutoff pval in gene-level and gene-mask legend
 ## More info
 - Add '?' button cursortips for 'Ancestry', variant mask, mask maf and test dropdown titles.
 
+## Canonical gene URL should be the ENSG, so other sites can link to us
 
-## Download button on gene / phenotype pages
+`/gene/:id` already **accepts** an ENSG — `resolveGene` looks up either form and
+[GenePage.tsx](../app/src/pages/GenePage.tsx#L37) falls back to treating an
+`ENSG…` param as the id directly. The problem is that our own links mint the
+**symbol**: [SearchBar.tsx:64](../app/src/components/SearchBar.tsx#L64) and the
+landing-page example chips ([LandingPage.tsx:49](../app/src/pages/LandingPage.tsx#L49))
+navigate to `/gene/PCSK9`, so that is the URL a user copies out of the address
+bar and the one that ends up cited elsewhere. (The phenotype page already links
+by `ensg`.)
 
-Explore a per-page download, so a user looking at one gene or trait can take
-those rows away without going to the [Downloads page](../app/src/pages/DownloadsPage.tsx)
-and pulling whole files from GCS. (Listed as "one-click export" in
-[competitive-ideas.md](competitive-ideas.md) — this is the actionable version.)
+Symbols are unstable (HGNC renames, aliases, and symbols that have been reused
+across loci), so a symbol URL is a fragile inbound link. Make the ENSG canonical:
 
-**Two very different implementations, and the cheap one is also the better UX:**
+- All internal navigation emits `/gene/ENSG00000169174`.
+- A symbol param keeps working but **redirects** (`<Navigate replace>`) to the
+  ENSG URL, so the address bar always settles on the stable form.
+- Show the symbol prominently in the page heading (it already is) — the URL
+  being an ENSG costs nothing in readability there.
+- Note the analytics implication: [analytics.ts](../app/src/lib/analytics.ts)
+  reports the router path, so today's dashboard has symbol paths and would gain
+  ENSG ones; a redirect that fires before the pageview avoids double-counting.
+- Worth a one-line "stable link to this page" affordance on the gene page once
+  the ENSG is canonical, mirroring what gnomAD/Open Targets do.
 
-1. **Export what's already loaded (recommended).** The page has already fetched
-   and parsed everything the table shows, so serialising the current rows to
-   CSV/TSV in the browser (`Blob` + `URL.createObjectURL`) costs **zero extra
-   requests** — no R2 reads, no pipeline change, works offline. Respecting the
-   active mask / MAF / test / ancestry filters makes it "download exactly what I
-   am looking at", which the bulk GCS files can't offer.
-2. **Link to the raw source files.** Cheap to build but sends users to
-   per-phenotype × ancestry files far larger than what they were viewing, and
-   adds R2 reads. Probably not worth it given the Downloads page exists.
+
+## Download button on gene / phenotype pages — DONE (option 1)
+
+Shipped as "export what's already loaded": [exportTable.ts](../app/src/lib/exportTable.ts)
+(serialiser) + [DownloadButton.tsx](../app/src/components/DownloadButton.tsx),
+declared per table via VirtualTable's `exportSpec` prop. Live on the gene table,
+the phenotype table, and the variant table. **Zero extra requests** — no R2
+reads, no pipeline change, works offline.
+
+Decisions worth not re-litigating:
+
+- **The button lives in VirtualTable's caption bar**, not on the page, because
+  that component owns `getSortedRowModel()` — so the file is the rows on screen
+  *in the order shown*, which a page-level button couldn't produce without
+  duplicating the sort.
+- **Row extraction and serialisation are both deferred to the click.** The
+  caption bar re-renders on every scroll frame (the virtualizer drives it), so
+  mapping 20k rows per render would cost more than the download.
+- **TSV, not CSV.** Phenotype names, categories and mask labels contain commas;
+  tabs never occur in this data, so tab-delimited needs no escaping path at all
+  and matches the upstream BRaVa summary-stat files.
+- **Qualifying constants become columns** (gene, phenotype, mask, MAF, test,
+  ancestry) rather than a `#` comment header, so each row is self-describing and
+  the file still loads with a plain `read.delim` / `pd.read_csv(sep='\t')`.
+- **Both `P` and `neglog10P` ship.** `P` is reconstructed from the stored
+  −log10 via `exportP` (`10**-lp` underflows to 0 past ~1e-308), and the raw
+  −log10 column is the lossless one.
+- Missing values export as **empty cells**, the NA convention in R and pandas —
+  never the display formatters' em-dash, which would poison the column type.
+- Per-ancestry triples come from `ancestryExportColumns` in
+  [ancestryColumns.tsx](../app/src/components/ancestryColumns.tsx), beside the
+  on-screen grid columns they mirror, so the two can't drift.
+
+Not done (deliberately): **linking to the raw source files** from these pages.
+It sends users to per-phenotype × ancestry files far larger than what they were
+viewing and adds R2 reads; the [Downloads page](../app/src/pages/DownloadsPage.tsx)
+already covers bulk access.
 
 ### R2 request budget — how much headroom is there?
 
@@ -134,6 +177,61 @@ significance, review status, variation ID. Same shape as the exon build: a
 - **Matching.** ClinVar normalizes indels differently from the BRaVa VCFs, so
   chr:pos:ref:alt matching will silently miss some indels. Worth quantifying the
   miss rate on one gene before promising a "in ClinVar" badge.
+
+## Chromosome ideogram + locus context on the gene page
+
+Show where the gene sits on its chromosome (cytoband ideogram with a position
+marker), and ideally let neighbouring genes be clicked to navigate. Requested as
+"zoomable and other genes clickable".
+
+**The data is nearly all already bundled.** [genes.json](../app/public/data/meta/genes.json)
+(984 KB, shipped with the app) carries `ids`/`symbols`/`chr`/`start`/`end` for all
+20,033 genes, so neighbour genes cost **zero fetches and zero R2 reads** — filter
+by chromosome once and memoise (chr1 is the worst case at 2,061 genes).
+
+**The one missing input is cytobands.** Not in the repo, and *not* in the Ensembl
+110 GTF everything else is built from, so this needs a new one-off external
+source: UCSC `cytoBand.txt.gz` (hg38) or Ensembl REST
+`/info/assembly/homo_sapiens?bands=1`. ~1,400 bands → roughly 30 KB as compact
+columnar JSON, well under 10 KB gzipped. A short `build_cytobands.py` emitting
+`meta/cytobands.json`, **bundled with the app** like the exon shards, so it costs
+no Class B reads. Bonus: it supplies true chromosome lengths and centromere
+positions, which [genome.ts](../app/src/lib/genome.ts#L23-L28) currently only
+approximates from max-gene-end.
+
+### Two tiers of effort, and they are very different
+
+1. **Static ideogram + position marker (~1–2 h).** An SVG sibling of
+   [GeneTrack.tsx](../app/src/components/GeneTrack.tsx): rounded-rect outline,
+   band rects filled by Giemsa stain (`gneg` / `gpos25…100` / `acen` / `gvar` /
+   `stalk`), red tick at the gene. ~100 lines, no new interaction model. The
+   centromere pinch is the only fiddly drawing bit — drawing `acen` as dark
+   triangles inside a plain rounded rect is the usual simplification.
+2. **Continuous zoom + clickable neighbours (a day-plus, a real component).**
+   Viewport state, wheel/drag pan-zoom, a draggable viewport box on the ideogram
+   overview, hit-testing, reset control, trackpad/touch handling. The genuinely
+   hard part is **gene-symbol label collision avoidance and lane packing** — at
+   whole-chromosome scale there are ~2,000 genes and no labels are possible, so
+   labels can only appear below roughly a 2 Mb window. Likely canvas rather than
+   SVG at that density. 400–600 lines plus tests, and it introduces a second
+   x-scale concept alongside [exonScale.ts](../app/src/lib/exonScale.ts).
+
+### Decide before building
+
+- **Placement.** "Directly under the gene diagram" is incoherent as-is: that
+  diagram sits under [LocusZoom.tsx](../app/src/components/LocusZoom.tsx), whose
+  axis is **exon-collapsed by default** (introns excised), so genomic distance
+  isn't linear there. Put the ideogram near the gene-page header (beside the
+  chr/position text), or below the diagram as a visually separate "locus context"
+  block with its own genomic axis and label.
+- **Genes with no results.** The index holds 20,033 genes but BRaVa results cover
+  19,490, so a clickable neighbour can land on a gene page with no data. Render
+  non-result genes faint and non-clickable.
+
+**Recommended shape:** tier 1 plus a *fixed-window* neighbour strip (gene span ×5,
+or ±500 kb) with neighbours as clickable arrows carrying symbols → `/gene/{ENSG}`.
+That delivers the position context and jump-to-neighbour value for a fraction of
+tier 2's cost, and doesn't foreclose adding continuous zoom later.
 
 ## Variant table: extending the N (eff.) meter beyond the cross-ancestry meta
 
