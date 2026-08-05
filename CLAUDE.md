@@ -180,6 +180,40 @@ Raw: `{PHENO}_ALL_gene_meta_analysis_100_cutoff.{ANCESTRY}.tsv.gz` (no suffix =
   display em-dash. Per-ancestry triples come from `ancestryExportColumns` in
   [ancestryColumns.tsx](app/src/components/ancestryColumns.tsx), next to the grid
   columns they mirror. Costs **zero fetches**, so no R2 read budget.
+- **Figure export = "save the picture"** ([exportImage.ts](app/src/lib/exportImage.ts),
+  [SaveFigureButton.tsx](app/src/components/SaveFigureButton.tsx)): a `Figure ▾`
+  chip (styled to match `DownloadButton`, which saves the *numbers*) offering
+  **PNG at 300 dpi** or **vector SVG**, wired into both forest plots
+  ([ForestPlot](app/src/components/ForestPlot.tsx),
+  [VariantForest](app/src/components/VariantForest.tsx)) via an `svgRef`. Three
+  things this has to get right:
+  (1) **Styles are inlined onto a clone.** Our plots colour themselves with
+  Tailwind classes (`fill-ink-faint`, `text-[11px]`) that resolve against the
+  document stylesheet; a serialised SVG has no access to it, so without inlining
+  the computed values every mark exports as black 16 px text. Only a short list of
+  presentation properties is copied (dumping the whole computed style adds ~300
+  declarations per node).
+  (2) **Dimensions are preserved exactly.** The raster is scaled by `dpi / 96`
+  (96 = the CSS reference pixel) and the drawing — not the geometry — is scaled,
+  so text/strokes re-render at device resolution; nothing is re-laid-out.
+  A `pHYs` chunk is spliced into the encoded PNG (canvas only knows pixels), so
+  Word/Illustrator/LaTeX place the figure at its on-screen physical size instead
+  of assuming 72/96 dpi and blowing it up 3×; journals also read it as 300 dpi.
+  (3) **Interaction chrome is stripped.** The transparent full-row hit targets and
+  the hover highlight carry `data-png-skip` (`PNG_SKIP_ATTR`) and are removed from
+  the clone. Both formats get an explicit **white background rect** — neither has
+  one implicitly, and a transparent figure on a dark slide loses its dark ink.
+  A **caption band** (gene/variant × phenotype, then mask · MAF · test · P_het ·
+  BRaVa) is stamped above the plot, because that context is HTML *around* the SVG
+  on the page and would be lost the moment the file leaves the browser. It is a
+  *band*: the plot content is translated down and the image grows to match, so the
+  plot's own geometry is byte-identical to the screen — **never re-scale the plot
+  to make room for the caption**. Lines wrap to the plot width (measured with a
+  shared canvas context), and the ink colours come from the `--color-ink*` tokens.
+  The variant forest's caption has no mask: variant-level data carries no
+  functional annotation, so a variant has no mask to name.
+  Filenames go through the same `slug` as the TSV exports, so a figure and its
+  table sort together in a download folder. Costs zero fetches.
 - **The About page's "Participants" stat is the hard-coded `~1.2M`**, quoting the
   flagship paper, NOT `Σ biobank.sample_size` through `fmtCount`. Those Table S3
   sizes are all round figures (500,000 / 400,000 / …), so summing them to

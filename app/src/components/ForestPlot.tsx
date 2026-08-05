@@ -7,8 +7,10 @@ import {
   type Ancestry,
 } from '../lib/constants'
 import { fmtBeta, fmtBeta3, fmtCount, fmtPLog, fmtPLog3, fmtPos } from '../lib/format'
+import { figureFilename } from '../lib/exportImage'
 import type { ForestSeries } from '../lib/select'
 import type { AncestryN, PhenotypeMeta } from '../data/types'
+import SaveFigureButton from './SaveFigureButton'
 
 const ML = 128 // left: ancestry label + N columns
 const LABEL_R = 56 // right edge of the ancestry-label column
@@ -22,6 +24,8 @@ interface Props {
   trait: PhenotypeMeta
   maskLabel: string
   mafLabel: string
+  /** Gene symbol, used only to name the exported figure file. */
+  symbol?: string
 }
 
 /**
@@ -29,8 +33,9 @@ interface Props {
  * with the cross-ancestry meta ("All") drawn last as a diamond. Reference line
  * at β = 0; heterogeneity p shown in the header.
  */
-export default function ForestPlot({ series, trait, maskLabel, mafLabel }: Props) {
+export default function ForestPlot({ series, trait, maskLabel, mafLabel, symbol }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
+  const svgRef = useRef<SVGSVGElement>(null)
   const [width, setWidth] = useState(720)
   const [hover, setHover] = useState<number | null>(null)
 
@@ -89,18 +94,45 @@ export default function ForestPlot({ series, trait, maskLabel, mafLabel }: Props
         <span className="text-[11px] text-ink-faint">
           {maskLabel} · {mafLabel} · IVW Burden {axisLabel} ± 95% CI
         </span>
-        {series.hetLp != null && (
-          <span
-            className={`text-[11px] ${heterogeneous ? 'text-risk' : 'text-ink-faint'}`}
-            title="Cochran's Q heterogeneity test across contributing strata"
-          >
-            P_het = {fmtPLog(series.hetLp)}
-            {heterogeneous ? ' · heterogeneous' : ''}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {series.hetLp != null && (
+            <span
+              className={`text-[11px] ${heterogeneous ? 'text-risk' : 'text-ink-faint'}`}
+              title="Cochran's Q heterogeneity test across contributing strata"
+            >
+              P_het = {fmtPLog(series.hetLp)}
+              {heterogeneous ? ' · heterogeneous' : ''}
+            </span>
+          )}
+          <SaveFigureButton
+            svgRef={svgRef}
+            what="forest plot"
+            filename={figureFilename([
+              symbol,
+              trait.id,
+              maskLabel,
+              `maf${mafLabel}`,
+              'forest',
+            ])}
+            caption={{
+              // The on-page context lives in HTML around the plot, so the export
+              // restates it: subject, then the selection that produced it.
+              title: `${symbol ? `${symbol} × ` : ''}${trait.name}`,
+              subtitle: [
+                maskLabel,
+                mafLabel,
+                `IVW Burden ${axisLabel} ± 95% CI`,
+                series.hetLp == null ? null : `P_het = ${fmtPLog(series.hetLp)}`,
+                'BRaVa',
+              ]
+                .filter(Boolean)
+                .join(' · '),
+            }}
+          />
+        </div>
       </div>
 
-      <svg width={width} height={height}>
+      <svg ref={svgRef} width={width} height={height}>
         {/* zero reference line */}
         <line
           x1={x(0)}
@@ -136,13 +168,17 @@ export default function ForestPlot({ series, trait, maskLabel, mafLabel }: Props
               className="cursor-default"
             >
               {/* full-row transparent hit target so hovering anywhere in the
-                  row (not just over text/markers) highlights it */}
+                  row (not just over text/markers) highlights it. Both this and
+                  the highlight below are interaction chrome, so they carry
+                  `data-png-skip` (= PNG_SKIP_ATTR) and are stripped from
+                  exported figures. */}
               <rect
                 x={0}
                 y={cy - ROW_H / 2}
                 width={width}
                 height={ROW_H}
                 fill="transparent"
+                data-png-skip=""
               />
               {hover === i && (
                 <rect
@@ -152,6 +188,7 @@ export default function ForestPlot({ series, trait, maskLabel, mafLabel }: Props
                   height={ROW_H}
                   className="fill-brand-light/60"
                   pointerEvents="none"
+                  data-png-skip=""
                 />
               )}
               <text

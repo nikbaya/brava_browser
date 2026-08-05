@@ -337,6 +337,7 @@ function ForestDrawer({
             <ForestPlot
               series={series}
               trait={trait}
+              symbol={symbol}
               maskLabel={MASK_META[maskIndex].label}
               mafLabel={MAF_META[mafIndex].label}
             />

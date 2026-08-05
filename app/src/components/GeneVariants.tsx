@@ -171,7 +171,13 @@ export default function GeneVariants({
               close ✕
             </button>
           </div>
-          <VariantForest rows={forestRows} trait={trait} loading={anc.loading} />
+          <VariantForest
+            rows={forestRows}
+            trait={trait}
+            loading={anc.loading}
+            label={`${chr ? `chr${chr}-` : ''}${selected.pos}-${selected.ref}-${selected.alt}`}
+            symbol={symbol}
+          />
         </div>
       )}
 

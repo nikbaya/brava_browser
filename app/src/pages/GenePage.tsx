@@ -238,6 +238,7 @@ export default function GenePage() {
               <ForestPlot
                 series={forest}
                 trait={forestTrait}
+                symbol={symbol}
                 maskLabel={MASK_META[filters.maskIndex].label}
                 mafLabel={MAF_META[filters.mafIndex].label}
               />

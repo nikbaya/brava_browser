@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { scaleLinear } from 'd3-scale'
 import { ANCESTRIES, ANCESTRY_COLOR, ANCESTRY_META, type Ancestry } from '../lib/constants'
 import { fmtBeta, fmtBeta3, fmtPLog, fmtPLog3 } from '../lib/format'
+import { figureFilename } from '../lib/exportImage'
 import type { PhenotypeMeta } from '../data/types'
 import type { VariantForestRow } from '../lib/select'
+import SaveFigureButton from './SaveFigureButton'
 
 const ML = 92
 // Right gutter holds the whole numeric label — "β  [lo, hi] · p=1.17e-205" runs
@@ -29,12 +31,19 @@ export default function VariantForest({
   rows,
   trait,
   loading,
+  label,
+  symbol,
 }: {
   rows: VariantForestRow[]
   trait: PhenotypeMeta
   loading?: boolean
+  /** Variant identifier (e.g. `chr1-55039974-G-T`), for the figure export. */
+  label?: string
+  /** Enclosing gene symbol, for the figure export. */
+  symbol?: string
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
+  const svgRef = useRef<SVGSVGElement>(null)
   const [measured, setMeasured] = useState(MIN_W)
   const [hover, setHover] = useState<number | null>(null)
 
@@ -87,10 +96,23 @@ export default function VariantForest({
 
   return (
     <div ref={wrapRef} className="relative w-full overflow-x-auto">
-      <div className="px-1 pb-1 text-[11px] text-ink-faint">
-        Single-variant meta {axisLabel} ± 95% CI · hover a stratum for detail
+      <div className="flex items-baseline justify-between gap-x-3 px-1 pb-1">
+        <span className="text-[11px] text-ink-faint">
+          Single-variant meta {axisLabel} ± 95% CI · hover a stratum for detail
+        </span>
+        <SaveFigureButton
+          svgRef={svgRef}
+          what="forest plot"
+          filename={figureFilename([symbol, label, trait.id, 'forest'])}
+          caption={{
+            // No mask here: the variant-level data carries no functional
+            // annotation, so a variant has no mask to name (see CLAUDE.md).
+            title: [symbol, label].filter(Boolean).join(' ') + ` × ${trait.name}`,
+            subtitle: `Single-variant meta ${axisLabel} ± 95% CI · BRaVa`,
+          }}
+        />
       </div>
-      <svg width={width} height={height}>
+      <svg ref={svgRef} width={width} height={height}>
         <line
           x1={x(0)}
           x2={x(0)}
@@ -123,13 +145,16 @@ export default function VariantForest({
               className="cursor-default"
             >
               {/* full-row transparent hit target, so hovering anywhere in the
-                  row (not just over text/markers) highlights it */}
+                  row (not just over text/markers) highlights it. Interaction
+                  chrome: `data-png-skip` (= PNG_SKIP_ATTR) keeps this and the
+                  highlight out of exported figures. */}
               <rect
                 x={0}
                 y={cy - ROW_H / 2}
                 width={width}
                 height={ROW_H}
                 fill="transparent"
+                data-png-skip=""
               />
               {hover === i && (
                 <rect
@@ -139,6 +164,7 @@ export default function VariantForest({
                   height={ROW_H}
                   className="fill-brand-light/60"
                   pointerEvents="none"
+                  data-png-skip=""
                 />
               )}
               <text
