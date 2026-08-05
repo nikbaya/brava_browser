@@ -92,9 +92,13 @@ describe('pngWithDpiBytes', () => {
 
 describe('figureFilename', () => {
   it('slugs fragments and joins them under the brava_ prefix', () => {
+    // The fragments a gene-level forest actually passes: MASK_META.short and the
+    // numeric MAF_META.value, matching the TSV export's name (not the display
+    // labels — `< 0.1%` would name the same cutoff "0.1" against the table's
+    // "0.001").
     expect(
-      figureFilename(['PCSK9', 'LDL_Cholesterol', 'pLoF or DM/PA', 'maf<0.001', 'forest']),
-    ).toBe('brava_PCSK9_LDL_Cholesterol_pLoF-or-DM-PA_maf-0.001_forest.png')
+      figureFilename(['PCSK9', 'LDL_Cholesterol', 'pLoF | dmg missense', 'maf0.001', 'forest']),
+    ).toBe('brava_PCSK9_LDL_Cholesterol_pLoF-dmg-missense_maf0.001_forest.png')
   })
 
   it('drops missing fragments', () => {

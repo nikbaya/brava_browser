@@ -212,8 +212,13 @@ Raw: `{PHENO}_ALL_gene_meta_analysis_100_cutoff.{ANCESTRY}.tsv.gz` (no suffix =
   shared canvas context), and the ink colours come from the `--color-ink*` tokens.
   The variant forest's caption has no mask: variant-level data carries no
   functional annotation, so a variant has no mask to name.
-  Filenames go through the same `slug` as the TSV exports, so a figure and its
-  table sort together in a download folder. Costs zero fetches.
+  Filenames go through the same `slug` and the **same fragments in the same
+  order** as the TSV exports (`brava_{gene}_{trait}_{mask.short}_maf{value}_…`), so
+  a figure and the numbers behind it sort together in a download folder. This is
+  why `ForestPlot` takes `maskIndex`/`mafIndex` rather than pre-formatted labels:
+  the header wants `MAF_META[i].label` (`< 0.1%`) but the filename must use
+  `.value` (`0.001`) or the same cutoff gets two different names across the two
+  downloads. Costs zero fetches.
 - **The About page's "Participants" stat is the hard-coded `~1.2M`**, quoting the
   flagship paper, NOT `Σ biobank.sample_size` through `fmtCount`. Those Table S3
   sizes are all round figures (500,000 / 400,000 / …), so summing them to

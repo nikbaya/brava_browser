@@ -4,6 +4,8 @@ import {
   ANCESTRY_COLOR,
   ANCESTRIES,
   ANCESTRY_META,
+  MAF_META,
+  MASK_META,
   type Ancestry,
 } from '../lib/constants'
 import { fmtBeta, fmtBeta3, fmtCount, fmtPLog, fmtPLog3, fmtPos } from '../lib/format'
@@ -22,9 +24,14 @@ const ROW_H = 26
 interface Props {
   series: ForestSeries
   trait: PhenotypeMeta
-  maskLabel: string
-  mafLabel: string
-  /** Gene symbol, used only to name the exported figure file. */
+  /**
+   * Mask / MAF as **indices**, not pre-formatted labels: the header wants the
+   * long display label while the exported filename wants the same `short` and
+   * numeric `value` the TSV exports use, so the component needs the whole record.
+   */
+  maskIndex: number
+  mafIndex: number
+  /** Gene symbol, used only to label and name the exported figure. */
   symbol?: string
 }
 
@@ -33,7 +40,9 @@ interface Props {
  * with the cross-ancestry meta ("All") drawn last as a diamond. Reference line
  * at β = 0; heterogeneity p shown in the header.
  */
-export default function ForestPlot({ series, trait, maskLabel, mafLabel, symbol }: Props) {
+export default function ForestPlot({ series, trait, maskIndex, mafIndex, symbol }: Props) {
+  const mask = MASK_META[maskIndex]
+  const maf = MAF_META[mafIndex]
   const wrapRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const [width, setWidth] = useState(720)
@@ -92,7 +101,7 @@ export default function ForestPlot({ series, trait, maskLabel, mafLabel, symbol 
     <div ref={wrapRef} className="relative w-full">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 px-1 pb-1">
         <span className="text-[11px] text-ink-faint">
-          {maskLabel} · {mafLabel} · IVW Burden {axisLabel} ± 95% CI
+          {mask.label} · {maf.label} · IVW Burden {axisLabel} ± 95% CI
         </span>
         <div className="flex items-center gap-2">
           {series.hetLp != null && (
@@ -107,11 +116,14 @@ export default function ForestPlot({ series, trait, maskLabel, mafLabel, symbol 
           <SaveFigureButton
             svgRef={svgRef}
             what="forest plot"
+            // Same fragments, in the same order, as this selection's TSV export
+            // (`brava_{gene}_{mask}_maf{value}_…`) so the figure and the numbers
+            // behind it sit together in a download folder.
             filename={figureFilename([
               symbol,
               trait.id,
-              maskLabel,
-              `maf${mafLabel}`,
+              mask.short,
+              `maf${maf.value}`,
               'forest',
             ])}
             caption={{
@@ -119,8 +131,8 @@ export default function ForestPlot({ series, trait, maskLabel, mafLabel, symbol 
               // restates it: subject, then the selection that produced it.
               title: `${symbol ? `${symbol} × ` : ''}${trait.name}`,
               subtitle: [
-                maskLabel,
-                mafLabel,
+                mask.label,
+                maf.label,
                 `IVW Burden ${axisLabel} ± 95% CI`,
                 series.hetLp == null ? null : `P_het = ${fmtPLog(series.hetLp)}`,
                 'BRaVa',

@@ -103,7 +103,9 @@ export default function VariantForest({
         <SaveFigureButton
           svgRef={svgRef}
           what="forest plot"
-          filename={figureFilename([symbol, label, trait.id, 'forest'])}
+          // Fragment order mirrors the variant table's TSV name
+          // (`brava_{gene}_{trait}_…`), with the variant as the discriminator.
+          filename={figureFilename([symbol, trait.id, label, 'forest'])}
           caption={{
             // No mask here: the variant-level data carries no functional
             // annotation, so a variant has no mask to name (see CLAUDE.md).
