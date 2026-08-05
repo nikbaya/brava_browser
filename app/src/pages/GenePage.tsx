@@ -152,12 +152,19 @@ export default function GenePage() {
               </span>
             </div>
             <div className="flex flex-wrap gap-1.5 text-[11px]">
-              <Ext href={`https://gnomad.broadinstitute.org/gene/${ensg}?dataset=gnomad_r4`}>
-                gnomAD
-              </Ext>
+              {/* No `?dataset=` param: the bare URL follows gnomAD's current
+                  default release, so this keeps working past r4 instead of
+                  pinning a version that ages out. Matches `gnomadVariantUrl`
+                  in GeneVariants.tsx. */}
+              <Ext href={`https://gnomad.broadinstitute.org/gene/${ensg}`}>gnomAD</Ext>
               <Ext href={`https://app.genebass.org/gene/${ensg}`}>Genebass</Ext>
-              <Ext href={`https://www.ensembl.org/Homo_sapiens/Gene/Summary?g=${ensg}`}>
-                Ensembl
+              {/* Open Targets keys targets by Ensembl gene ID, so `ensg` drops
+                  straight in — no symbol lookup or cross-reference needed. Deep
+                  link to /associations (the disease-association table) rather
+                  than the target overview: it's the closest analogue to what
+                  this page shows. */}
+              <Ext href={`https://platform.opentargets.org/target/${ensg}/associations`}>
+                Open Targets
               </Ext>
               {symbol !== ensg && (
                 <Ext href={`https://www.genecards.org/cgi-bin/carddisp.pl?gene=${symbol}`}>
