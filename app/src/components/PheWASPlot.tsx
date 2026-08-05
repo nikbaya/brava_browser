@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { scaleLinear } from 'd3-scale'
 import type { PhenotypeMeta } from '../data/types'
-import { fmtBeta, fmtPLog } from '../lib/format'
+import { fmtBeta3, fmtPLog3 } from '../lib/format'
 import { SIG_GENE_CAUCHY, SIG_GENE_MASK_BONFERRONI } from '../lib/constants'
 import { THRESH_GENE, THRESH_GENE_MASK, ThresholdLegend } from './ui'
 
@@ -231,7 +231,7 @@ export default function PheWASPlot({
         <div className="pointer-events-none absolute top-2 right-2 rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-lg">
           <div className="font-semibold text-ink">{ordered[hover].meta.name}</div>
           <div className="tnum text-ink-soft">
-            p = {fmtPLog(ordered[hover].lp)} · β = {fmtBeta(ordered[hover].beta)}
+            p = {fmtPLog3(ordered[hover].lp)} · β = {fmtBeta3(ordered[hover].beta)}
           </div>
         </div>
       )}

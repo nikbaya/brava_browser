@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import {
   fmtPLog,
+  fmtPLog3,
+  fmtPCompact,
   fmtP,
   pFromNeglog10,
   fmtBeta,
+  fmtBeta3,
   neglog10,
   fmtCount,
 } from './format'
@@ -44,6 +47,65 @@ describe('fmtPLog (p-value from stored -log10)', () => {
       expect(mantissa).toBeGreaterThanOrEqual(1)
       expect(mantissa).toBeLessThan(10)
     }
+  })
+})
+
+describe('fmtPLog3 / fmtBeta3 (tooltips: always 3 significant figures)', () => {
+  it('keeps 3 sig figs for non-significant p, not 3 decimals', () => {
+    expect(fmtPLog3(2)).toBe('0.0100') // p = 0.01 — the table form gives "0.010"
+    expect(fmtPLog3(1)).toBe('0.100') // p = 0.1
+    expect(fmtPLog3(3)).toBe('0.00100') // p = 0.001
+    expect(fmtPLog3(0)).toBe('1.00') // p = 1
+    expect(fmtPLog3(-Math.log10(0.05))).toBe('0.0500')
+  })
+
+  it('defers to the e-form (already a 3-sig-fig mantissa) below 1e-3', () => {
+    expect(fmtPLog3(-Math.log10(1.17e-205))).toBe('1.17e-205')
+    expect(fmtPLog3(10)).toBe('1.00e-10')
+  })
+
+  it('gives β 3 sig figs across magnitudes', () => {
+    expect(fmtBeta3(0.01)).toBe('0.0100') // fmtBeta would give "0.01"
+    expect(fmtBeta3(-0.5)).toBe('−0.500') // U+2212 MINUS SIGN
+    expect(fmtBeta3(0.0123456)).toBe('0.0123')
+    expect(fmtBeta3(12.3456)).toBe('12.3')
+    expect(fmtBeta3(0)).toBe('0.00')
+    expect(fmtBeta3(0.0001)).toBe('1.00e-4')
+    expect(fmtBeta3(5000)).toBe('5.00e+3')
+  })
+
+  it('returns the em dash for null / NaN', () => {
+    expect(fmtPLog3(null)).toBe('—')
+    expect(fmtBeta3(undefined)).toBe('—')
+    expect(fmtBeta3(NaN)).toBe('—')
+  })
+})
+
+describe('fmtPCompact (dense per-ancestry grid)', () => {
+  it('shows 3 decimals for p >= 0.01, matching its 3-sig-fig tooltip', () => {
+    // PCSK9 x ColonRectCanc x AMR: stored lp = 0.02 -> p = 0.954992…
+    expect(fmtPCompact(0.02)).toBe('0.955')
+    expect(fmtPLog3(0.02)).toBe('0.955') // cell and tooltip agree
+    expect(fmtPCompact(0)).toBe('1.000')
+    expect(fmtPCompact(2)).toBe('0.010')
+  })
+
+  it('drops to a 1-sig-fig mantissa below p = 0.01', () => {
+    expect(fmtPCompact(2.1)).toBe('8e-3')
+    expect(fmtPCompact(205)).toBe('1e-205')
+  })
+
+  // The column is sized for the sci branch's 6 chars ("2e-156"), so a 5-char
+  // ceiling here means 3 dp needs no column resize.
+  it('stays within 5 chars for every p >= 0.01', () => {
+    for (let lp = 0; lp <= 2; lp += 0.01) {
+      expect(fmtPCompact(lp).length).toBeLessThanOrEqual(5)
+    }
+  })
+
+  it('returns the em dash for null / NaN', () => {
+    expect(fmtPCompact(null)).toBe('—')
+    expect(fmtPCompact(NaN)).toBe('—')
   })
 })
 

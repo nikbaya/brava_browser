@@ -3,6 +3,8 @@ import { format } from 'd3-format'
 const fixed2 = format('.2f')
 const sci2 = format('.2e')
 const si = format('.3~s')
+/** 3 significant figures in plain decimal notation ("0.0100", "0.500", "12.3"). */
+const sig3 = format('.3r')
 
 /** Build "1.17e-205" from a mantissa + exponent. */
 function eNotation(mantissa: number, exp: number, digits = 2): string {
@@ -29,14 +31,41 @@ export function fmtPLog(lp: number | null | undefined): string {
 }
 
 /**
+ * Tooltip p-value from its stored -log10(p): ALWAYS 3 significant figures.
+ * Tooltips are the "read the exact number" surface, so the table form's `.3f`
+ * isn't enough there — it renders p = 0.01 as "0.010" (two sig figs) and
+ * p = 0.5 as "0.500" (three), which is inconsistent. Above 1e-3 the e-form
+ * mantissa is already 3 sig figs, so this only changes the decimal branch.
+ */
+export function fmtPLog3(lp: number | null | undefined): string {
+  if (lp == null || Number.isNaN(lp)) return '—'
+  if (lp <= 3) return sig3(Math.pow(10, -lp)) // p ≥ 1e-3: "0.0100", "0.500"
+  return fmtPLog(lp)
+}
+
+/** Tooltip effect size / standard error: always 3 significant figures. */
+export function fmtBeta3(b: number | null | undefined): string {
+  if (b == null || Number.isNaN(b)) return '—'
+  const a = Math.abs(b)
+  if (a === 0) return '0.00'
+  if (a < 0.001 || a >= 1000) return sci2(b) // 2-dp mantissa = 3 sig figs
+  return sig3(b)
+}
+
+/**
  * Ultra-compact p-value from its stored -log10(p), for the dense per-ancestry
  * grid: a 1-significant-figure mantissa (e.g. "2e-205", "8e-6") and a plain
- * 2-decimal form for p ≥ 0.01. The full-precision value lives in the cell's
- * title attribute.
+ * 3-decimal form for p ≥ 0.01. The full-precision value lives in the cell's
+ * tooltip.
+ *
+ * 3 dp, not 2, so the cell agrees with its 3-sig-fig tooltip (`fmtPLog3`) —
+ * at 2 dp a p of 0.95499 read "0.95" in the grid but "0.955" on hover, which
+ * looked like a discrepancy. Widest output stays 5 chars ("1.000"), narrower
+ * than the sci branch's "2e-156", so no column resize is needed.
  */
 export function fmtPCompact(lp: number | null | undefined): string {
   if (lp == null || Number.isNaN(lp)) return '—'
-  if (lp <= 2) return format('.2f')(Math.pow(10, -lp)) // p ≥ 0.01: "0.03"
+  if (lp <= 2) return format('.3f')(Math.pow(10, -lp)) // p ≥ 0.01: "0.034"
   const logp = -lp
   let exp = Math.floor(logp)
   let mantissa = Math.pow(10, logp - exp) // [1, 10)

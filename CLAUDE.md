@@ -99,9 +99,21 @@ Raw: `{PHENO}_ALL_gene_meta_analysis_100_cutoff.{ANCESTRY}.tsv.gz` (no suffix =
   preceding block's trailing edge, matching gnomAD, so intronic variants stack on
   the exon boundary. Ours uses cumulative offsets + binary search instead of
   their per-call filter/reduce (thousands of points per frame, plus hover).
-  **Axis defaults to genomic** (exons shaded behind the points) with an
-  `Exons`/`Genomic` toggle — the collapsed view matters because the median gene
-  in our index spends only 12.6% of its span in exons (42% are under 10%).
+  **Axis defaults to exon-collapsed** with an `Exons`/`Genomic` toggle (genomic
+  mode shades the exons behind the points instead); genes with no gene model fall
+  back to genomic automatically. The collapsed view is the default because the
+  median gene in our index spends only 12.6% of its span in exons (42% are under
+  10%), so on a genomic axis the coding variants pile into a few pixels.
+- **Outbound gnomAD links.** The variant table's Variant cell carries a small
+  external-link icon (tooltip "View in gnomAD") to
+  `gnomad.broadinstitute.org/variant/{chr}-{pos}-{ref}-{alt}`
+  (`gnomadVariantUrl` in [GeneVariants.tsx](app/src/components/GeneVariants.tsx)).
+  Both datasets are GRCh38 and gnomAD's variant id is exactly our stored
+  `chrom-pos-ref-alt`, so no liftover or lookup is needed — it's a plain
+  hyperlink, still **not** the rate-limited gnomAD API. **Never add a
+  `?dataset=` param**: the bare URL tracks gnomAD's current default release, so
+  the links keep working across future gnomAD versions. Ultra-rare BRaVa
+  variants may not exist there, hence the quiet styling (faint until hover).
 - **Multi-ancestry view = forest plot** ([ForestPlot.tsx](app/src/components/ForestPlot.tsx)):
   IVW Burden β ± 1.96·SE per ancestry, `All` rendered last as a meta diamond,
   P_het header (flags "heterogeneous" when <0.05), axis label adapts to trait
@@ -120,6 +132,15 @@ Raw: `{PHENO}_ALL_gene_meta_analysis_100_cutoff.{ANCESTRY}.tsv.gz` (no suffix =
 - **Scientific notation:** "e" form (e.g. `1.17e-205`), NOT superscript — the
   user explicitly prefers e for readability. `fmtPLog` reconstructs mantissa/exp
   from −log10 to avoid underflow ([format.ts](app/src/lib/format.ts)).
+- **3 significant figures in every tooltip**, p-values and βs alike — including
+  large values, so p = 0.01 reads `0.0100`, never `0.01`. Use `fmtPLog3` /
+  `fmtBeta3`, not the table forms (`fmtPLog`/`fmtBeta`, which are fixed-decimal
+  and keep numeric columns decimal-aligned). The dense per-ancestry grid's
+  `fmtPCompact` uses 3 dp for p ≥ 0.01 so a cell never disagrees with its own
+  tooltip (2 dp showed p = 0.95499 as `0.95` against a `0.955` tooltip).
+  Caveat to remember: the pipeline rounds −log10(p) to 2 dp
+  ([common.py](pipeline/common.py)), so p carries only ~1.2% relative precision
+  (ln10 × 0.005) — the third figure is display convention, not measurement.
 - **Header** ([Header.tsx](app/src/components/Header.tsx)): icon only, no text.
 - **Defaults** ([constants.ts](app/src/lib/constants.ts)): ancestry `All`, mask
   index 4 (pLoF or DM/PA), MAF index 0 (<0.001), test SKAT-O.

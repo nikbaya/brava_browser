@@ -1,6 +1,6 @@
 import type { ColumnDef } from '@tanstack/react-table'
 import { ANCESTRIES, ANCESTRY_META } from '../lib/constants'
-import { fmtBeta, fmtPCompact, fmtPLog } from '../lib/format'
+import { fmtBeta3, fmtPCompact, fmtPLog3 } from '../lib/format'
 import { DIR_NEG, DIR_POS, EffectTriangle, isSig, sigTextClass } from './indicators'
 import Tip from './Tip'
 
@@ -85,7 +85,7 @@ export function ancestryGridColumns<T extends GridRowLike>(
       // keep the grid dense. Uses Tip, not a native `title`, for a fast reveal.
       return (
         <Tip
-          label={lp != null ? `P = ${fmtPLog(lp)}` : 'no data'}
+          label={lp != null ? `P = ${fmtPLog3(lp)}` : 'no data'}
           className={CELL_HIT}
         >
           <span className={`truncate tnum ${sigTextClass(lp)}`}>
@@ -119,7 +119,7 @@ export function ancestryGridColumns<T extends GridRowLike>(
       const sig = isSig(c.row.original.lp[a])
       return (
         <Tip
-          label={b != null ? `β = ${fmtBeta(b)}` : 'no data'}
+          label={b != null ? `β = ${fmtBeta3(b)}` : 'no data'}
           className={`${CELL_HIT} justify-center`}
         >
           <EffectTriangle beta={b} max={betaMax} dim={!sig} />

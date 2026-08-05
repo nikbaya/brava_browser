@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { scaleLinear } from 'd3-scale'
 import type { GeneIndex } from '../data/types'
 import { chrColor, genomeLayout } from '../lib/genome'
-import { fmtPLog } from '../lib/format'
+import { fmtPLog3 } from '../lib/format'
 import { SIG_GENE_CAUCHY, SIG_GENE_MASK_BONFERRONI } from '../lib/constants'
 import type { PhenoRow } from '../lib/select'
 
@@ -187,7 +187,7 @@ export default function ManhattanPlot({
             {geneIndex.symbols[hover.row.geneIdx] || geneIndex.ids[hover.row.geneIdx]}
           </div>
           <div className="tnum text-ink-soft">
-            chr{geneIndex.chr[hover.row.geneIdx]} · p = {fmtPLog(hover.row.y)}
+            chr{geneIndex.chr[hover.row.geneIdx]} · p = {fmtPLog3(hover.row.y)}
           </div>
         </div>
       )}

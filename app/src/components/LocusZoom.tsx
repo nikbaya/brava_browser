@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { scaleLinear } from 'd3-scale'
-import { fmtBeta, fmtPLog, fmtPos } from '../lib/format'
+import { fmtBeta3, fmtPLog3, fmtPos } from '../lib/format'
 import type { VariantRow } from '../lib/select'
 import type { GeneModel } from '../data/types'
 import { collapsedRegions, regionScale, type Span } from '../lib/exonScale'
@@ -41,11 +41,12 @@ function mbDecimals(bp: number): number {
  * -log10 p, colored by effect direction. Canvas so it stays smooth for the
  * biggest genes (TTN ≈ 7k variants). Click a point to select the variant.
  *
- * The x axis is true genomic position by default, with the gene's exons shaded
- * behind the points. With a gene model supplied, a toggle switches to
- * exon-collapsed coordinates — pixel width allocated only to exons ±75 bp, gaps
- * excised (gnomAD's `regionViewerScale`) — which is the only way coding variants
- * in a mostly-intronic gene become resolvable.
+ * The x axis defaults to exon-collapsed coordinates — pixel width allocated only
+ * to exons ±75 bp, gaps excised (gnomAD's `regionViewerScale`) — since that's the
+ * only way coding variants in a mostly-intronic gene become resolvable (the
+ * median gene in our index spends ~13% of its span in exons). A toggle switches
+ * back to true genomic position, which shades the exons behind the points
+ * instead. Genes with no gene model fall back to the genomic axis.
  */
 export default function LocusZoom({
   variants,
@@ -70,7 +71,9 @@ export default function LocusZoom({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [width, setWidth] = useState(900)
   const [hover, setHover] = useState<Hover | null>(null)
-  const [collapse, setCollapse] = useState(false)
+  // Exon-collapsed by default; `collapsed` below degrades to genomic when the
+  // gene has no model (or no exon regions), so this is safe without a model.
+  const [collapse, setCollapse] = useState(true)
 
   const points = useMemo<Plotted[]>(() => {
     const out: Plotted[] = []
@@ -336,7 +339,7 @@ export default function LocusZoom({
             {fmtPos(hover.p.row.pos)} {hover.p.row.ref}›{hover.p.row.alt}
           </div>
           <div className="tnum text-ink-soft">
-            p = {fmtPLog(hover.p.row.lp)} · β = {fmtBeta(hover.p.row.beta)}
+            p = {fmtPLog3(hover.p.row.lp)} · β = {fmtBeta3(hover.p.row.beta)}
           </div>
         </div>
       )}

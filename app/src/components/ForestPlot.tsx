@@ -6,7 +6,7 @@ import {
   ANCESTRY_META,
   type Ancestry,
 } from '../lib/constants'
-import { fmtBeta, fmtCount, fmtPLog, fmtPos } from '../lib/format'
+import { fmtBeta, fmtBeta3, fmtCount, fmtPLog, fmtPLog3, fmtPos } from '../lib/format'
 import type { ForestSeries } from '../lib/select'
 import type { AncestryN, PhenotypeMeta } from '../data/types'
 
@@ -238,11 +238,11 @@ function Tooltip({
     <div className="pointer-events-none absolute top-0 right-0 rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-lg">
       <div className="font-semibold text-ink">{ANCESTRY_META[row.anc].long}</div>
       <div className="tnum text-ink-soft">
-        β = {fmtBeta(row.beta)}
-        {row.se != null && <> ± {fmtBeta(row.se)}</>}
+        β = {fmtBeta3(row.beta)}
+        {row.se != null && <> ± {fmtBeta3(row.se)}</>}
       </div>
       <div className="tnum text-ink-soft">
-        Burden p = {fmtPLog(row.lpBurden)} · SKAT-O p = {fmtPLog(row.lpSkato)}
+        Burden p = {fmtPLog3(row.lpBurden)} · SKAT-O p = {fmtPLog3(row.lpSkato)}
       </div>
       {n && (
         <div className="tnum text-ink-faint">

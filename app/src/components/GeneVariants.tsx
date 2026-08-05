@@ -12,6 +12,7 @@ import { variantForest, variantRows, type VariantRow } from '../lib/select'
 import { fmtBeta, fmtCount, fmtOR, fmtPLog, fmtPos } from '../lib/format'
 import { Notice, Spinner } from './ui'
 import { DirDot, SigDot } from './indicators'
+import Tip from './Tip'
 import VirtualTable from './VirtualTable'
 import LocusZoom from './LocusZoom'
 import VariantForest from './VariantForest'
@@ -141,6 +142,60 @@ export default function GeneVariants({
   )
 }
 
+/**
+ * gnomAD variant page for a BRaVa variant. Both are GRCh38 and gnomAD's variant
+ * id is the same `chrom-pos-ref-alt` we store, so no liftover or lookup is
+ * needed — this is a plain outbound link, NOT the rate-limited gnomAD API.
+ * Deliberately no `?dataset=` param: the bare URL follows whatever gnomAD's
+ * current default release is, so these links survive future gnomAD versions.
+ */
+export function gnomadVariantUrl(
+  chr: string,
+  pos: number,
+  ref: string,
+  alt: string,
+): string {
+  return `https://gnomad.broadinstitute.org/variant/${chr}-${pos}-${ref}-${alt}`
+}
+
+/**
+ * Small "open in gnomAD" affordance beside a variant id. Ultra-rare variants
+ * may not exist in gnomAD (it then shows its own not-found page), so this stays
+ * visually quiet — faint until hovered. Clicks are stopped from bubbling so
+ * following the link doesn't also open the row's ancestry forest.
+ */
+function GnomadLink({ chr, row }: { chr: string; row: VariantRow }) {
+  return (
+    // shrink-0 on the Tip wrapper, not just the anchor: the wrapper span is the
+    // flex item here, so without it the icon squeezes to nothing on long indels.
+    <Tip label="View in gnomAD" className="inline-flex shrink-0 items-center">
+      <a
+        href={gnomadVariantUrl(chr, row.pos, row.ref, row.alt)}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        aria-label={`View chr${chr}:${row.pos} ${row.ref}>${row.alt} in gnomAD`}
+        className="shrink-0 text-ink-faint transition-colors hover:text-brand"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.4}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-3 w-3"
+          aria-hidden="true"
+        >
+          <path d="M14 4h6v6" />
+          <path d="M20 4l-8.5 8.5" />
+          <path d="M18 14.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4.5" />
+        </svg>
+      </a>
+    </Tip>
+  )
+}
+
 function VariantTable({
   rows,
   trait,
@@ -166,17 +221,24 @@ function VariantTable({
         id: 'variant',
         header: 'Variant',
         accessorFn: (r) => r.pos,
-        size: 190,
+        size: 205,
+        // `fill` (own layout, no wrapping truncate span) so the gnomAD link
+        // keeps its pixels: long indel alleles overflow this column, and inside
+        // the default truncating wrapper a trailing icon would be clipped away.
+        meta: { fill: true },
         cell: (c) => {
           const r = c.row.original
           return (
-            <span className="tnum text-ink">
-              {chr ? `chr${chr}:` : ''}
-              {fmtPos(r.pos)}{' '}
-              <span className="text-ink-soft">
-                {r.ref}›{r.alt}
+            <div className="flex w-full min-w-0 items-center gap-1 px-2 whitespace-nowrap">
+              <span className="tnum truncate text-ink">
+                {chr ? `chr${chr}:` : ''}
+                {fmtPos(r.pos)}{' '}
+                <span className="text-ink-soft">
+                  {r.ref}›{r.alt}
+                </span>
               </span>
-            </span>
+              {chr && <GnomadLink chr={chr} row={r} />}
+            </div>
           )
         },
       },
