@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { lpArray, phenoRows, geneRows, forestSeries } from './select'
-import type { GeneData, PhenotypeData } from '../data/types'
+import {
+  lpArray,
+  phenoRows,
+  geneRows,
+  forestSeries,
+  variantAncRows,
+} from './select'
+import type { GeneData, GeneVariantAncData, PhenotypeData } from '../data/types'
 
 // A tiny phenotype payload: two genes, mask 0 & 4, maf 0 & 1.
 const PHENO: PhenotypeData = {
@@ -113,5 +119,41 @@ describe('forestSeries', () => {
     })
     expect(rows.map((r) => r.ancIdx)).toEqual([0])
     expect(hetLp).toBeNull() // lp_het is null on that row
+  })
+})
+
+// One gene's per-ancestry variant file: two ancestries (1 = EUR, 2 = AFR) over a
+// shared coord table, with only ancestry 1 carrying phenotype 0.
+const VANC: GeneVariantAncData = {
+  id: 'ENSG1',
+  nv: 3,
+  pos: [100, 200, 300],
+  ref: ['A', 'C', 'G'],
+  alt: ['T', 'G', 'A'],
+  by_anc: {
+    '1': {
+      '0': { idx: [2, 0], beta: [0.4, null], se: [0.1, null], lp: [6.2, 0.3] },
+    },
+    '2': {
+      '1': { idx: [1], beta: [-0.2], se: [0.05], lp: [1.1] },
+    },
+  },
+}
+
+describe('variantAncRows', () => {
+  it('resolves the coord table for one ancestry × phenotype, in slice order', () => {
+    const rows = variantAncRows(VANC, 1, 0)
+    expect(rows.map((r) => `${r.pos}${r.ref}>${r.alt}`)).toEqual(['300G>A', '100A>T'])
+    expect(rows[0]).toMatchObject({ beta: 0.4, se: 0.1, lp: 6.2 })
+  })
+
+  it('nulls the meta-only fields (per-ancestry slices carry beta/se/lp only)', () => {
+    const [r] = variantAncRows(VANC, 1, 0)
+    expect([r.nc, r.ne, r.i2, r.cq, r.ed]).toEqual([null, null, null, null, null])
+  })
+
+  it('returns [] for an ancestry or phenotype with no slice', () => {
+    expect(variantAncRows(VANC, 1, 1)).toEqual([]) // pheno absent for that anc
+    expect(variantAncRows(VANC, 4, 0)).toEqual([]) // ancestry absent (e.g. EAS)
   })
 })

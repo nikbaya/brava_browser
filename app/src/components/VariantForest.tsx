@@ -1,20 +1,29 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { scaleLinear } from 'd3-scale'
-import { ANCESTRIES, ANCESTRY_COLOR, ANCESTRY_META } from '../lib/constants'
-import { fmtBeta, fmtPLog } from '../lib/format'
+import { ANCESTRIES, ANCESTRY_COLOR, ANCESTRY_META, type Ancestry } from '../lib/constants'
+import { fmtBeta, fmtBeta3, fmtPLog, fmtPLog3 } from '../lib/format'
 import type { PhenotypeMeta } from '../data/types'
 import type { VariantForestRow } from '../lib/select'
 
 const ML = 92
-const MR = 150
+// Right gutter holds the whole numeric label — "β  [lo, hi] · p=1.17e-205" runs
+// to ~36 chars at 11px, which a 150px gutter clipped mid-p-value.
+const MR = 250
 const MT = 4
 const MB = 24
 const ROW_H = 24
+// Below this the plot area would collapse to nothing; the wrapper scrolls
+// horizontally instead of squeezing (ML + MR alone is 342).
+const MIN_W = 620
 
 /**
  * Per-variant multi-ancestry forest: single-variant meta β with 95% CI for each
  * ancestry, `All` last as a diamond. Distinct from the gene-level ForestPlot
  * (which shows Burden/SKAT-O); here there is one p-value per stratum.
+ *
+ * Hovering a row highlights it and opens a tooltip with the full-precision
+ * numbers. Note the per-ancestry variant slices carry only beta/se/lp — no
+ * N, I² or Cochran's Q — so unlike the gene-level forest there is no N column.
  */
 export default function VariantForest({
   rows,
@@ -25,6 +34,19 @@ export default function VariantForest({
   trait: PhenotypeMeta
   loading?: boolean
 }) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [measured, setMeasured] = useState(MIN_W)
+  const [hover, setHover] = useState<number | null>(null)
+
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const ro = new ResizeObserver((e) => setMeasured(e[0].contentRect.width))
+    ro.observe(el)
+    setMeasured(el.clientWidth)
+    return () => ro.disconnect()
+  }, [])
+
   const ordered = useMemo(() => {
     const named = rows
       .filter((r) => r.beta != null)
@@ -58,15 +80,15 @@ export default function VariantForest({
       </p>
     )
 
-  const width = 560
+  const width = Math.max(measured, MIN_W)
   const height = MT + ordered.length * ROW_H + MB
   const x = scaleLinear().domain(domain).range([ML, width - MR])
   const axisLabel = trait.type === 'binary' ? 'β (log OR)' : 'β (SD units)'
 
   return (
-    <div className="w-full overflow-x-auto">
+    <div ref={wrapRef} className="relative w-full overflow-x-auto">
       <div className="px-1 pb-1 text-[11px] text-ink-faint">
-        Single-variant meta {axisLabel} ± 95% CI
+        Single-variant meta {axisLabel} ± 95% CI · hover a stratum for detail
       </div>
       <svg width={width} height={height}>
         <line
@@ -94,7 +116,31 @@ export default function VariantForest({
           const isMeta = r.anc === 'All'
           const color = ANCESTRY_COLOR[r.anc]
           return (
-            <g key={r.ancIdx}>
+            <g
+              key={r.ancIdx}
+              onMouseEnter={() => setHover(i)}
+              onMouseLeave={() => setHover(null)}
+              className="cursor-default"
+            >
+              {/* full-row transparent hit target, so hovering anywhere in the
+                  row (not just over text/markers) highlights it */}
+              <rect
+                x={0}
+                y={cy - ROW_H / 2}
+                width={width}
+                height={ROW_H}
+                fill="transparent"
+              />
+              {hover === i && (
+                <rect
+                  x={0}
+                  y={cy - ROW_H / 2}
+                  width={width}
+                  height={ROW_H}
+                  className="fill-brand-light/60"
+                  pointerEvents="none"
+                />
+              )}
               <text
                 x={ML - 10}
                 y={cy}
@@ -141,6 +187,34 @@ export default function VariantForest({
           )
         })}
       </svg>
+
+      {hover != null && ordered[hover] && (
+        <Tooltip row={ordered[hover]} ci={ci(ordered[hover].beta!, ordered[hover].se)} />
+      )}
+    </div>
+  )
+}
+
+function Tooltip({
+  row,
+  ci,
+}: {
+  row: { anc: Ancestry; beta: number | null; se: number | null; lp: number | null }
+  ci: [number, number]
+}) {
+  return (
+    <div className="pointer-events-none absolute top-0 right-0 rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-lg">
+      <div className="font-semibold text-ink">{ANCESTRY_META[row.anc].long}</div>
+      <div className="tnum text-ink-soft">
+        β = {fmtBeta3(row.beta)}
+        {row.se != null && <> ± {fmtBeta3(row.se)}</>}
+      </div>
+      {row.se != null && (
+        <div className="tnum text-ink-faint">
+          95% CI [{fmtBeta3(ci[0])}, {fmtBeta3(ci[1])}]
+        </div>
+      )}
+      <div className="tnum text-ink-soft">p = {fmtPLog3(row.lp)}</div>
     </div>
   )
 }

@@ -133,6 +133,40 @@ export function variantRows(d: GeneVariantData, phenoIdx: number): VariantRow[] 
   return out
 }
 
+/**
+ * Variants for one phenotype in ONE ancestry stratum, from the lazy `.anc.json`.
+ * Same row shape as `variantRows` so the table / locuszoom are agnostic, but the
+ * per-ancestry slices only carry beta/se/lp — nc/ne/i2/cq/ed are null because the
+ * pipeline emits them for the meta only (callers hide those columns for strata).
+ * `ancIdx` is a canonical ANCESTRIES index; 0 (`All`) is not in this file.
+ */
+export function variantAncRows(
+  d: GeneVariantAncData,
+  ancIdx: number,
+  phenoIdx: number,
+): VariantRow[] {
+  const sl = d.by_anc[String(ancIdx)]?.[String(phenoIdx)]
+  if (!sl) return []
+  const out: VariantRow[] = new Array(sl.idx.length)
+  for (let i = 0; i < sl.idx.length; i++) {
+    const v = sl.idx[i]
+    out[i] = {
+      pos: d.pos[v],
+      ref: d.ref[v],
+      alt: d.alt[v],
+      beta: sl.beta[i] ?? null,
+      se: sl.se[i] ?? null,
+      lp: sl.lp[i] ?? null,
+      nc: null,
+      ne: null,
+      i2: null,
+      cq: null,
+      ed: null,
+    }
+  }
+  return out
+}
+
 /** Effect estimate for one variant in one ancestry, for the forest plot. */
 export interface VariantForestRow {
   ancIdx: number

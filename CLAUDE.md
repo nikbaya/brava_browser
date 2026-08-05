@@ -121,6 +121,17 @@ Raw: `{PHENO}_ALL_gene_meta_analysis_100_cutoff.{ANCESTRY}.tsv.gz` (no suffix =
   is already in `gene/{ENSG}.json` (no extra fetch on the gene page; the
   phenotype page fetches the gene file into a side drawer).
   [PhenoPicker.tsx](app/src/components/PhenoPicker.tsx) = searchable combobox.
+- **Nullable table columns must sort via `?? undefined` + `sortUndefined:
+  'last'`.** TanStack's sort only special-cases `undefined`; a `null` value falls
+  through to its `compareBasic`, where `null === 0`, `null > 0` and `0 > null` are
+  all false — an inconsistent comparator, so blanks interleave with genuine zeros
+  (this is what made a blank I² sort like I² = 0%). Every nullable numeric column
+  uses an `accessorFn` that maps `null → undefined`; see
+  [ancestryColumns.tsx](app/src/components/ancestryColumns.tsx) and the variant
+  table in [GeneVariants.tsx](app/src/components/GeneVariants.tsx).
+- The variant table shows **no OR column** — β (log OR for binary traits) is the
+  reported effect; `fmtOR` still exists in [format.ts](app/src/lib/format.ts) but
+  is currently unused.
 - **Indicator dots** ([indicators.tsx](app/src/components/indicators.tsx)):
   `SigDot` (significance tiers, soft green/amber) + `DirDot` (direction, soft
   blue/red) replace a full "effect" column. Colors are **alpha-softened** (~30–55%
@@ -273,8 +284,27 @@ slicing** (per-gene-region variant shards), not whole-phenotype files.
 Frontend code, data build, and R2 upload are all **done** (commits `d43f82e`,
 `7478cd7`):
 - `GeneVariants`, `LocusZoom`, `VariantForest` components; data types, fetchers,
-  `variantRows` / `variantForest` selectors; `VITE_VARIANT_BASE_URL` wired into
-  `config.ts` and `deploy.yml` (points to `…r2.dev/v2`).
+  `variantRows` / `variantAncRows` / `variantForest` selectors;
+  `VITE_VARIANT_BASE_URL` wired into `config.ts` and `deploy.yml` (points to
+  `…r2.dev/v2`).
+- **The page's ancestry filter drives the variant view.** `GeneVariants` takes
+  `ancIdx`: 0 (`All`) reads the cross-ancestry meta out of the main file, any
+  other stratum reads `{ENSG}[.{pheno}].anc.json` via `variantAncRows` — the same
+  file the per-variant forest lazily fetches, so the two share one cached fetch.
+  **Per-ancestry slices carry only `idx`/`beta`/`se`/`lp`** (no `nc`/`ne`/`i2`/
+  `cq`/`ed`), so the table drops its **N (eff.)** and **I²** columns for a single
+  stratum instead of showing a column of dashes; adding them back means re-running
+  the variant ETL and re-uploading ~176k objects. Strata are much sparser than the
+  meta (PCSK9 × colorectal: All 225, EUR 154, non-EUR 104, AMR 50, AFR 38, SAS 24,
+  EAS 0), so the "no variants in this stratum" empty state is a normal path.
+  Selecting a variant clears on ancestry change (it may not exist in the new
+  stratum). The All meta is a superset of the strata, so the forest's `All`
+  diamond still resolves for a variant picked in stratum mode.
+- `VariantForest` mirrors the gene-level `ForestPlot`: ResizeObserver width,
+  full-row hover highlight + tooltip (β ± SE, 95% CI, p at 3 sig figs). Its right
+  gutter is 250px because the inline `β [lo, hi] · p=…` label runs ~36 chars —
+  at the old 150px the p-value was cut off. No N column: per-stratum N isn't in
+  the data (see above).
 - `pipeline/build_variants.py`: streaming two-pass VCF→JSON ETL. Resolves SAMPLE
   subfield positions from each file's own FORMAT column (fixed indices misalign —
   quantitative traits omit `NC`, and some files omit `NS`/`NE`).

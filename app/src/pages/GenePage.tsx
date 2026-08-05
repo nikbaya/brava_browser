@@ -253,12 +253,15 @@ export default function GenePage() {
                   />
                 </div>
                 <span className="text-[11px] text-ink-faint">
-                  single-variant meta · overlapping this gene by position
+                  {ANCESTRY_META[filters.ancestry].long} · single-variant
+                  {filters.ancestry === 'All' ? ' meta' : ''} · overlapping this gene by
+                  position
                 </span>
               </div>
               <GeneVariants
                 ensg={ensg}
                 phenoIdx={forestIdx}
+                ancIdx={ancIdx}
                 trait={forestTrait}
                 split={splitSet.has(ensg)}
                 start={start}
