@@ -135,6 +135,106 @@ significance, review status, variation ID. Same shape as the exon build: a
   chr:pos:ref:alt matching will silently miss some indels. Worth quantifying the
   miss rate on one gene before promising a "in ClinVar" badge.
 
+## Variant table: extending the N (eff.) meter beyond the cross-ancestry meta
+
+**Shipped:** in meta mode (ancestry = `All`) the N (eff.) cell carries a
+`MagnitudeBar` ([indicators.tsx](../app/src/components/indicators.tsx)) whose
+length is the variant's effective sample size over the largest N among the loaded
+rows, mirroring how `DirDot` normalises |β| per column. Pure frontend — `ne` was
+already in the meta slice.
+
+**Not shipped, and why:** for any single ancestry the column is dropped entirely,
+because `.anc.json` slices carry only `idx`/`beta`/`se`/`lp`
+([types.ts](../app/src/data/types.ts) `VariantAncSlice`). There is no per-variant,
+per-ancestry N in the shipped data, so the meter disappears exactly when you
+subset — the opposite of what you'd want.
+
+### Option A — per-stratum N (makes the meter work in every ancestry)
+
+Pass 1 of the ETL **already writes `ne` for every ancestry row** into the shard
+files ([build_variants.py](../pipeline/build_variants.py) — the record is built
+identically regardless of `aidx`); only `_anc_payload` drops it on the way out. So
+it's a two-line pipeline change plus a full re-run.
+
+Measured cost (on the local full build, gzip -6, biggest 40 `.anc.json` files):
+
+| | |
+|---|---|
+| Adding `ne` to anc slices | **+18.6% gzipped** on the anc payload |
+| Bucket impact | anc ≈ ⅓ of the 2.52 GiB v2 data → **3.75 → ~3.90 GiB** of the 10 GB ceiling |
+| Class A ops | ~176k re-uploads against the 1M/month budget — fine once, not repeatedly |
+| Wall clock | `make full-variants` ~1–2 h + ~6 GB GCS download |
+
+Free offset while in there: `_num` casts every shard field to `float`, so `ne`/`nc`
+ship as `"75717.0"` — two wasted bytes per value across every meta file. Emitting
+them as ints pays back part of the growth.
+
+**Do this opportunistically**, bundled with the next variant ETL re-run (e.g. a
+ClinVar or annotation pass), not as a standalone rebuild.
+
+### Option B — stacked per-ancestry composition bar via `.anc.json`
+
+Superseded by Option C below, which gets the same thing for free. Recorded for
+completeness: a segmented bar built from the per-ancestry *files* would need
+Option A **plus** the `.anc.json` fetch on first paint in meta mode, where it's
+currently lazy (`needAnc` is false until a variant is selected,
+[GeneVariants.tsx](../app/src/components/GeneVariants.tsx)) — a first-paint
+regression and an extra Class B read on the common path.
+
+### Option C — decode `ED`, which makes composition free (**preferred**)
+
+An earlier note here claimed `ED` was per-biobank and therefore useless for
+ancestry composition. **That was wrong.** Measured properly:
+
+- `ED` is one character per **biobank × ancestry stratum**. Its length is constant
+  within a phenotype and ranges 4–33 across the 44 phenotypes (0/44 phenotypes
+  showed more than one distinct length over 120 sampled genes). Only 10 biobanks
+  exist, so lengths above 10 already rule out per-biobank.
+- The stratum **order and identity are recoverable**: each meta VCF's
+  `##bcftools_metalCommand` header line lists its metal inputs in `ED` order, and
+  every input filename encodes biobank, ancestry and cohort counts —
+  `all-of-us.palmer.BRaVa_v8.HipRep.v8.ALL.AFR.176.77793.SAIGE.variant.20240326.vcf.gz`
+  → all-of-us / AFR / 176 cases / 77,793 controls.
+
+Verified on 3,000 variants each for HipRep (5 strata), AlcCons (4), BMI (25) and
+LDLC (26): summing the strata that `ED` marks as contributing (`+`/`-`, vs `?`)
+reproduces the file's own `NS`, `NC` and `NE` **exactly, 3000/3000 in every case**,
+where
+
+    NE = Σ over contributing strata of 4 / (1/N_case + 1/N_ctrl)     (binary)
+    NE = Σ over contributing strata of N                            (quantitative)
+
+So `ED` + a header-derived stratum table yields, per variant, exactly which strata
+contributed and their sizes — i.e. **per-ancestry sample composition, without
+touching the variant data or re-uploading anything**. The build step is 44 tiny
+range-reads of VCF headers emitting a bundled `meta/variant_studies.json`
+(44 phenotypes × ≤34 strata × {biobank, ancestry, cases, controls} — kilobytes,
+like the exon shards, so zero Class B cost).
+
+Caveats before building:
+- My throwaway filename regex resolved the full input list for only 4 of 10
+  phenotypes tested; the other 6 came up 2–3 strata short (AFib 21 parsed vs 23 in
+  `ED`, HTN 30 vs 33, T2Diab 28 vs 31, IBD 19 vs 22, ColonRectCanc 23 vs 26,
+  Height 20 vs 21). That's regex coverage of filename variants, not a data problem —
+  but the build must assert `len(parsed) == len(ED)` per phenotype and fail loudly,
+  because a silent off-by-two would misattribute every ancestry.
+- `meta/pheno_sizes.json` is **not** authoritative for this: its stratum counts
+  matched `ED` length for only 12 of 38 phenotypes, and the six `_F` phenotypes are
+  absent from it entirely. Use the VCF headers.
+- This covers meta mode only. In a single-ancestry view `.anc.json` carries no `ED`
+  either, so Option A is still the route for per-stratum N there.
+
+### Worth considering either way — normalise to the achievable N
+
+The shipped bar is normalised to the table's own max, so it's a *relative* read:
+a full bar means "best-supported variant here", not "well powered" (the cell's
+tooltip spells the denominator out for this reason). `meta/pheno_sizes.json` is
+already bundled with true per-phenotype × ancestry × biobank N, so the denominator
+could instead be the max **achievable** N for the selected phenotype × stratum —
+absolute, stable across sorting and filtering, and zero data cost. That would also
+give the stratum column a meaningful bar with no per-variant N at all, though it
+would be constant down the column rather than per row.
+
 ## Gene table: header/body cell-divider misalignment
 
 The per-ancestry grid header's group-cell outline doesn't line up with the body

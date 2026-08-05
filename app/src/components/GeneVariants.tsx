@@ -17,7 +17,7 @@ import {
 import { ANCESTRIES, ANCESTRY_META } from '../lib/constants'
 import { fmtBeta, fmtCount, fmtPLog, fmtPos } from '../lib/format'
 import { Notice, Spinner } from './ui'
-import { DirDot, SigDot } from './indicators'
+import { DirDot, MagnitudeBar, SigDot } from './indicators'
 import Tip from './Tip'
 import VirtualTable from './VirtualTable'
 import LocusZoom from './LocusZoom'
@@ -33,6 +33,12 @@ import VariantForest from './VariantForest'
  * meta from the main file, any other stratum reads the per-ancestry file (also
  * used by the forest, so the two share one cached fetch). Per-ancestry slices
  * carry only beta/se/lp, so the N (eff.) and I² columns are dropped for strata.
+ *
+ * In meta mode N (eff.) carries a `MagnitudeBar` normalised to the largest N in
+ * the table, so uneven biobank contribution is scannable down the column. A
+ * stratum has no per-variant N in the data at all — extending the meter to
+ * strata, or to a per-ancestry breakdown, needs a variant ETL re-run; see
+ * docs/ui-followups.md.
  */
 export default function GeneVariants({
   ensg,
@@ -226,6 +232,50 @@ function GnomadLink({ chr, row }: { chr: string; row: VariantRow }) {
   )
 }
 
+/**
+ * Tooltip text for an N (eff.) cell: the exact count the cell abbreviates, plus
+ * the meter's denominator spelled out — a bar normalised to the table's own max
+ * is a *relative* read, so a full bar means "best-supported variant here", not
+ * "well powered". Phrasing follows the gene table's grid tooltips ("P = …",
+ * "no data" for a null) in [ancestryColumns.tsx].
+ */
+function neLabel(ne: number | undefined, max: number): string {
+  if (ne == null) return 'no data'
+  const exact = `N (eff.) = ${Math.round(ne).toLocaleString()}`
+  if (max <= 0) return exact
+  return `${exact} · ${Math.round((100 * ne) / max)}% of max (${Math.round(max).toLocaleString()})`
+}
+
+/**
+ * Header tooltip text for the variant-table columns. Deliberately terse — one
+ * sentence saying what the number is, no restating of what the dots and bars in
+ * the cells already show. Two are context-dependent: p-value reads differently
+ * for the meta than for one stratum, and β's units follow the trait type.
+ */
+function columnHelp(
+  isMeta: boolean,
+  ancLong: string,
+  type: PhenotypeMeta['type'],
+): Record<'variant' | 'lp' | 'beta' | 'ne' | 'i2', string> {
+  // GWAS-VCF convention (these files' ES/SE/LP/NE keys): the effect allele is ALT.
+  const units = type === 'binary' ? 'log-odds units (log OR)' : 'trait SD units'
+  return {
+    variant: 'GRCh38 position and alleles (reference›alternate).',
+    lp: isMeta
+      ? 'Association p-value from the cross-ancestry meta-analysis.'
+      : `Association p-value within the ${ancLong} stratum.`,
+    beta: `Effect size for the alternate allele, in ${units}.`,
+    // Verified against the raw VCFs: per stratum NE = 4 / (1/N_case + 1/N_ctrl),
+    // summed over the strata that contributed to the variant. So for a binary
+    // trait it tracks the rarer class, not the headcount.
+    ne:
+      type === 'binary'
+        ? 'Effective sample size, set by the case/control balance — far below the total N when cases are rare.'
+        : 'Effective sample size contributing to this variant.',
+    i2: "Cochran's I²: how much of the effect-size variation between strata is real disagreement rather than chance. Blank when only one stratum contributes.",
+  }
+}
+
 function VariantTable({
   rows,
   trait,
@@ -248,8 +298,20 @@ function VariantTable({
     return m
   }, [rows])
 
-  const columns = useMemo<ColumnDef<VariantRow, any>[]>(
-    () => [
+  // Denominator for the N (eff.) meter: the largest effective sample size among
+  // the rows loaded for this gene × phenotype × ancestry, i.e. the same
+  // per-column normalisation `maxAbsBeta` gives the direction dots. It's over
+  // `rows` (not the sorted/filtered row model), so the bars keep a fixed
+  // meaning while you sort rather than rescaling under the cursor.
+  const maxNe = useMemo(() => {
+    let m = 0
+    for (const r of rows) if (r.ne != null) m = Math.max(m, r.ne)
+    return m
+  }, [rows])
+
+  const columns = useMemo<ColumnDef<VariantRow, any>[]>(() => {
+    const help = columnHelp(isMeta, ANCESTRY_META[ANCESTRIES[ancIdx]].long, trait.type)
+    return [
       {
         id: 'variant',
         header: 'Variant',
@@ -258,7 +320,7 @@ function VariantTable({
         // `fill` (own layout, no wrapping truncate span) so the gnomAD link
         // keeps its pixels: long indel alleles overflow this column, and inside
         // the default truncating wrapper a trailing icon would be clipped away.
-        meta: { fill: true },
+        meta: { fill: true, help: help.variant },
         cell: (c) => {
           const r = c.row.original
           return (
@@ -285,6 +347,7 @@ function VariantTable({
         accessorFn: (r) => r.lp ?? undefined,
         sortUndefined: 'last',
         size: 120,
+        meta: { help: help.lp },
         cell: (c) => (
           <span className="tnum inline-flex items-center gap-1.5">
             <SigDot lp={c.getValue<number | undefined>()} />
@@ -298,6 +361,7 @@ function VariantTable({
         accessorFn: (r) => r.beta ?? undefined,
         sortUndefined: 'last',
         size: 110,
+        meta: { help: help.beta },
         cell: (c) => {
           const b = c.getValue<number | undefined>()
           return (
@@ -323,10 +387,28 @@ function VariantTable({
               header: 'N (eff.)',
               accessorFn: (r: VariantRow) => r.ne ?? undefined,
               sortUndefined: 'last' as const,
-              size: 90,
-              cell: (c: CellContext<VariantRow, any>) => (
-                <span className="tnum">{fmtCount(c.getValue<number | undefined>())}</span>
-              ),
+              size: 134,
+              // `fill` (own layout, no truncating wrapper) so the meter keeps its
+              // pixels, and the count sits in a fixed-width span so every bar
+              // starts at the same x — bars only compare from a shared origin.
+              meta: { fill: true, help: help.ne },
+              cell: (c: CellContext<VariantRow, any>) => {
+                const v = c.getValue<number | undefined>()
+                return (
+                  // Tip (not a native title) for the same snappy reveal as the
+                  // gene table's grid, and it claims the whole cell — h-full
+                  // w-full, which meta.fill makes possible — because a 2px
+                  // sliver bar would otherwise be an awful hover target. Same
+                  // reasoning as CELL_HIT in [ancestryColumns.tsx].
+                  <Tip
+                    label={neLabel(v, maxNe)}
+                    className="flex h-full w-full min-w-0 items-center gap-2 px-2 whitespace-nowrap"
+                  >
+                    <span className="tnum w-[46px] shrink-0">{fmtCount(v)}</span>
+                    <MagnitudeBar value={v} max={maxNe} />
+                  </Tip>
+                )
+              },
             },
             {
               id: 'i2',
@@ -334,6 +416,7 @@ function VariantTable({
               accessorFn: (r: VariantRow) => r.i2 ?? undefined,
               sortUndefined: 'last' as const,
               size: 70,
+              meta: { help: help.i2 },
               cell: (c: CellContext<VariantRow, any>) => {
                 // i2 is Cochran's I² already in percent (0–100); '—' when a single
                 // biobank contributes (heterogeneity undefined for one study), which
@@ -348,9 +431,8 @@ function VariantTable({
             },
           ]
         : []),
-    ],
-    [chr, trait.type, maxAbsBeta, isMeta],
-  )
+    ]
+  }, [chr, trait.type, maxAbsBeta, maxNe, isMeta, ancIdx])
 
   const caption = (
     <span>

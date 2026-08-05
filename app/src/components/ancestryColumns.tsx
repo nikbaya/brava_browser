@@ -1,5 +1,5 @@
 import type { ColumnDef } from '@tanstack/react-table'
-import { ANCESTRIES, ANCESTRY_META } from '../lib/constants'
+import { ANCESTRIES, ANCESTRY_META, type Test } from '../lib/constants'
 import { fmtBeta3, fmtPCompact, fmtPLog3 } from '../lib/format'
 import { DIR_NEG, DIR_POS, EffectTriangle, isSig, sigTextClass } from './indicators'
 import Tip from './Tip'
@@ -66,9 +66,16 @@ export function ancestryGridColumns<T extends GridRowLike>(
     pending?: (row: T, ancIdx: number) => boolean
     /** Largest |β| across the table, for scaling the effect triangles. */
     betaMax?: number
+    /**
+     * The test whose p-values these columns show, named in the group header.
+     * Without it the header reads a bare "P-value" while the β block next to it
+     * says "Burden", which invites reading both blocks as one test's output —
+     * they aren't: the p-value follows the test selector, β is always Burden.
+     */
+    test?: Test
   } = {},
 ): ColumnDef<T, any>[] {
-  const { highlight, pending, betaMax = 0 } = opts
+  const { highlight, pending, betaMax = 0, test } = opts
 
   const pCols: ColumnDef<T, any>[] = ancIdxs.map((a, i) => ({
     id: `p${a}`,
@@ -129,7 +136,23 @@ export function ancestryGridColumns<T extends GridRowLike>(
   }))
 
   return [
-    { id: 'pval', header: 'P-value', columns: pCols },
-    { id: 'burden', header: 'Burden β', columns: bCols },
+    {
+      id: 'pval',
+      header: test ? `${test} P-value` : 'P-value',
+      meta: {
+        help: test
+          ? `Association p-value from the ${test} test.`
+          : 'Association p-value.',
+      },
+      columns: pCols,
+    },
+    {
+      id: 'burden',
+      header: 'Burden β',
+      meta: {
+        help: 'Effect size from the Burden test — the only test that estimates β.',
+      },
+      columns: bCols,
+    },
   ]
 }

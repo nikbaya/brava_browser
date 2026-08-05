@@ -138,6 +138,17 @@ Raw: `{PHENO}_ALL_gene_meta_analysis_100_cutoff.{ANCESTRY}.tsv.gz` (no suffix =
   opacity on existing semantic tokens) so they don't clash with the bold,
   full-opacity ancestry palette (`ANCESTRY_COLOR` in
   [constants.ts](app/src/lib/constants.ts)).
+  `MagnitudeBar` is the third indicator: a track + fill "health bar" for a
+  quantity in a dense cell, currently the variant table's **N (eff.)** column
+  (fill length = the row's effective sample size ÷ the largest among the loaded
+  rows). Deliberately a **single neutral hue** (`ink-faint` on `line`) — extent
+  already encodes the magnitude, the semantic tokens are taken by significance
+  and direction, and a brand tint would sink into the row-hover `bg-brand-light`.
+  Its scale is **linear**, unlike the √ lift in `dirAlpha`/`EffectTriangle`: those
+  encode with opacity/height, but a bar's *length* must stay proportional to its
+  value. Only meta mode has per-variant N — extending the meter to single
+  ancestries needs a variant ETL re-run, costed in
+  [docs/ui-followups.md](docs/ui-followups.md).
 - **Effect wording** ([effect.ts](app/src/lib/effect.ts)): binary →
   risk↑/protective↓; quantitative → higher↑/lower↓.
 - **Scientific notation:** "e" form (e.g. `1.17e-205`), NOT superscript — the

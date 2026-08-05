@@ -107,6 +107,52 @@ export function EffectTriangle({
   )
 }
 
+/**
+ * Inline magnitude meter ("health bar") for a dense table cell: the filled
+ * length is the value as a fraction of `max`, on a **linear** scale — a bar's
+ * length has to stay proportional to its value, so the √ lift used for the dots
+ * and triangles (where the encoding is opacity/height, not extent) would read as
+ * a different number here. The track is always drawn so a short bar reads as
+ * "little support" rather than "small number".
+ *
+ * Deliberately a single neutral hue: extent already carries the magnitude, and
+ * the semantic tokens are spoken for — protective/accent mean significance
+ * (`SigDot`), red/blue mean effect direction (`DirDot`), and the bold
+ * ANCESTRY_COLOR palette means ancestry. Neutral also survives the row-hover
+ * `bg-brand-light` wash, which a brand-tinted bar would sink into.
+ *
+ * `aria-hidden` because the exact value sits in text beside it — the bar is a
+ * scanning aid, not the only carrier of the number.
+ */
+export function MagnitudeBar({
+  value,
+  max,
+  width = 40,
+}: {
+  value: number | null | undefined
+  max: number
+  /** Track width in px; the filled span is a fraction of this. */
+  width?: number
+}) {
+  if (value == null || Number.isNaN(value) || max <= 0) return null
+  const frac = Math.max(0, Math.min(1, value / max))
+  // Floor the drawn width so a genuinely tiny value stays a visible sliver
+  // instead of vanishing into the track; only a true 0 draws nothing.
+  const w = frac > 0 ? Math.max(2, Math.round(frac * width)) : 0
+  return (
+    <span
+      aria-hidden
+      className="relative inline-block h-[5px] shrink-0 rounded-full bg-line"
+      style={{ width }}
+    >
+      <span
+        className="absolute inset-y-0 left-0 rounded-full bg-ink-faint"
+        style={{ width: w }}
+      />
+    </span>
+  )
+}
+
 export function SigDot({ lp }: { lp: number | null | undefined }) {
   let cls = 'border border-ink-faint/40'
   let title = 'Not significant'

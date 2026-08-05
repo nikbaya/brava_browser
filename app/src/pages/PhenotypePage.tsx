@@ -445,9 +445,10 @@ function ResultsTable({
         highlight: selAncIdx,
         pending: (_r, a) => !loadedAnc.has(a),
         betaMax: betaGridMax,
+        test: filters.test,
       }),
     ],
-    [ancIdxs, selAncIdx, loadedAnc, betaGridMax],
+    [ancIdxs, selAncIdx, loadedAnc, betaGridMax, filters.test],
   )
 
   const caption = (

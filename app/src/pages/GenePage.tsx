@@ -398,9 +398,10 @@ function GeneTable({
       ...ancestryGridColumns<GTGridRow>(ancIdxs, {
         highlight: ancIdx,
         betaMax: betaGridMax,
+        test: filters.test,
       }),
     ],
-    [ancIdxs, ancIdx, betaGridMax],
+    [ancIdxs, ancIdx, betaGridMax, filters.test],
   )
 
   const caption = (

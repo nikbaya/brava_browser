@@ -9,6 +9,7 @@ import {
   type SortingState,
 } from '@tanstack/react-table'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import Tip from './Tip'
 
 declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -23,6 +24,14 @@ declare module '@tanstack/react-table' {
      * Cells opting in must supply their own padding.
      */
     fill?: boolean
+    /**
+     * Explanatory text for this column, shown as a tooltip on its header. A
+     * dotted underline marks the header as having an explanation — without an
+     * affordance nobody discovers a hover-only tooltip. Kept on the column def
+     * (not baked into the `header` renderer) so the underline, the hover delay,
+     * and the wrapped-tooltip width stay identical across every table.
+     */
+    help?: string
   }
 }
 
@@ -182,9 +191,25 @@ export default function VirtualTable<T>({
                               : 'justify-center text-ink normal-case'
                           } ${canSort ? 'hover:text-ink' : ''}`}
                         >
-                          <span className="truncate">
-                            {flexRender(h.column.columnDef.header, h.getContext())}
-                          </span>
+                          {h.column.columnDef.meta?.help ? (
+                            <Tip
+                              label={h.column.columnDef.meta.help}
+                              wide
+                              // `cursor-help` only where the header isn't also
+                              // the sort control — a sortable header must keep
+                              // the pointer cursor, so there the dotted
+                              // underline carries the affordance on its own.
+                              className={`min-w-0 truncate underline decoration-ink-faint/70 decoration-dotted underline-offset-[3px] ${
+                                canSort ? '' : 'cursor-help'
+                              }`}
+                            >
+                              {flexRender(h.column.columnDef.header, h.getContext())}
+                            </Tip>
+                          ) : (
+                            <span className="truncate">
+                              {flexRender(h.column.columnDef.header, h.getContext())}
+                            </span>
+                          )}
                           {canSort && (
                             <span className="text-[9px]">
                               {{ asc: '▲', desc: '▼' }[
