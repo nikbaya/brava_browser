@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useIndex, type SearchResult } from '../data/IndexContext'
+import { categoryColors } from '../lib/categoryColor'
 
 interface Props {
   autoFocus?: boolean
@@ -46,6 +47,13 @@ export default function SearchBar({
   )
 
   const items = typing ? results : browse
+
+  // Same input as the PheWAS plot's map (every category in the index), so a
+  // category's colour is identical in both places.
+  const catColor = useMemo(
+    () => categoryColors(phenotypes.map((p) => p.category)),
+    [phenotypes],
+  )
 
   useEffect(() => setActive(0), [q])
 
@@ -133,18 +141,30 @@ export default function SearchBar({
                   <span className="truncate font-medium text-ink">
                     {r.primary}
                   </span>
+                  {/* The tag rides in the secondary line at every width rather
+                      than as a right-aligned chip: category names run to 19
+                      chars ("Endocrine/Metabolic") and the chip was shrink-0, so
+                      it took ~145px off the front of the row and squeezed the
+                      name — badly enough on a phone that the name vanished.
+                      Here it shares the truncation budget with the throwaway
+                      line instead. */}
                   <span className="truncate text-xs text-ink-faint">
+                    {/* Phenotype categories carry the PheWAS legend's colour, so
+                        a category reads the same here as in the plot. Genes have
+                        no category — their 'gene' tag stays brand. */}
+                    <span
+                      className={r.kind === 'gene' ? 'text-brand' : undefined}
+                      style={
+                        r.kind === 'phenotype'
+                          ? { color: catColor.get(r.tag) }
+                          : undefined
+                      }
+                    >
+                      {r.tag}
+                    </span>
+                    {' · '}
                     {r.secondary}
                   </span>
-                </span>
-                <span
-                  className={`ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${
-                    r.kind === 'gene'
-                      ? 'bg-brand/10 text-brand'
-                      : 'bg-accent/10 text-accent'
-                  }`}
-                >
-                  {r.tag}
                 </span>
               </button>
             </li>

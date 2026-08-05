@@ -3,6 +3,7 @@ import { scaleLinear } from 'd3-scale'
 import type { PhenotypeMeta } from '../data/types'
 import { fmtBeta3, fmtPLog3 } from '../lib/format'
 import { SIG_GENE_CAUCHY, SIG_GENE_MASK_BONFERRONI } from '../lib/constants'
+import { CATEGORY_PALETTE, categoryColors } from '../lib/categoryColor'
 import { THRESH_GENE, THRESH_GENE_MASK, ThresholdLegend } from './ui'
 
 export interface PheWASPoint {
@@ -10,12 +11,6 @@ export interface PheWASPoint {
   lp: number | null
   beta: number | null
 }
-
-// Stable category palette.
-const PALETTE = [
-  '#1f6f8b', '#e08a1e', '#2f7d4f', '#c0392b', '#7d5ba6', '#0e7c86',
-  '#b5651d', '#8a8d3a', '#a83f6b', '#3b6ea5', '#5c8a3a', '#9c6b30', '#566573',
-]
 
 const M = { top: 12, right: 16, bottom: 62, left: 46 }
 const HEIGHT = 248
@@ -63,17 +58,14 @@ export default function PheWASPlot({
       )
   }, [points, phenotypes])
 
-  // Index-based color map over the sorted unique categories: guarantees
-  // distinct, stable colors for the legend (a string hash could collide).
-  const catColorMap = useMemo(() => {
-    const cats = Array.from(new Set(ordered.map((p) => p.meta.category))).sort(
-      (a, b) => a.localeCompare(b),
-    )
-    const m = new Map<string, string>()
-    cats.forEach((c, i) => m.set(c, PALETTE[i % PALETTE.length]))
-    return m
-  }, [ordered])
-  const catColor = (cat: string) => catColorMap.get(cat) ?? PALETTE[0]
+  // Built from every category in the index, not just the ones this gene has
+  // points for, so a category is the same colour on every gene page — and the
+  // same colour the search dropdown gives it.
+  const catColorMap = useMemo(
+    () => categoryColors(phenotypes.map((p) => p.category)),
+    [phenotypes],
+  )
+  const catColor = (cat: string) => catColorMap.get(cat) ?? CATEGORY_PALETTE[0]
 
   // Contiguous runs of each category (points are already category-sorted).
   const bands = useMemo(() => {
@@ -108,13 +100,13 @@ export default function PheWASPlot({
     <div ref={wrapRef} className="relative w-full">
       {/* category legend (key for point colors + bands) */}
       <div className="flex flex-wrap gap-x-3 gap-y-1 px-1 pb-2 text-[11px] text-ink-soft">
-        {Array.from(catColorMap).map(([cat, color]) => (
-          <span key={cat} className="inline-flex items-center gap-1">
+        {bands.map((b) => (
+          <span key={b.category} className="inline-flex items-center gap-1">
             <span
               className="inline-block h-2.5 w-2.5 rounded-sm"
-              style={{ background: color }}
+              style={{ background: catColor(b.category) }}
             />
-            {cat}
+            {b.category}
           </span>
         ))}
       </div>

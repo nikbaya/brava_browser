@@ -123,12 +123,17 @@ function ExampleRow({
   label: string
   children: React.ReactNode
 }) {
+  // On a phone the "EXAMPLE GENES" label costs ~110px of the row and pushed the
+  // last chip onto a second line, so below `sm` it sits on its own line and the
+  // chips get the full width. From `sm` up it's the original single row.
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2">
+    <div className="flex flex-col items-center gap-1.5 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-2">
       <span className="text-xs font-medium tracking-wide text-ink-faint uppercase">
         {label}
       </span>
-      {children}
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {children}
+      </div>
     </div>
   )
 }
@@ -137,7 +142,7 @@ function Chip({ to, children }: { to: string; children: React.ReactNode }) {
   return (
     <Link
       to={to}
-      className="rounded-full border border-line bg-surface px-3 py-1 text-ink-soft transition hover:border-brand hover:bg-brand-light hover:text-brand"
+      className="rounded-full border border-line bg-surface px-2.5 py-1 text-[13px] text-ink-soft transition hover:border-brand hover:bg-brand-light hover:text-brand sm:px-3 sm:text-sm"
     >
       {children}
     </Link>

@@ -2,15 +2,34 @@
 
 Small polish items noted for later.
 
-## Must report 3 sig figs everywhere
+## Show the Burden β value in the table, not just the up/down triangle
 
-Ideally include beta burden values in table, not just triangle up/down symbol.
+The per-ancestry grid renders β as an `EffectTriangle` with the number only in
+the tooltip ([ancestryColumns.tsx](../app/src/components/ancestryColumns.tsx#L133)).
+Worth a numeric β column, or a toggle.
+
+(The "3 significant figures everywhere" half of this item shipped: `fmtPLog3` /
+`fmtBeta3` in every tooltip, `fmtPCompact` at 3 dp in the dense grid.)
 
 ## Clicking on gene in phenotype page must show gene page with phenotype in forest plot.
 
 ## Landing page:
-- Add ancestral diversity pie charts?
 - Consider adding global map (with current and future partnering biobanks)?
+
+## Mobile: collapse the header nav into a burger menu
+
+[Header.tsx](../app/src/components/Header.tsx) puts the logo, the search bar and
+three nav links (Downloads / About / FAQ) in one flex row at every width. The
+links are `shrink-0`, so on a phone they hold their full width and the search
+bar — the primary action, and the only one that has to be usable one-handed —
+is squeezed into what's left.
+
+Put the three links behind a burger button pinned top right below roughly `sm`,
+and let the search bar take the freed width. Points to settle: the logo probably
+drops to the mark without the "BRaVa" wordmark at that width; the menu needs to
+close on navigation and on Escape; and the header is `sticky top-0 z-30` with the
+`StickyTitle` sub-bar pinned at `top-14`, so an open panel has to sit above both
+without disturbing that fixed `h-14`.
 
 ## Manhattan plots
 Include actual cutoff pval in gene-level and gene-mask legend
@@ -126,18 +145,6 @@ So ~5 reads for a typical pageview → **roughly 2 million pageviews/month befor
 the 10M Class B ceiling**, and the client's in-memory cache means repeat views in
 one session are free. A download button of type (1) adds **nothing** to this.
 Conclusion: requests are not a constraint — build the client-side export.
-
-## Table caption doesn't stay put during horizontal scroll
-
-Tables now scroll sideways below their natural width with the first column frozen
-([VirtualTable.tsx](../app/src/components/VirtualTable.tsx)). The sticky caption
-(active filters / β legend) lives inside the min-width wrapper, so it pans out of
-view as you scroll right, unlike the frozen column.
-
-Fix direction: pin the caption's content with `sticky left-0` and constrain it to
-the scrollport width (needs the container's `clientWidth`, e.g. via
-`ResizeObserver`), or move the caption outside the min-width wrapper and stack
-the two sticky bands by measured caption height.
 
 ## ClinVar annotations on the variant view
 
