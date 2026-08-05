@@ -211,18 +211,42 @@ range-reads of VCF headers emitting a bundled `meta/variant_studies.json`
 (44 phenotypes × ≤34 strata × {biobank, ancestry, cases, controls} — kilobytes,
 like the exon shards, so zero Class B cost).
 
-Caveats before building:
-- My throwaway filename regex resolved the full input list for only 4 of 10
-  phenotypes tested; the other 6 came up 2–3 strata short (AFib 21 parsed vs 23 in
-  `ED`, HTN 30 vs 33, T2Diab 28 vs 31, IBD 19 vs 22, ColonRectCanc 23 vs 26,
-  Height 20 vs 21). That's regex coverage of filename variants, not a data problem —
-  but the build must assert `len(parsed) == len(ED)` per phenotype and fail loudly,
-  because a silent off-by-two would misattribute every ancestry.
+**The parser is solved and validated across all 44 phenotypes** (875 strata).
+Two rules matter, and both cost a debugging round when guessed:
+
+1. **Select inputs structurally, not by heuristic.** Take every `.vcf.gz` path under
+   `meta-analysis_inputs/` in order of appearance; the `-o` output lives under
+   `meta-analysis_outputs/`. Filtering on "filename contains SAIGE" silently drops
+   `uk-biobank.baya.pilot.Height.JULY23Freeze.ALL.EUR.401497.regenie.variant.20250606.vcf.gz`
+   — Height's UKB EUR stratum is a **regenie** run, the only non-SAIGE input in the
+   whole set, and losing it shifts every `ED` position after it.
+2. **The method field is not `[A-Za-z]+`.** Genomics England's inputs are labelled
+   `SAIGEv_1_1_9` (63 of 875 strata), so a letters-only pattern fails on 20
+   phenotypes. Use `[A-Za-z][A-Za-z0-9_]*`.
+
+Working filename grammar:
+
+    {biobank}.{analyst}.{freeze}.{pheno}.{ver}.{SEX}.{ANC}.{counts}.{method}.variant.{date}.vcf.gz
+      SEX     = ALL | F | M            (768 ALL, 107 F across the 44 phenotypes)
+      ANC     = AFR | AMR | EAS | EUR | SAS      (no MID/other appears)
+      counts  = {cases}.{controls} for binary traits, a single {n} for quantitative
+
+With that, all 44 phenotypes satisfy `len(parsed) == len(ED)`, and summing the
+`ED`-marked strata reproduces `NS`, `NC` and `NE` on 2,000 variants per phenotype
+with zero mismatches. **Keep the `len(parsed) == len(ED)` assertion in the build
+anyway** and fail loudly: a future submission with a new filename shape would
+otherwise silently misattribute every ancestry rather than error.
+
+Remaining caveats:
 - `meta/pheno_sizes.json` is **not** authoritative for this: its stratum counts
   matched `ED` length for only 12 of 38 phenotypes, and the six `_F` phenotypes are
   absent from it entirely. Use the VCF headers.
 - This covers meta mode only. In a single-ancestry view `.anc.json` carries no `ED`
   either, so Option A is still the route for per-stratum N there.
+- The counts in the filenames are **cohort** sizes for the stratum, not
+  variant-specific ones. That is exactly what reproduces `NS`/`NC`/`NE`, so it is
+  the right denominator — but it means the bar shows the composition of the
+  *strata that carried the variant*, not per-ancestry allele counts.
 
 ### Worth considering either way — normalise to the achievable N
 
