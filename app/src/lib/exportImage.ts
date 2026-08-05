@@ -32,6 +32,7 @@
  */
 
 import { slug } from './exportTable'
+import { textWidth } from './textWidth'
 
 /** CSS reference pixels per inch — the fixed anchor for the `dpi` scale factor. */
 const CSS_DPI = 96
@@ -282,14 +283,11 @@ function captionBand(
 
 /** Greedy word wrap measured with the same font the band will render in. */
 function wrap(text: string, maxWidth: number, font: string): string[] {
-  const ctx = measurer()
-  if (!ctx) return [text]
-  ctx.font = font
   const lines: string[] = []
   let line = ''
   for (const word of text.split(/\s+/).filter(Boolean)) {
     const next = line ? `${line} ${word}` : word
-    if (line && ctx.measureText(next).width > maxWidth) {
+    if (line && textWidth(next, font) > maxWidth) {
       lines.push(line)
       line = word
     } else {
@@ -298,13 +296,6 @@ function wrap(text: string, maxWidth: number, font: string): string[] {
   }
   if (line) lines.push(line)
   return lines.length ? lines : [text]
-}
-
-let measureCtx: CanvasRenderingContext2D | null | undefined
-/** Shared 1×1 context used only for text metrics. */
-function measurer(): CanvasRenderingContext2D | null {
-  if (measureCtx === undefined) measureCtx = document.createElement('canvas').getContext('2d')
-  return measureCtx
 }
 
 /** Design-token lookup, so the caption matches the page's ink colours. */

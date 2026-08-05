@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react'
 import { useAsync } from '../lib/useAsync'
 import { useIndex } from '../data/IndexContext'
 import { fetchBiobankIndex } from '../data/client'
-import { fmtCount, fmtPos } from '../lib/format'
+import { fmtPos } from '../lib/format'
 import { SUPERPOPS } from '../lib/constants'
-import { Notice, Pill, Spinner } from '../components/ui'
-import AncestryPie from '../components/AncestryPie'
+import { Notice, Spinner } from '../components/ui'
+import CohortCards from '../components/CohortCards'
 import DiversityPies from '../components/DiversityPies'
 import Tip from '../components/Tip'
 import {
@@ -15,11 +15,10 @@ import {
   LEADERSHIP,
   PRINCIPLES,
   WORKING_GROUPS,
-  type Cohort,
 } from '../data/consortium'
 import type { Biobank } from '../data/types'
 
-const TABS = ['Overview', 'Governing Principles', 'Leadership', 'Participating Biobanks'] as const
+const TABS = ['Overview', 'Governing Principles', 'Leadership'] as const
 type Tab = (typeof TABS)[number]
 
 /**
@@ -84,7 +83,6 @@ export default function AboutPage() {
         {tab === 'Overview' && <Overview biobanks={biobanks} />}
         {tab === 'Governing Principles' && <Governance />}
         {tab === 'Leadership' && <Leadership />}
-        {tab === 'Participating Biobanks' && <Participating biobanks={biobanks} />}
       </div>
     </div>
   )
@@ -112,32 +110,48 @@ function Overview({ biobanks }: { biobanks: Biobank[] }) {
   }, [biobanks])
 
   return (
-    <section>
-      <h2 className="mb-1 text-lg font-semibold text-ink">Ancestral diversity</h2>
-      <p className="mb-4 max-w-3xl text-sm text-ink-soft">
-        BRaVa's strength is the breadth of genetic ancestries it brings together.
-        Each pie is one genetic-ancestry group; the slices show how that
-        ancestry's representation is assembled across the contributing biobanks
-        (hover for counts).
-      </p>
-      <div className="rounded-2xl border border-line bg-surface p-4">
-        <DiversityPies biobanks={biobanks} />
-      </div>
-      <p className="mt-2 max-w-3xl text-xs text-ink-faint">
-        These pies total <span className="tnum">{fmtPos(shown)}</span> sequenced
-        samples assigned to one of the five genetic-ancestry groups shown
-        {other > 0 && (
-          <>
-            {' '}
-            (a further <span className="tnum">{fmtPos(other)}</span> in{' '}
-            {otherGroups.join(', ')} are not plotted)
-          </>
-        )}
-        . That is a different quantity from the ~1.2M participants above, which
-        counts everyone enrolled in the ten biobanks and is published as rounded
-        per-biobank totals.
-      </p>
-    </section>
+    <div className="space-y-8">
+      <section>
+        <h2 className="mb-1 text-lg font-semibold text-ink">Ancestral diversity</h2>
+        <p className="mb-4 max-w-3xl text-sm text-ink-soft">
+          BRaVa's strength is the breadth of genetic ancestries it brings together.
+          Each pie is one genetic-ancestry group; the slices show how that
+          ancestry's representation is assembled across the contributing biobanks
+          (hover for counts).
+        </p>
+        <div className="rounded-2xl border border-line bg-surface p-4">
+          <DiversityPies biobanks={biobanks} />
+        </div>
+        <p className="mt-2 max-w-3xl text-xs text-ink-faint">
+          These pies total <span className="tnum">{fmtPos(shown)}</span> sequenced
+          samples assigned to one of the five genetic-ancestry groups shown
+          {other > 0 && (
+            <>
+              {' '}
+              (a further <span className="tnum">{fmtPos(other)}</span> in{' '}
+              {otherGroups.join(', ')} are not plotted)
+            </>
+          )}
+          . That is a different quantity from the ~1.2M participants above, which
+          counts everyone enrolled in the ten biobanks and is published as rounded
+          per-biobank totals.
+        </p>
+      </section>
+
+      {/* Same order as the landing page: the ancestry pies, then the cohorts
+          they are assembled from. Formerly its own "Participating Biobanks"
+          tab, which hid the roster one click away from the diversity it
+          explains. */}
+      <section>
+        <h2 className="mb-1 text-lg font-semibold text-ink">Participating biobanks</h2>
+        <p className="mb-4 max-w-3xl text-sm text-ink-soft">
+          BRaVa unites {COHORTS.length} biobanks and cohorts worldwide. Cohorts with
+          results in this release show their sample size and ancestry
+          composition; others are founding members whose data is not in this release.
+        </p>
+        <CohortCards biobanks={biobanks} />
+      </section>
+    </div>
   )
 }
 
@@ -197,73 +211,6 @@ function Leadership() {
         ))}
       </div>
     </section>
-  )
-}
-
-function Participating({ biobanks }: { biobanks: Biobank[] }) {
-  const byId = new Map(biobanks.map((b) => [b.id, b]))
-  // Contributing cohorts (with results in this release) first.
-  const sorted = [...COHORTS].sort((a, b) => {
-    const an = a.id ? (byId.get(a.id)?.sample_size ?? 0) : -1
-    const bn = b.id ? (byId.get(b.id)?.sample_size ?? 0) : -1
-    return bn - an
-  })
-  return (
-    <section>
-      <p className="mb-4 max-w-3xl text-sm text-ink-soft">
-        BRaVa unites {COHORTS.length} biobanks and cohorts worldwide. Cohorts with
-        results in this release show their sample size and ancestry
-        composition; others are founding members whose data is not in this release.
-      </p>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {sorted.map((c) => (
-          <CohortCard key={c.name} c={c} b={c.id ? byId.get(c.id) : undefined} />
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function CohortCard({ c, b }: { c: Cohort; b?: Biobank }) {
-  const popBased = b?.ascertainment.toLowerCase().startsWith('population')
-  return (
-    <div className="flex flex-col rounded-2xl border border-line bg-surface p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 font-semibold text-ink">
-            <span className="text-xl leading-none">{c.flag}</span>
-            <span className="truncate">{c.name}</span>
-          </div>
-          <div className="text-xs text-ink-faint">{c.country}</div>
-        </div>
-        {b && (
-          <div className="text-right">
-            <div className="text-lg font-bold tabular-nums text-ink">
-              {fmtCount(b.sample_size)}
-            </div>
-            <div className="text-[10px] text-ink-faint">samples</div>
-          </div>
-        )}
-      </div>
-
-      {b && (
-        <>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <Pill tone={popBased ? 'brand' : 'up'}>
-              {popBased ? 'Population-based' : 'Hospital-based'}
-            </Pill>
-            <Pill tone="neutral">{b.sequencing}</Pill>
-          </div>
-          <div className="mt-3 border-t border-line pt-3">
-            <AncestryPie data={b.ancestry_n} size={64} />
-          </div>
-        </>
-      )}
-
-      <div className="mt-3 border-t border-line pt-2 text-[11px] text-ink-faint">
-        {c.people.join(' · ')}
-      </div>
-    </div>
   )
 }
 

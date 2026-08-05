@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom'
 import SearchBar from '../components/SearchBar'
+import CohortCards from '../components/CohortCards'
 import DiversityPies from '../components/DiversityPies'
 import { useAsync } from '../lib/useAsync'
 import { fetchBiobankIndex } from '../data/client'
-import { fmtCount } from '../lib/format'
-import { COHORTS, type Cohort } from '../data/consortium'
+import { COHORTS } from '../data/consortium'
 import type { Biobank } from '../data/types'
 
 // Curated examples shown under the search bar (Google-style).
@@ -22,10 +22,11 @@ export default function LandingPage() {
 
   return (
     <div>
-      {/* Hero: viewport minus the sticky header (h-14) and footer, minus a
-          sliver so the top of the next section peeks above the fold and hints
-          that there's more below. Nav lives in the shared Header. */}
-      <section className="mx-auto flex min-h-[calc(100vh-230px)] max-w-2xl flex-col items-center justify-center px-4 text-center">
+      {/* Hero: fixed vertical padding, deliberately NOT a viewport-height box.
+          Centering inside `min-h-[calc(100vh-…)]` made the whitespace around the
+          search bar breathe in and out with the window, and on a tall screen it
+          was far more air than the block needs. Nav lives in the shared Header. */}
+      <section className="mx-auto flex max-w-2xl flex-col items-center px-4 pt-10 pb-12 text-center">
         <img
           src={`${import.meta.env.BASE_URL}BRaVa_logo.svg`}
           alt="BRaVa"
@@ -85,46 +86,14 @@ function Diversity({ biobanks }: { biobanks: Biobank[] }) {
 }
 
 function Biobanks({ biobanks }: { biobanks: Biobank[] }) {
-  const byId = new Map(biobanks.map((b) => [b.id, b]))
-  const n = (c: Cohort) => (c.id ? (byId.get(c.id)?.sample_size ?? 0) : 0)
-  // Cohorts with results in this release first, largest to smallest.
-  const sorted = [...COHORTS].sort((a, b) => n(b) - n(a))
-
   return (
     <Section
       title="Participating biobanks"
-      blurb={`BRaVa unites ${COHORTS.length} biobanks and cohorts worldwide. ${
-        byId.size
-      } contribute results to this release; the rest are founding members whose data is not yet included.`}
-      more={{ to: '/about', label: 'Cohort details' }}
+      blurb={`BRaVa unites ${COHORTS.length} biobanks and cohorts worldwide. Cohorts with results in this release show their sample size and ancestry composition; others are founding members whose data is not in this release.`}
     >
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-        {sorted.map((c) => {
-          const b = c.id ? byId.get(c.id) : undefined
-          return (
-            <div
-              key={c.name}
-              className={`flex items-center gap-2.5 rounded-xl border border-line bg-surface px-3 py-2.5 ${
-                b ? '' : 'opacity-70'
-              }`}
-            >
-              <span className="text-xl leading-none">{c.flag}</span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-medium text-ink">{c.name}</div>
-                <div className="text-[11px] text-ink-faint">{c.country}</div>
-              </div>
-              {b && (
-                <div className="shrink-0 text-right">
-                  <div className="text-[13px] font-semibold tabular-nums text-ink">
-                    {fmtCount(b.sample_size)}
-                  </div>
-                  <div className="text-[10px] text-ink-faint">samples</div>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+      {/* The same cards as the About page's Participating Biobanks tab — no
+          "Cohort details" link, because this *is* the detail. */}
+      <CohortCards biobanks={biobanks} />
     </Section>
   )
 }
@@ -132,24 +101,15 @@ function Biobanks({ biobanks }: { biobanks: Biobank[] }) {
 function Section({
   title,
   blurb,
-  more,
   children,
 }: {
   title: string
   blurb: string
-  more?: { to: string; label: string }
   children: React.ReactNode
 }) {
   return (
     <section>
-      <div className="mb-3 flex items-baseline justify-between gap-4">
-        <h2 className="text-lg font-semibold text-ink">{title}</h2>
-        {more && (
-          <Link to={more.to} className="shrink-0 text-sm text-brand hover:underline">
-            {more.label} →
-          </Link>
-        )}
-      </div>
+      <h2 className="mb-3 text-lg font-semibold text-ink">{title}</h2>
       <p className="mb-4 max-w-3xl text-sm text-ink-soft">{blurb}</p>
       {children}
     </section>

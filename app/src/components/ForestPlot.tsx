@@ -10,16 +10,22 @@ import {
 } from '../lib/constants'
 import { fmtBeta, fmtBeta3, fmtCount, fmtPLog, fmtPLog3, fmtPos } from '../lib/format'
 import { figureFilename } from '../lib/exportImage'
+import { bodyFont, textWidth } from '../lib/textWidth'
 import type { ForestSeries } from '../lib/select'
 import type { AncestryN, PhenotypeMeta } from '../data/types'
 import SaveFigureButton from './SaveFigureButton'
 
 const ML = 128 // left: ancestry label + N columns
 const LABEL_R = 56 // right edge of the ancestry-label column
-const MR = 138 // right: β [lo, hi]
+const LABEL_GAP = 8 // plot area → "β [lo, hi]" label
+const LABEL_PAD = 8 // label → right edge of the svg
 const MT = 6
 const MB = 26
 const ROW_H = 26
+// Narrowest plot area worth drawing; below it the wrapper scrolls sideways
+// rather than squeezing the CIs into nothing (the phenotype page renders this
+// in a max-w-xl drawer).
+const MIN_PLOT = 170
 
 interface Props {
   series: ForestSeries
@@ -82,8 +88,28 @@ export default function ForestPlot({ series, trait, maskIndex, mafIndex, symbol 
     return [lo - pad, hi + pad] as [number, number]
   }, [rows])
 
+  // Right gutter sized from the widest label actually drawn: β and its CI
+  // bounds switch to "-1.23e-4" form for small effects, which a fixed gutter
+  // clipped at the svg edge (nothing reflows in SVG).
+  const labels = useMemo(
+    () =>
+      rows.map((r) => {
+        const [lo, hi] = ci(r.beta!, r.se)
+        return r.se == null
+          ? fmtBeta(r.beta)
+          : `${fmtBeta(r.beta)}  [${fmtBeta(lo)}, ${fmtBeta(hi)}]`
+      }),
+    [rows],
+  )
+  const MR = useMemo(() => {
+    const font = bodyFont(11)
+    const widest = labels.reduce((m, l) => Math.max(m, textWidth(l, font)), 0)
+    return Math.ceil(LABEL_GAP + widest + LABEL_PAD)
+  }, [labels])
+
+  const w = Math.max(width, ML + MR + MIN_PLOT)
   const height = MT + rows.length * ROW_H + MB
-  const x = scaleLinear().domain(domain).range([ML, width - MR])
+  const x = scaleLinear().domain(domain).range([ML, w - MR])
 
   if (rows.length === 0)
     return (
@@ -144,124 +170,128 @@ export default function ForestPlot({ series, trait, maskIndex, mafIndex, symbol 
         </div>
       </div>
 
-      <svg ref={svgRef} width={width} height={height}>
-        {/* zero reference line */}
-        <line
-          x1={x(0)}
-          x2={x(0)}
-          y1={MT}
-          y2={MT + rows.length * ROW_H}
-          stroke="#cbd3dc"
-          strokeDasharray="3 3"
-        />
-        {/* x ticks */}
-        {x.ticks(5).map((t) => (
-          <g key={t}>
-            <text
-              x={x(t)}
-              y={height - 8}
-              textAnchor="middle"
-              className="fill-ink-faint text-[10px] tabular-nums"
-            >
-              {t}
-            </text>
-          </g>
-        ))}
-        {rows.map((r, i) => {
-          const cy = MT + i * ROW_H + ROW_H / 2
-          const [lo, hi] = ci(r.beta!, r.se)
-          const isMeta = r.anc === 'All'
-          const color = ANCESTRY_COLOR[r.anc]
-          return (
-            <g
-              key={r.ancIdx}
-              onMouseEnter={() => setHover(i)}
-              onMouseLeave={() => setHover(null)}
-              className="cursor-default"
-            >
-              {/* full-row transparent hit target so hovering anywhere in the
-                  row (not just over text/markers) highlights it. Both this and
-                  the highlight below are interaction chrome, so they carry
-                  `data-png-skip` (= PNG_SKIP_ATTR) and are stripped from
-                  exported figures. */}
-              <rect
-                x={0}
-                y={cy - ROW_H / 2}
-                width={width}
-                height={ROW_H}
-                fill="transparent"
-                data-png-skip=""
-              />
-              {hover === i && (
+      {/* The svg, not the wrapper, is what scrolls: the header above keeps its
+          P_het chip and Figure ▾ button in view when the plot pans sideways. */}
+      <div className="overflow-x-auto">
+        <svg ref={svgRef} width={w} height={height}>
+          {/* zero reference line */}
+          <line
+            x1={x(0)}
+            x2={x(0)}
+            y1={MT}
+            y2={MT + rows.length * ROW_H}
+            stroke="#cbd3dc"
+            strokeDasharray="3 3"
+          />
+          {/* x ticks */}
+          {x.ticks(5).map((t) => (
+            <g key={t}>
+              <text
+                x={x(t)}
+                y={height - 8}
+                textAnchor="middle"
+                className="fill-ink-faint text-[10px] tabular-nums"
+              >
+                {t}
+              </text>
+            </g>
+          ))}
+          {rows.map((r, i) => {
+            const cy = MT + i * ROW_H + ROW_H / 2
+            const [lo, hi] = ci(r.beta!, r.se)
+            const isMeta = r.anc === 'All'
+            const color = ANCESTRY_COLOR[r.anc]
+            return (
+              <g
+                key={r.ancIdx}
+                onMouseEnter={() => setHover(i)}
+                onMouseLeave={() => setHover(null)}
+                className="cursor-default"
+              >
+                {/* full-row transparent hit target so hovering anywhere in the
+                    row (not just over text/markers) highlights it. Both this and
+                    the highlight below are interaction chrome, so they carry
+                    `data-png-skip` (= PNG_SKIP_ATTR) and are stripped from
+                    exported figures. */}
                 <rect
                   x={0}
                   y={cy - ROW_H / 2}
-                  width={width}
+                  width={w}
                   height={ROW_H}
-                  className="fill-brand-light/60"
-                  pointerEvents="none"
+                  fill="transparent"
                   data-png-skip=""
                 />
-              )}
-              <text
-                x={LABEL_R}
-                y={cy}
-                textAnchor="end"
-                dominantBaseline="central"
-                className={`text-[11px] ${isMeta ? 'fill-ink font-semibold' : 'fill-ink-soft'}`}
-              >
-                {ANCESTRY_META[r.anc].label}
-              </text>
-              {/* N column */}
-              <text
-                x={ML - 10}
-                y={cy}
-                textAnchor="end"
-                dominantBaseline="central"
-                className="fill-ink-faint text-[10px] tabular-nums"
-              >
-                {trait.n?.[r.anc] ? `N=${fmtCount(trait.n[r.anc].n)}` : ''}
-              </text>
-              {/* CI bar */}
-              {r.se != null && (
-                <line
-                  x1={x(lo)}
-                  x2={x(hi)}
-                  y1={cy}
-                  y2={cy}
-                  stroke={color}
-                  strokeWidth={1.5}
-                />
-              )}
-              {/* marker */}
-              {isMeta ? (
-                <path
-                  d={diamond(x(r.beta!), cy, 6)}
-                  fill={color}
-                  stroke="#fff"
-                  strokeWidth={0.5}
-                />
-              ) : (
-                <circle cx={x(r.beta!)} cy={cy} r={4} fill={color} />
-              )}
-              {/* numeric */}
-              <text
-                x={width - MR + 8}
-                y={cy}
-                dominantBaseline="central"
-                className={`text-[11px] tabular-nums ${isMeta ? 'fill-ink font-semibold' : 'fill-ink-soft'}`}
-              >
-                {fmtBeta(r.beta)}
-                {r.se != null && (
-                  <tspan className="fill-ink-faint">
-                    {'  '}[{fmtBeta(lo)}, {fmtBeta(hi)}]
-                  </tspan>
+                {hover === i && (
+                  <rect
+                    x={0}
+                    y={cy - ROW_H / 2}
+                    width={w}
+                    height={ROW_H}
+                    className="fill-brand-light/60"
+                    pointerEvents="none"
+                    data-png-skip=""
+                  />
                 )}
-              </text>
-            </g>
-          )
-        })}
-      </svg>
+                <text
+                  x={LABEL_R}
+                  y={cy}
+                  textAnchor="end"
+                  dominantBaseline="central"
+                  className={`text-[11px] ${isMeta ? 'fill-ink font-semibold' : 'fill-ink-soft'}`}
+                >
+                  {ANCESTRY_META[r.anc].label}
+                </text>
+                {/* N column */}
+                <text
+                  x={ML - 10}
+                  y={cy}
+                  textAnchor="end"
+                  dominantBaseline="central"
+                  className="fill-ink-faint text-[10px] tabular-nums"
+                >
+                  {trait.n?.[r.anc] ? `N=${fmtCount(trait.n[r.anc].n)}` : ''}
+                </text>
+                {/* CI bar */}
+                {r.se != null && (
+                  <line
+                    x1={x(lo)}
+                    x2={x(hi)}
+                    y1={cy}
+                    y2={cy}
+                    stroke={color}
+                    strokeWidth={1.5}
+                  />
+                )}
+                {/* marker */}
+                {isMeta ? (
+                  <path
+                    d={diamond(x(r.beta!), cy, 6)}
+                    fill={color}
+                    stroke="#fff"
+                    strokeWidth={0.5}
+                  />
+                ) : (
+                  <circle cx={x(r.beta!)} cy={cy} r={4} fill={color} />
+                )}
+                {/* numeric */}
+                <text
+                  x={w - MR + LABEL_GAP}
+                  y={cy}
+                  dominantBaseline="central"
+                  className={`text-[11px] tabular-nums ${isMeta ? 'fill-ink font-semibold' : 'fill-ink-soft'}`}
+                >
+                  {fmtBeta(r.beta)}
+                  {r.se != null && (
+                    <tspan className="fill-ink-faint">
+                      {'  '}[{fmtBeta(lo)}, {fmtBeta(hi)}]
+                    </tspan>
+                  )}
+                </text>
+              </g>
+            )
+          })}
+        </svg>
+      </div>
 
       {hover != null && rows[hover] && (
         <Tooltip row={rows[hover]} n={trait.n?.[rows[hover].anc]} />

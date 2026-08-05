@@ -3,20 +3,20 @@ import { scaleLinear } from 'd3-scale'
 import { ANCESTRIES, ANCESTRY_COLOR, ANCESTRY_META, type Ancestry } from '../lib/constants'
 import { fmtBeta, fmtBeta3, fmtPLog, fmtPLog3 } from '../lib/format'
 import { figureFilename } from '../lib/exportImage'
+import { bodyFont, textWidth } from '../lib/textWidth'
 import type { PhenotypeMeta } from '../data/types'
 import type { VariantForestRow } from '../lib/select'
 import SaveFigureButton from './SaveFigureButton'
 
 const ML = 92
-// Right gutter holds the whole numeric label — "β  [lo, hi] · p=1.17e-205" runs
-// to ~36 chars at 11px, which a 150px gutter clipped mid-p-value.
-const MR = 250
+const LABEL_GAP = 8 // plot area → "β [lo, hi] · p=…" label
+const LABEL_PAD = 8 // label → right edge of the svg
 const MT = 4
 const MB = 24
 const ROW_H = 24
-// Below this the plot area would collapse to nothing; the wrapper scrolls
-// horizontally instead of squeezing (ML + MR alone is 342).
-const MIN_W = 620
+// Narrowest plot area worth drawing; below it the wrapper scrolls sideways
+// instead of squeezing the CIs into nothing.
+const MIN_PLOT = 250
 
 /**
  * Per-variant multi-ancestry forest: single-variant meta β with 95% CI for each
@@ -44,7 +44,8 @@ export default function VariantForest({
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
-  const [measured, setMeasured] = useState(MIN_W)
+  // 0 until the ResizeObserver reports: `width` below floors it at the minimum.
+  const [measured, setMeasured] = useState(0)
   const [hover, setHover] = useState<number | null>(null)
 
   useEffect(() => {
@@ -80,6 +81,25 @@ export default function VariantForest({
     return [lo - pad, hi + pad] as [number, number]
   }, [ordered])
 
+  // Right gutter sized from the widest label actually drawn — "β  [lo, hi] ·
+  // p=1.17e-205" runs long, and longer still when β formats as "-1.23e-4", so a
+  // fixed gutter clipped it at the svg edge (nothing reflows in SVG).
+  const labels = useMemo(
+    () =>
+      ordered.map((r) => {
+        const [lo, hi] = ci(r.beta!, r.se)
+        return r.se == null
+          ? fmtBeta(r.beta)
+          : `${fmtBeta(r.beta)}  [${fmtBeta(lo)}, ${fmtBeta(hi)}] · p=${fmtPLog(r.lp)}`
+      }),
+    [ordered],
+  )
+  const MR = useMemo(() => {
+    const font = bodyFont(11)
+    const widest = labels.reduce((m, l) => Math.max(m, textWidth(l, font)), 0)
+    return Math.ceil(LABEL_GAP + widest + LABEL_PAD)
+  }, [labels])
+
   if (loading)
     return <p className="py-4 text-center text-xs text-ink-faint">Loading ancestries…</p>
   if (ordered.length === 0)
@@ -89,7 +109,7 @@ export default function VariantForest({
       </p>
     )
 
-  const width = Math.max(measured, MIN_W)
+  const width = Math.max(measured, ML + MR + MIN_PLOT)
   const height = MT + ordered.length * ROW_H + MB
   const x = scaleLinear().domain(domain).range([ML, width - MR])
   const axisLabel = trait.type === 'binary' ? 'β (log OR)' : 'β (SD units)'
@@ -199,7 +219,7 @@ export default function VariantForest({
                 <circle cx={x(r.beta!)} cy={cy} r={4} fill={color} />
               )}
               <text
-                x={width - MR + 8}
+                x={width - MR + LABEL_GAP}
                 y={cy}
                 dominantBaseline="central"
                 className={`text-[11px] tabular-nums ${isMeta ? 'fill-ink font-semibold' : 'fill-ink-soft'}`}
