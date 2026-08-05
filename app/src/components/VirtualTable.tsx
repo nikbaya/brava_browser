@@ -68,7 +68,11 @@ export default function VirtualTable<T>({
   onSortingChange: (s: SortingState) => void
   rowHeight?: number
   onRowClick?: (row: T) => void
-  /** Pinned summary (e.g. active filters) shown above the column headers. */
+  /**
+   * Summary (e.g. active filters) shown in a bar above the column headers. The
+   * bar is outside the scroll region, so it stays put through both vertical and
+   * sideways scrolling.
+   */
   caption?: React.ReactNode
   /**
    * Declare this to get a download button in the caption bar. The export lives
@@ -140,176 +144,184 @@ export default function VirtualTable<T>({
   const fixedHeight = reserve * rowHeight >= CAP - 60 ? CAP : undefined
 
   return (
-    <div
-      ref={containerRef}
-      onScroll={onScroll}
-      style={{ maxHeight: CAP, height: fixedHeight }}
-      className="overflow-auto rounded-lg border border-line bg-surface text-[13px]"
-    >
-      <div style={{ minWidth: contentWidth }}>
-        {/* Pinned caption + column headers stick together. Header groups render
-            one flex row per level, so spanning group labels (e.g. "P-value" over
-            the ancestry sub-columns) line up over their children. */}
-        <div className="sticky top-0 z-10">
-          {(caption || exportSpec) && (
-            <div className="flex items-center gap-2 border-b border-line bg-surface-soft px-2.5 py-1 text-[11px] text-ink-faint">
-              <span className="min-w-0 flex-1">{caption}</span>
-              {exportSpec && (
-                // Row extraction is deferred to the click: this bar re-renders
-                // on every scroll frame (the virtualizer drives it), and mapping
-                // 20k rows each time would cost more than the download itself.
-                <DownloadButton
-                  count={rows.length}
-                  getRows={() => rows.map((r) => r.original)}
-                  spec={exportSpec}
-                />
-              )}
-            </div>
+    // The caption bar sits OUTSIDE the scroll container, not inside it: within the
+    // container it would be as wide as the columns (`contentWidth`), so on a
+    // sideways-scrolling table its right-hand download button starts off-screen
+    // and the filter summary pans away. Out here both stay put in every scroll
+    // direction. `overflow-hidden` clips the scroll region's square corners to
+    // the rounded border.
+    <div className="overflow-hidden rounded-lg border border-line bg-surface text-[13px]">
+      {(caption || exportSpec) && (
+        <div className="flex items-center gap-2 border-b border-line bg-surface-soft px-2.5 py-1 text-[11px] text-ink-faint">
+          <span className="min-w-0 flex-1">{caption}</span>
+          {exportSpec && (
+            // Row extraction is deferred to the click: this bar re-renders on
+            // every scroll frame (the virtualizer drives it), and mapping 20k rows
+            // each time would cost more than the download itself.
+            <DownloadButton
+              count={rows.length}
+              getRows={() => rows.map((r) => r.original)}
+              spec={exportSpec}
+            />
           )}
-          {table.getHeaderGroups().map((hg) => {
-            return (
-              <div
-                key={hg.id}
-                className="flex border-b border-line bg-surface-soft"
-              >
-                {hg.headers.map((h, i) => {
-                  const isLeaf = h.subHeaders.length === 0
-                  const canSort = isLeaf && h.column.getCanSort()
-                  // A group header (spanning ≥1 leaf) marks a block; so does a
-                  // leaf flagged with meta.divider. Both draw a left rule that
-                  // lines up with the body cell dividers below.
-                  const divider =
-                    !isLeaf || h.column.columnDef.meta?.divider
-                  // Freeze the first cell of every header level, so the frozen
-                  // column reads as one continuous block down through the
-                  // caption, the group row, and the leaf row.
-                  const frozen = i === 0
-                  return (
-                    // Padding lives on the inner wrapper, never the flex item:
-                    // group and leaf rows have different cell counts, and per-cell
-                    // padding on a flex-basis:0 item would skew each row's width
-                    // distribution, so the two header rows wouldn't line up.
-                    <div
-                      key={h.id}
-                      onClick={canSort ? h.column.getToggleSortingHandler() : undefined}
-                      style={{
-                        ...cellBasis(h.getSize()),
-                        boxShadow: frozen ? frozenEdge : undefined,
-                      }}
-                      className={`flex min-w-0 select-none ${
-                        frozen ? 'sticky left-0 z-[1] bg-surface-soft' : ''
-                      } ${divider ? 'border-l border-line' : ''} ${
-                        canSort ? 'cursor-pointer' : ''
-                      }`}
-                    >
-                      {h.isPlaceholder ? null : (
-                        <div
-                          className={`flex w-full min-w-0 items-center gap-0.5 px-2 py-1 text-[11px] font-semibold tracking-wide ${
-                            isLeaf
-                              ? 'text-ink-soft uppercase'
-                              : 'justify-center text-ink normal-case'
-                          } ${canSort ? 'hover:text-ink' : ''}`}
-                        >
-                          {h.column.columnDef.meta?.help ? (
-                            <Tip
-                              label={h.column.columnDef.meta.help}
-                              wide
-                              // `cursor-help` only where the header isn't also
-                              // the sort control — a sortable header must keep
-                              // the pointer cursor, so there the dotted
-                              // underline carries the affordance on its own.
-                              className={`min-w-0 truncate underline decoration-ink-faint/70 decoration-dotted underline-offset-[3px] ${
-                                canSort ? '' : 'cursor-help'
-                              }`}
-                            >
-                              {flexRender(h.column.columnDef.header, h.getContext())}
-                            </Tip>
-                          ) : (
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        onScroll={onScroll}
+        style={{ maxHeight: CAP, height: fixedHeight }}
+        className="overflow-auto"
+      >
+        <div style={{ minWidth: contentWidth }}>
+          {/* Pinned column headers. Header groups render one flex row per level,
+              so spanning group labels (e.g. "P-value" over the ancestry
+              sub-columns) line up over their children. */}
+          <div className="sticky top-0 z-10">
+            {table.getHeaderGroups().map((hg) => {
+              return (
+                <div
+                  key={hg.id}
+                  className="flex border-b border-line bg-surface-soft"
+                >
+                  {hg.headers.map((h, i) => {
+                    const isLeaf = h.subHeaders.length === 0
+                    const canSort = isLeaf && h.column.getCanSort()
+                    // A group header (spanning ≥1 leaf) marks a block; so does a
+                    // leaf flagged with meta.divider. Both draw a left rule that
+                    // lines up with the body cell dividers below.
+                    const divider =
+                      !isLeaf || h.column.columnDef.meta?.divider
+                    // Freeze the first cell of every header level, so the frozen
+                    // column reads as one continuous block down through the
+                    // caption, the group row, and the leaf row.
+                    const frozen = i === 0
+                    return (
+                      // Padding lives on the inner wrapper, never the flex item:
+                      // group and leaf rows have different cell counts, and per-cell
+                      // padding on a flex-basis:0 item would skew each row's width
+                      // distribution, so the two header rows wouldn't line up.
+                      <div
+                        key={h.id}
+                        onClick={canSort ? h.column.getToggleSortingHandler() : undefined}
+                        style={{
+                          ...cellBasis(h.getSize()),
+                          boxShadow: frozen ? frozenEdge : undefined,
+                        }}
+                        className={`flex min-w-0 select-none ${
+                          frozen ? 'sticky left-0 z-[1] bg-surface-soft' : ''
+                        } ${divider ? 'border-l border-line' : ''} ${
+                          canSort ? 'cursor-pointer' : ''
+                        }`}
+                      >
+                        {h.isPlaceholder ? null : (
+                          <div
+                            className={`flex w-full min-w-0 items-center gap-0.5 px-2 py-1 text-[11px] font-semibold tracking-wide ${
+                              isLeaf
+                                ? 'text-ink-soft uppercase'
+                                : 'justify-center text-ink normal-case'
+                            } ${canSort ? 'hover:text-ink' : ''}`}
+                          >
+                            {h.column.columnDef.meta?.help ? (
+                              <Tip
+                                label={h.column.columnDef.meta.help}
+                                wide
+                                // `cursor-help` only where the header isn't also
+                                // the sort control — a sortable header must keep
+                                // the pointer cursor, so there the dotted
+                                // underline carries the affordance on its own.
+                                className={`min-w-0 truncate underline decoration-ink-faint/70 decoration-dotted underline-offset-[3px] ${
+                                  canSort ? '' : 'cursor-help'
+                                }`}
+                              >
+                                {flexRender(h.column.columnDef.header, h.getContext())}
+                              </Tip>
+                            ) : (
+                              <span className="truncate">
+                                {flexRender(h.column.columnDef.header, h.getContext())}
+                              </span>
+                            )}
+                            {canSort && (
+                              <span className="text-[9px]">
+                                {{ asc: '▲', desc: '▼' }[
+                                  h.column.getIsSorted() as string
+                                ] ?? ''}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Body */}
+          <div style={{ height: virt.getTotalSize(), position: 'relative' }}>
+            {virt.getVirtualItems().map((vi) => {
+              const row = rows[vi.index]
+              return (
+                <div
+                  key={row.id}
+                  onClick={() => onRowClick?.(row.original)}
+                  style={{
+                    transform: `translateY(${vi.start}px)`,
+                    height: rowHeight,
+                  }}
+                  className={`group absolute flex w-full border-b border-line/50 ${
+                    vi.index % 2 ? 'bg-surface-soft/40' : ''
+                  } ${onRowClick ? 'cursor-pointer hover:bg-brand-light' : ''}`}
+                >
+                  {row.getVisibleCells().map((cell, i) => {
+                    // The frozen cell overlaps its neighbours, so it repaints the
+                    // row's own background (see .frozen-cell* in index.css) —
+                    // including the click-affordance hover, via group-hover.
+                    const frozen = i === 0
+                    return (
+                      // Padding on the inner wrapper (not the flex item) so body
+                      // columns line up with the header rows — see header note above.
+                      <div
+                        key={cell.id}
+                        style={{
+                          ...cellBasis(cell.column.getSize()),
+                          boxShadow: frozen ? frozenEdge : undefined,
+                        }}
+                        className={`flex min-w-0 ${
+                          frozen
+                            ? `sticky left-0 z-[1] ${
+                                vi.index % 2 ? 'frozen-cell-alt' : 'frozen-cell'
+                              } ${onRowClick ? 'group-hover:bg-brand-light' : ''}`
+                            : ''
+                        } ${
+                          cell.column.columnDef.meta?.divider
+                            ? 'border-l border-line/70'
+                            : ''
+                        }`}
+                      >
+                        {cell.column.columnDef.meta?.fill ? (
+                          flexRender(cell.column.columnDef.cell, cell.getContext())
+                        ) : (
+                          <div className="flex w-full min-w-0 items-center px-2 whitespace-nowrap">
                             <span className="truncate">
-                              {flexRender(h.column.columnDef.header, h.getContext())}
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
                             </span>
-                          )}
-                          {canSort && (
-                            <span className="text-[9px]">
-                              {{ asc: '▲', desc: '▼' }[
-                                h.column.getIsSorted() as string
-                              ] ?? ''}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )
-          })}
-        </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
 
-        {/* Body */}
-        <div style={{ height: virt.getTotalSize(), position: 'relative' }}>
-          {virt.getVirtualItems().map((vi) => {
-            const row = rows[vi.index]
-            return (
-              <div
-                key={row.id}
-                onClick={() => onRowClick?.(row.original)}
-                style={{
-                  transform: `translateY(${vi.start}px)`,
-                  height: rowHeight,
-                }}
-                className={`group absolute flex w-full border-b border-line/50 ${
-                  vi.index % 2 ? 'bg-surface-soft/40' : ''
-                } ${onRowClick ? 'cursor-pointer hover:bg-brand-light' : ''}`}
-              >
-                {row.getVisibleCells().map((cell, i) => {
-                  // The frozen cell overlaps its neighbours, so it repaints the
-                  // row's own background (see .frozen-cell* in index.css) —
-                  // including the click-affordance hover, via group-hover.
-                  const frozen = i === 0
-                  return (
-                    // Padding on the inner wrapper (not the flex item) so body
-                    // columns line up with the header rows — see header note above.
-                    <div
-                      key={cell.id}
-                      style={{
-                        ...cellBasis(cell.column.getSize()),
-                        boxShadow: frozen ? frozenEdge : undefined,
-                      }}
-                      className={`flex min-w-0 ${
-                        frozen
-                          ? `sticky left-0 z-[1] ${
-                              vi.index % 2 ? 'frozen-cell-alt' : 'frozen-cell'
-                            } ${onRowClick ? 'group-hover:bg-brand-light' : ''}`
-                          : ''
-                      } ${
-                        cell.column.columnDef.meta?.divider
-                          ? 'border-l border-line/70'
-                          : ''
-                      }`}
-                    >
-                      {cell.column.columnDef.meta?.fill ? (
-                        flexRender(cell.column.columnDef.cell, cell.getContext())
-                      ) : (
-                        <div className="flex w-full min-w-0 items-center px-2 whitespace-nowrap">
-                          <span className="truncate">
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )
-          })}
+          {rows.length === 0 && (
+            <p className="px-4 py-8 text-center text-sm text-ink-faint">
+              No rows match the current filters.
+            </p>
+          )}
         </div>
-
-        {rows.length === 0 && (
-          <p className="px-4 py-8 text-center text-sm text-ink-faint">
-            No rows match the current filters.
-          </p>
-        )}
       </div>
     </div>
   )

@@ -78,8 +78,14 @@ Raw: `{PHENO}_ALL_gene_meta_analysis_100_cutoff.{ANCESTRY}.tsv.gz` (no suffix =
 - **Routing:** React Router v7 **HashRouter** (avoids GH Pages 404-on-refresh).
 - **Tables:** TanStack Table + Virtual; [VirtualTable.tsx](app/src/components/VirtualTable.tsx)
   is div/flex (shared flex weights keep header+body aligned), rowHeight 30,
-  text-[13px], alternating shading, **sticky caption** showing active filters
-  while scrolling.
+  text-[13px], alternating shading, **caption bar** showing active filters plus
+  the TSV download button. The caption bar is rendered **outside the scroll
+  container** (column headers stay inside it, `sticky top-0`): inside, it inherits
+  the columns' `contentWidth`, so on a table wide enough to pan sideways the
+  right-aligned download button starts off-screen and the filter summary scrolls
+  away. Keep it out there — the frozen first column and sticky headers still work,
+  and `overflow-hidden` on the outer box clips the scroll region to the rounded
+  border.
 - **Manhattan:** HTML **canvas** ([ManhattanPlot.tsx](app/src/components/ManhattanPlot.tsx)),
   19k+ points, linear hit-test, significance lines, tight x-axis whitespace.
 - **PheWAS & forest:** SVG.
