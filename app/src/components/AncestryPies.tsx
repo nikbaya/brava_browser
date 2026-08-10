@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { fetchBiobankIndex, fetchPhenoSizes } from '../data/client'
 import { useAsync } from '../lib/useAsync'
+import { biobankShort } from '../lib/format'
 import { ANCESTRY_COLOR, ANCESTRY_META, SUPERPOPS, type Ancestry } from '../lib/constants'
 import type { BiobankN, PhenotypeMeta } from '../data/types'
 import { Spinner } from './ui'
@@ -73,6 +74,7 @@ export default function AncestryPies({
         n: r.n,
         fill: lighten(base, rows.length > 1 ? (i / (rows.length - 1)) * 0.62 : 0),
         title: subtitle(name(r.id), r.n, r.case),
+        label: biobankShort(r.id, name(r.id)),
       }))
       return {
         anc: a as Ancestry,
@@ -91,6 +93,9 @@ export default function AncestryPies({
           n: ancTotal(a),
           fill: ANCESTRY_COLOR[a as Ancestry],
           title: subtitle(ANCESTRY_META[a as Ancestry].long, ancTotal(a), ancCases(a)),
+          // A meta pie's slices are ancestries, not biobanks — so its legend
+          // reads EUR / AFR / …, the same codes the forest plot uses.
+          label: ANCESTRY_META[a as Ancestry].label,
         }))
         .sort((x, y) => y.n - x.n)
     const metaDefs: { anc: Ancestry; keys: readonly string[] }[] = [
@@ -132,6 +137,7 @@ export default function AncestryPies({
       total={p.total}
       radius={p.radius}
       selected={selected === p.anc}
+      legend
       // A stratum can have sample size but no association results — those are
       // shown faded and non-clickable rather than leading to an empty table.
       disabled={!available.includes(p.anc)}
@@ -142,30 +148,36 @@ export default function AncestryPies({
   )
 
   return (
-    <section className="mt-4 rounded-lg border border-line bg-surface p-3">
+    <section className="mt-4 mb-6 rounded-lg border border-line bg-surface p-3">
       <h2 className="mb-2 text-[13px] font-semibold text-ink">
         Sample size by ancestry
         <span className="ml-1.5 font-normal text-ink-faint">
-          · slices are contributing biobanks (hover) · click to view that stratum
+          · slices are contributing biobanks (hover for exact N) · click to view
+          that stratum
         </span>
       </h2>
 
-      <div className="flex flex-wrap items-stretch gap-x-1 gap-y-2">
+      {/* Below `xl` the two groups sit side by side, split by a vertical rule,
+          and the pies are bare. From `xl` each pie gains a legend (see
+          SliceLegend), which makes the strata group too wide to share a row —
+          so the groups stack and the rule turns horizontal rather than leaving
+          a stranded left border on a wrapped row. */}
+      <div className="flex flex-wrap items-stretch gap-x-1 gap-y-2 xl:flex-col xl:items-start">
         <div className="flex flex-col">
           <span className="mb-0.5 pl-2 text-[10px] font-medium tracking-wide text-ink-faint uppercase">
             Per-ancestry strata
           </span>
-          <div className="flex flex-wrap items-end gap-1">
+          <div className="flex flex-wrap items-end gap-1 xl:items-start">
             {built.stratumPies.map(render)}
           </div>
         </div>
 
         {built.metaPies.length > 0 && (
-          <div className="flex flex-col border-l border-line pl-2">
+          <div className="flex flex-col border-l border-line pl-2 xl:self-stretch xl:border-l-0 xl:border-t xl:pt-2 xl:pl-0">
             <span className="mb-0.5 pl-2 text-[10px] font-medium tracking-wide text-ink-faint uppercase">
               Meta-analyses
             </span>
-            <div className="flex flex-wrap items-end gap-1">
+            <div className="flex flex-wrap items-end gap-1 xl:items-start">
               {built.metaPies.map(render)}
             </div>
           </div>

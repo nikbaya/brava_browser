@@ -9,6 +9,7 @@ import {
   fmtBeta3,
   neglog10,
   fmtCount,
+  biobankShort,
 } from './format'
 
 describe('fmtPLog (p-value from stored -log10)', () => {
@@ -168,5 +169,21 @@ describe('fmtCount', () => {
   })
   it('is null-safe', () => {
     expect(fmtCount(null)).toBe('—')
+  })
+})
+
+describe('biobankShort', () => {
+  // The real catalogue (app/public/data/meta/biobanks.json), so the rule is
+  // pinned against the names the legend actually renders.
+  it('keeps names that fit a legend row', () => {
+    expect(biobankShort('uk-biobank', 'UK Biobank')).toBe('UK Biobank')
+    expect(biobankShort('all-of-us', 'All of Us')).toBe('All of Us')
+    expect(biobankShort('gel', 'Genomics England')).toBe('Genomics England')
+    expect(biobankShort('bbj', 'BioBank Japan')).toBe('BioBank Japan')
+  })
+  it("falls back to the biobank's own ID when the name is too long", () => {
+    expect(biobankShort('ccpm', 'Colorado Center for Personalized Medicine')).toBe('CCPM')
+    expect(biobankShort('mgbb', 'Mass General Brigham Biobank')).toBe('MGBB')
+    expect(biobankShort('pmbb', 'Penn Medicine BioBank')).toBe('PMBB')
   })
 })

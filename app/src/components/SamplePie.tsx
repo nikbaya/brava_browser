@@ -42,7 +42,12 @@ export interface Slice {
   n: number
   fill: string
   title: string
+  /** Short label for the side legend; omit to keep the slice legend-less. */
+  label?: string
 }
+
+/** Legend rows per pie — beyond this the tail is summarised as "+N more". */
+export const LEGEND_MAX = 5
 
 export interface PieTipState {
   x: number
@@ -85,6 +90,70 @@ export function PieTip({ tip }: { tip: PieTipState | null }) {
 }
 
 /**
+ * The biggest slices, named, beside a pie. A pie this size can't label its own
+ * slices, and hover only ever reveals one at a time — so the composition (who
+ * contributes, and roughly how much) is invisible until you go looking for it.
+ * The list makes it readable at a glance where the layout has the width to
+ * spare; the tooltip stays the place for exact counts.
+ *
+ * Capped at `LEGEND_MAX` with a "+N more" tail so a pie of eight biobanks can't
+ * outgrow the pie beside it, and sorted by size independently of slice order
+ * (which is drawing order, not necessarily rank).
+ */
+function SliceLegend({
+  slices,
+  total,
+  onHover,
+  onLeave,
+}: {
+  slices: Slice[]
+  total: number
+  onHover: (e: ReactMouseEvent, text: string) => void
+  onLeave: () => void
+}) {
+  const ranked = slices.filter((s) => s.label).sort((a, b) => b.n - a.n)
+  if (ranked.length === 0) return null
+  const shown = ranked.slice(0, LEGEND_MAX)
+  const rest = ranked.length - shown.length
+
+  return (
+    // Only from `xl` up: below that the pies already fill their row, and a
+    // legend per pie would push them into extra rows to say what a hover
+    // already says. This is the one width test — a pie asked for a legend
+    // renders in row layout at every width, so hiding the list here collapses
+    // it back to exactly the legend-less pie.
+    // w-36 is set by the longest name kept in full (`biobankShort`'s 18-char
+    // cut-off, i.e. "Genomics England") plus the swatch and the percentage.
+    // Five of these units still fit one row at the `xl` breakpoint itself.
+    <ul className="hidden w-36 shrink-0 space-y-px text-left text-[10px] leading-tight xl:block">
+      {shown.map((s) => (
+        <li
+          key={s.key}
+          className="flex items-center gap-1"
+          onMouseMove={(e) => onHover(e, s.title)}
+          onMouseLeave={onLeave}
+        >
+          <span
+            className="h-2 w-2 shrink-0 rounded-[2px]"
+            style={{ backgroundColor: s.fill }}
+            aria-hidden="true"
+          />
+          <span className="truncate text-ink-soft">{s.label}</span>
+          <span className="tnum ml-auto pl-1 text-ink-faint">
+            {Math.round((100 * s.n) / total)}%
+          </span>
+        </li>
+      ))}
+      {rest > 0 && (
+        <li className="pl-3 text-ink-faint">
+          +{rest} more
+        </li>
+      )}
+    </ul>
+  )
+}
+
+/**
  * A pie of pre-computed slices. When `interactive`, it renders as a clickable
  * selector button with hover/selected affordances; otherwise as a static
  * figure. Slices report hover text via `onHover`/`onLeave`.
@@ -97,6 +166,7 @@ export default function SamplePie({
   interactive = true,
   selected = false,
   disabled = false,
+  legend = false,
   onSelect,
   onHover,
   onLeave,
@@ -110,6 +180,8 @@ export default function SamplePie({
   /** Stratum has sample size but no association results — shown faded and not
    *  clickable. */
   disabled?: boolean
+  /** Name the biggest slices beside the pie (needs `label` on the slices). */
+  legend?: boolean
   onSelect?: () => void
   onHover: (e: ReactMouseEvent, text: string) => void
   onLeave: () => void
@@ -145,8 +217,28 @@ export default function SamplePie({
     </>
   )
 
+  // With a legend the unit is a row (pie column, then the list); without one it
+  // is the column alone. A row holding only the column lays out identically, so
+  // the legend can drop out at narrow widths without a second layout.
+  const body = legend ? (
+    <>
+      <div className="flex flex-col items-center gap-1">{inner}</div>
+      <SliceLegend
+        slices={slices}
+        total={total}
+        onHover={onHover}
+        onLeave={onLeave}
+      />
+    </>
+  ) : (
+    inner
+  )
+  const layout = legend
+    ? 'flex items-center gap-2'
+    : 'flex flex-col items-center gap-1'
+
   if (!interactive)
-    return <div className="flex flex-col items-center gap-1 px-2 py-1.5">{inner}</div>
+    return <div className={`${layout} px-2 py-1.5`}>{body}</div>
 
   // Sample size exists but no association results for this stratum: keep it
   // visible (it still conveys N) but faded and clearly not clickable.
@@ -155,9 +247,9 @@ export default function SamplePie({
       <div
         aria-disabled
         title={`No association results for ${ANCESTRY_META[anc].long}`}
-        className="flex cursor-not-allowed flex-col items-center gap-1 rounded-lg px-2 py-1.5 opacity-40 grayscale"
+        className={`${layout} cursor-not-allowed rounded-lg px-2 py-1.5 opacity-40 grayscale`}
       >
-        {inner}
+        {body}
       </div>
     )
 
@@ -167,11 +259,11 @@ export default function SamplePie({
       onClick={onSelect}
       aria-pressed={selected}
       aria-label={`Show ${ANCESTRY_META[anc].long} results`}
-      className={`flex flex-col items-center gap-1 rounded-lg px-2 py-1.5 transition ${
+      className={`${layout} rounded-lg px-2 py-1.5 transition ${
         selected ? 'bg-brand-light ring-1 ring-brand/40' : 'hover:bg-surface-soft'
       }`}
     >
-      {inner}
+      {body}
     </button>
   )
 }

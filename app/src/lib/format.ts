@@ -136,3 +136,21 @@ export function fmtCount(n: number | null | undefined): string {
 
 /** Genomic position with thousands separators. */
 export const fmtPos = format(',')
+
+/** Longest biobank name a compact legend row can hold before it needs the ID. */
+const BIOBANK_NAME_MAX = 18
+
+/**
+ * Biobank label for a narrow legend: the full name when it fits, otherwise the
+ * biobank's own **ID** upper-cased — `ccpm` → `CCPM`, `pmbb` → `PMBB`.
+ *
+ * Those IDs are Table S3's "Biobank ID" column, i.e. each biobank's own
+ * abbreviation, so nothing here is invented; a truncated "Colorado Center for…"
+ * would be both longer and less recognisable. Names that already fit (UK
+ * Biobank, All of Us, BioMe, Genomics England) are left alone rather than
+ * abbreviated for consistency's sake — the point is legibility, not uniformity.
+ * The full name is always a hover away, in the slice tooltip.
+ */
+export function biobankShort(id: string, name: string): string {
+  return name.length <= BIOBANK_NAME_MAX ? name : id.toUpperCase()
+}
