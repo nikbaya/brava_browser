@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import StickyTitle from '../components/StickyTitle'
 import type { ColumnDef, SortingState } from '@tanstack/react-table'
 import { useIndex } from '../data/IndexContext'
@@ -13,8 +13,10 @@ import {
   DEFAULTS,
   MASK_META,
   MAF_META,
+  type Ancestry,
 } from '../lib/constants'
 import { fmtPos } from '../lib/format'
+import { pinToTop } from '../lib/scroll'
 import { slug, type ExportColumn, type TableExport } from '../lib/exportTable'
 import { Notice, Spinner } from '../components/ui'
 import FilterBar, { type FilterState } from '../components/FilterBar'
@@ -33,6 +35,62 @@ import ForestPlot from '../components/ForestPlot'
 import PhenoPicker from '../components/PhenoPicker'
 import VirtualTable from '../components/VirtualTable'
 import GeneVariants from '../components/GeneVariants'
+import CopyLinkButton from '../components/CopyLinkButton'
+
+/**
+ * Deep link to the variant-level section: `#/gene/PCSK9?section=variants&…`.
+ *
+ * Only what that section actually depends on is carried — the phenotype it is
+ * showing and the ancestry stratum. Mask/MAF/test qualify the *gene-level*
+ * numbers; single-variant results have no mask, so pinning them in the link
+ * would suggest they narrow what the recipient sees. `variant` additionally
+ * seeks a specific row (see GeneVariants' `seekVariant` doc) — pos + an
+ * approximate lp, since that's all a caller like the phenotype page's
+ * pixel-decimated overview table has (no ref/alt there).
+ */
+const VARIANTS_SECTION = 'variants'
+
+function variantSectionQuery(
+  phenoId: string,
+  ancestry: Ancestry,
+  variant?: { pos: number; lp: number },
+): URLSearchParams {
+  const q = new URLSearchParams({ section: VARIANTS_SECTION, pheno: phenoId })
+  if (ancestry !== DEFAULTS.ancestry) q.set('anc', ancestry)
+  if (variant) {
+    q.set('pos', String(variant.pos))
+    q.set('lp', variant.lp.toFixed(2))
+  }
+  return q
+}
+
+function variantShareUrl(
+  geneParam: string,
+  phenoId: string,
+  ancestry: Ancestry,
+): string {
+  const q = variantSectionQuery(phenoId, ancestry)
+  // HashRouter: everything after `#` is the route, so the shared URL is the
+  // current document URL with a freshly built hash.
+  return `${window.location.href.split('#')[0]}#/gene/${encodeURIComponent(geneParam)}?${q}`
+}
+
+/**
+ * In-app (React Router `to`) path to a gene's variant section, optionally
+ * seeking a specific variant. Unlike `variantShareUrl` (an absolute URL for
+ * copy-to-clipboard sharing), this is router-relative — for a plain in-app
+ * `<Link>`, e.g. from the phenotype page's variant table. Always the
+ * cross-ancestry meta: that's the only stratum the overview table's rows
+ * are drawn from.
+ */
+export function variantSectionPath(
+  geneParam: string,
+  phenoId: string,
+  variant?: { pos: number; lp: number },
+): string {
+  const q = variantSectionQuery(phenoId, DEFAULTS.ancestry, variant)
+  return `/gene/${encodeURIComponent(geneParam)}?${q}`
+}
 
 export default function GenePage() {
   const { id } = useParams()
@@ -43,14 +101,32 @@ export default function GenePage() {
   const ensg = resolved?.ensg ?? (id?.startsWith('ENSG') ? id : null)
   const gi = resolved?.idx ?? null
 
-  const [filters, setFilters] = useState<FilterState>({
-    ancestry: DEFAULTS.ancestry,
-    maskIndex: DEFAULTS.maskIndex,
-    mafIndex: DEFAULTS.mafIndex,
-    test: DEFAULTS.test,
+  // Shared-link parameters (see variantShareUrl). Read once, at mount: they seed
+  // the view rather than driving it, so the user's later filter changes aren't
+  // fighting the URL.
+  const [search] = useSearchParams()
+  const [filters, setFilters] = useState<FilterState>(() => {
+    const anc = search.get('anc')
+    return {
+      ancestry: anc && anc in ANCESTRY_INDEX ? (anc as Ancestry) : DEFAULTS.ancestry,
+      maskIndex: DEFAULTS.maskIndex,
+      mafIndex: DEFAULTS.mafIndex,
+      test: DEFAULTS.test,
+    }
   })
   // Which phenotype the forest plot is focused on (null = auto = top hit).
   const [forestPheno, setForestPheno] = useState<number | null>(null)
+
+  // Deep-linked variant to auto-select (see GeneVariants' `seekVariant` doc).
+  // `lp` is optional context for disambiguating a multi-allelic position;
+  // absent it just falls back to the first match at that position.
+  const seekVariant = useMemo(() => {
+    const posStr = search.get('pos')
+    if (!posStr) return null
+    const pos = Number(posStr)
+    const lp = Number(search.get('lp') ?? 0)
+    return Number.isFinite(pos) ? { pos, lp: Number.isFinite(lp) ? lp : 0 } : null
+  }, [search])
 
   const { data, loading, error } = useAsync(
     () => (ensg ? fetchGene(ensg) : Promise.reject(new Error('unknown gene'))),
@@ -99,16 +175,43 @@ export default function GenePage() {
     return best >= 0 ? best : (availablePhenos[0]?.idx ?? null)
   }, [phewasPoints, availablePhenos])
 
-  // Seed the forest to the gene's top hit once its data loads, then keep that
-  // phenotype fixed. Otherwise `topHitIdx` (filter-derived) would hijack the
-  // forest whenever the user changed a mask/MAF/test/ancestry filter — the
-  // filters should update the shown phenotype's numbers, not swap phenotypes.
+  // Seed the forest to the shared link's phenotype if there is one, else to the
+  // gene's top hit, once its data loads — then keep that phenotype fixed. The
+  // `seeded` latch is what pins it: `topHitIdx` is filter-derived, so without it
+  // the forest would be hijacked whenever the user changed a mask/MAF/test/
+  // ancestry filter. Filters should update the shown phenotype's numbers, not
+  // swap phenotypes.
+  const seeded = useRef(false)
   useEffect(() => {
-    if (data && topHitIdx != null) setForestPheno(topHitIdx)
-    // Runs once per gene load (data changes only when the gene does); filter
-    // changes must NOT re-seed, so they're intentionally excluded from deps.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data])
+    seeded.current = false
+  }, [ensg])
+  useEffect(() => {
+    if (seeded.current || !data) return
+    const want = search.get('pheno')
+    if (want) {
+      // Resolving the id needs the phenotype index, which may still be in
+      // flight. Wait for it rather than seeding the top hit and silently
+      // dropping the link's phenotype a moment later.
+      if (!phenotypes.length) return
+      const hit = availablePhenos.find((p) => phenotypes[p.idx]?.id === want)
+      if (hit) {
+        seeded.current = true
+        setForestPheno(hit.idx)
+        return
+      }
+    }
+    if (topHitIdx != null) {
+      seeded.current = true
+      setForestPheno(topHitIdx)
+    }
+  }, [data, phenotypes, availablePhenos, topHitIdx, search, ensg])
+
+  // Deep link / in-page jump to the variant section.
+  const variantsRef = useRef<HTMLElement>(null)
+  const jumped = useRef(false)
+  /** Cancels the in-flight scroll pin (see pinToTop). */
+  const unpin = useRef<(() => void) | null>(null)
+  const wantVariants = search.get('section') === VARIANTS_SECTION || seekVariant != null
 
   const forestIdx = forestPheno ?? topHitIdx
   const forest = useMemo(
@@ -122,6 +225,28 @@ export default function GenePage() {
         : null,
     [data, forestIdx, filters.maskIndex, filters.mafIndex],
   )
+
+  // Land a shared link on the variant section as soon as it exists, and hold it
+  // there while the plot and table stream in (see pinToTop — until they arrive
+  // the page is too short for the heading to reach the top). Instant rather than
+  // smooth: an animated glide down a freshly loaded page reads as a glitch, not
+  // as navigation.
+  useEffect(() => {
+    if (!wantVariants || jumped.current || !variantsRef.current) return
+    jumped.current = true
+    requestAnimationFrame(() => {
+      unpin.current?.()
+      unpin.current = pinToTop(variantsRef.current, { behavior: 'auto' })
+    })
+  }, [wantVariants, data, loading, forestIdx])
+
+  // Release the pin if the page goes away mid-load — it listens on `window`.
+  useEffect(() => () => unpin.current?.(), [])
+
+  const jumpToVariants = () => {
+    unpin.current?.()
+    unpin.current = pinToTop(variantsRef.current, { behavior: 'smooth' })
+  }
 
   if (idxLoading) return <Spinner label="Loading…" />
 
@@ -156,7 +281,25 @@ export default function GenePage() {
                 )}
               </span>
             </div>
-            <div className="flex flex-wrap gap-1.5 text-[11px]">
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+              {/* Single-variant results sit below three gene-level sections, so
+                  they were being missed entirely. This jump chip advertises them
+                  from the header; it's rendered only once the section it targets
+                  exists, so it can never scroll to nothing. Brand-tinted and
+                  separated from the external-database chips beside it — those
+                  leave the site, this one moves within the page. */}
+              {data && !loading && forestIdx != null && (
+                <>
+                  <button
+                    type="button"
+                    onClick={jumpToVariants}
+                    className="rounded-md border border-brand/40 bg-brand/10 px-2.5 py-1 font-medium text-brand transition hover:border-brand hover:bg-brand/15"
+                  >
+                    Variants ↓
+                  </button>
+                  <span className="mx-0.5 h-4 w-px bg-line" aria-hidden="true" />
+                </>
+              )}
               {/* No `?dataset=` param: the bare URL follows gnomAD's current
                   default release, so this keeps working past r4 instead of
                   pinning a version that ages out. Matches `gnomadVariantUrl`
@@ -255,9 +398,13 @@ export default function GenePage() {
           />
 
           {forestIdx != null && forestTrait && (
-            <section className="mb-3 rounded-lg border border-line bg-surface p-2">
+            <section
+              ref={variantsRef}
+              id={VARIANTS_SECTION}
+              className="mb-3 rounded-lg border border-line bg-surface p-2"
+            >
               <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-[13px] font-semibold text-ink">
                     Variants
                   </h2>
@@ -265,6 +412,12 @@ export default function GenePage() {
                     value={forestIdx}
                     options={availablePhenos}
                     onChange={setForestPheno}
+                  />
+                  <CopyLinkButton
+                    getUrl={() =>
+                      variantShareUrl(symbol, forestTrait.id, filters.ancestry)
+                    }
+                    help={`Copy a link that opens ${symbol} at these single-variant results — same phenotype (${forestTrait.name}) and ancestry (${ANCESTRY_META[filters.ancestry].label})`}
                   />
                 </div>
                 <span className="text-[11px] text-ink-faint">
@@ -283,6 +436,7 @@ export default function GenePage() {
                 start={start}
                 end={end}
                 chr={chr}
+                seekVariant={seekVariant}
               />
             </section>
           )}

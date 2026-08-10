@@ -10,7 +10,12 @@ import type { ReactNode } from 'react'
  */
 export default function StickyTitle({ children }: { children: ReactNode }) {
   return (
-    <div className="sticky top-14 z-20 border-b border-line bg-surface-soft/95 backdrop-blur">
+    // `data-sticky-title` is what lib/scroll.ts measures to offset in-page jumps
+    // past this bar (see stickyOffset).
+    <div
+      data-sticky-title
+      className="sticky top-14 z-20 border-b border-line bg-surface-soft/95 backdrop-blur"
+    >
       <div className="mx-auto flex max-w-7xl flex-col gap-1.5 px-4 py-1.5">
         {children}
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CellContext, ColumnDef, SortingState } from '@tanstack/react-table'
 import {
   fetchExonShard,
@@ -56,6 +56,7 @@ export default function GeneVariants({
   start,
   end,
   chr,
+  seekVariant,
 }: {
   ensg: string
   symbol: string
@@ -66,6 +67,14 @@ export default function GeneVariants({
   start?: number
   end?: number
   chr?: string | null
+  /**
+   * Deep-linked variant to auto-select once its row loads (e.g. from the
+   * phenotype page's variant table, which only has chr/pos + an approximate
+   * lp — no ref/alt — so the match is by position, breaking multi-allelic
+   * ties by nearest lp). Only resolved against the cross-ancestry meta rows:
+   * that's the stratum the phenotype page's overview data is drawn from.
+   */
+  seekVariant?: { pos: number; lp: number } | null
 }) {
   const { data, loading, error } = useAsync(
     () => fetchGeneVariants(ensg, phenoIdx, split),
@@ -87,6 +96,14 @@ export default function GeneVariants({
   // the selection when the ancestry changes rather than showing a stale forest.
   useEffect(() => setSelected(null), [ancIdx])
 
+  // Resolve a deep-linked variant once, the first time its row is available —
+  // a ref (not state) so it doesn't refight the user's own later selections
+  // when `rows` is recomputed for an unrelated reason (e.g. a re-fetch).
+  const seekedVariant = useRef(false)
+  useEffect(() => {
+    seekedVariant.current = false
+  }, [ensg, phenoIdx])
+
   // Per-ancestry file: needed up front when a stratum is selected (it backs the
   // table), otherwise lazily once a variant is clicked (it backs the forest).
   const needAnc = ancIdx !== 0 || selected != null
@@ -100,6 +117,25 @@ export default function GeneVariants({
     if (ancIdx === 0) return data ? variantRows(data, phenoIdx) : []
     return anc.data ? variantAncRows(anc.data, ancIdx, phenoIdx) : []
   }, [data, anc.data, ancIdx, phenoIdx])
+
+  useEffect(() => {
+    if (seekedVariant.current || !seekVariant || ancIdx !== 0 || rows.length === 0) return
+    let best: VariantRow | null = null
+    let bestD = Infinity
+    for (const r of rows) {
+      if (r.pos !== seekVariant.pos) continue
+      const d = r.lp != null ? Math.abs(r.lp - seekVariant.lp) : Infinity
+      if (d < bestD) {
+        bestD = d
+        best = r
+      }
+    }
+    if (best) {
+      seekedVariant.current = true
+      setSelected(best)
+    }
+  }, [seekVariant, ancIdx, rows])
+
   const forestRows = useMemo(
     () =>
       data && selected
