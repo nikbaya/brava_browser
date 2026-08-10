@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { fmtBeta, fmtPLog } from '../lib/format'
+import { fmtBeta, fmtP, fmtPLog } from '../lib/format'
 import { SIG_GENE_CAUCHY } from '../lib/constants'
 
 /** Threshold filter applied to result-table rows (not the plots). */
@@ -91,8 +91,47 @@ function ThresholdInput({
   )
 }
 
-/** A labelled row: uppercase caption, filled-track slider, editable readout. */
-function FilterRow({
+/**
+ * Labelled free-text search box, styled to match `ThresholdInput`. Exported
+ * (like `FilterRow` below) so a table that isn't wired through the full
+ * `TableFilters` strip — e.g. the phenotype page's variant table, which has
+ * no `|β|` axis — can still drop in the same search control.
+ */
+export function SearchInput({
+  label,
+  value,
+  onChange,
+  placeholder = 'any',
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[11px] font-medium tracking-wide text-ink-faint uppercase whitespace-nowrap">
+        {label}
+      </span>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        aria-label={`Filter by ${label.toLowerCase()}`}
+        className="w-32 rounded-md border border-line bg-surface px-1.5 py-0.5 text-[12px] text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+      />
+    </div>
+  )
+}
+
+/**
+ * A labelled row: uppercase caption, filled-track slider, editable readout.
+ * Exported so a table without a `|β|` axis to filter on (e.g. the phenotype
+ * page's variant table, which only has β's sign) can reuse just the P-value
+ * row instead of the whole two-axis `TableFilters` strip below.
+ */
+export function FilterRow({
   label,
   kind,
   min,
@@ -137,22 +176,29 @@ function FilterRow({
  * Compact threshold-filter strip for a result table. Two controls (P-value and
  * effect size), each a slider paired with an editable numeric field, plus a
  * one-click genome-wide significance preset. `children` is rendered flush-right
- * (typically the visible/total row count).
+ * (typically the visible/total row count). `search`/`onSearchChange` are
+ * optional — pass both to add a gene-name search box as the first control.
  */
 export default function TableFilters({
   value,
   onChange,
   maxLp,
   maxAbsBeta,
+  search,
+  onSearchChange,
+  searchLabel = 'Gene',
   children,
 }: {
   value: TableFilter
   onChange: (next: TableFilter) => void
   maxLp: number
   maxAbsBeta: number
+  search?: string
+  onSearchChange?: (v: string) => void
+  searchLabel?: string
   children?: ReactNode
 }) {
-  const active = value.minLp > 0 || value.minAbsBeta > 0
+  const active = value.minLp > 0 || value.minAbsBeta > 0 || !!search
   // Round the beta domain up so the slider's max is a clean-ish bound.
   const betaMax = maxAbsBeta > 0 ? Math.ceil(maxAbsBeta * 20) / 20 : 1
   const lpMax = Math.max(Math.ceil(maxLp), Math.ceil(SIG_LP))
@@ -160,6 +206,9 @@ export default function TableFilters({
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line bg-surface px-3 py-1.5">
+      {onSearchChange && (
+        <SearchInput label={searchLabel} value={search ?? ''} onChange={onSearchChange} />
+      )}
       <FilterRow
         label="P ≤"
         kind="p"
@@ -182,7 +231,7 @@ export default function TableFilters({
         type="button"
         onClick={() => onChange({ ...value, minLp: sigOn ? 0 : SIG_LP })}
         aria-pressed={sigOn}
-        title="Gene-level significance · P < 2.5×10⁻⁶"
+        title={`Gene-level significance · P < ${fmtP(SIG_GENE_CAUCHY)}`}
         className={`rounded-md border px-2 py-0.5 text-[11px] font-medium transition ${
           sigOn
             ? 'border-brand bg-brand/10 text-brand'
@@ -194,7 +243,10 @@ export default function TableFilters({
       {active && (
         <button
           type="button"
-          onClick={() => onChange(NO_TABLE_FILTER)}
+          onClick={() => {
+            onChange(NO_TABLE_FILTER)
+            onSearchChange?.('')
+          }}
           className="text-[11px] text-ink-faint hover:text-ink hover:underline"
         >
           reset

@@ -3,12 +3,21 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { ColumnDef, SortingState } from '@tanstack/react-table'
 import { useIndex } from '../data/IndexContext'
 import StickyTitle from '../components/StickyTitle'
-import { fetchGene, fetchPhenotype } from '../data/client'
+import {
+  fetchGene,
+  fetchGeneVariants,
+  fetchGeneVariantsAnc,
+  fetchPhenotype,
+  fetchVariantOverview,
+  fetchVariantSplit,
+  HttpError,
+} from '../data/client'
 import { useAsync } from '../lib/useAsync'
 import {
   forestSeries,
   phenoLookup,
   phenoRows,
+  variantForest,
   type GridRow,
   type PhenoRow,
 } from '../lib/select'
@@ -22,25 +31,34 @@ import {
   SIG_GENE_CAUCHY,
   type Ancestry,
 } from '../lib/constants'
-import { fmtPos } from '../lib/format'
-import { slug, type ExportColumn, type TableExport } from '../lib/exportTable'
-import type { PhenotypeData, PhenotypeMeta } from '../data/types'
+import { fmtP, fmtPLog, fmtPos } from '../lib/format'
+import { exportP, slug, type ExportColumn, type TableExport } from '../lib/exportTable'
+import type { GeneIndex, PhenotypeData, PhenotypeMeta, VariantOverview } from '../data/types'
 import { Notice, Spinner, ThresholdLegend } from '../components/ui'
 import {
   ancestryExportColumns,
   ancestryGridColumns,
   BetaLegend,
 } from '../components/ancestryColumns'
+import { DirDot, SigDot } from '../components/indicators'
+import { effectInfo } from '../lib/effect'
+import { VARIANT_CHR_LABELS } from '../lib/genome'
 import FilterBar, { type FilterState } from '../components/FilterBar'
 import TableFilters, {
+  FilterRow,
   NO_TABLE_FILTER,
   passesTableFilter,
+  SearchInput,
   type TableFilter,
 } from '../components/TableFilters'
 import ManhattanPlot from '../components/ManhattanPlot'
+import VariantManhattanPlot, { type VariantPick } from '../components/VariantManhattanPlot'
 import ForestPlot from '../components/ForestPlot'
+import VariantForest from '../components/VariantForest'
 import VirtualTable from '../components/VirtualTable'
 import AncestryPies from '../components/AncestryPies'
+import Tip from '../components/Tip'
+import { variantSectionPath } from './GenePage'
 
 export default function PhenotypePage() {
   const { id } = useParams()
@@ -66,6 +84,31 @@ export default function PhenotypePage() {
     null,
   )
 
+  // Variant clicked in the variant Manhattan, whose own (not the gene's)
+  // cross-ancestry forest is shown in a separate drawer.
+  const [variantDrawer, setVariantDrawer] = useState<
+    (VariantPick & { ensg: string; symbol: string }) | null
+  >(null)
+
+  // Row hovered in a results table, mirrored as a highlight ring on the
+  // matching Manhattan point (gene_idx for the gene table, overview array
+  // index for the variant table).
+  const [hoverGeneIdx, setHoverGeneIdx] = useState<number | null>(null)
+  const [hoverVariantIdx, setHoverVariantIdx] = useState<number | null>(null)
+
+  // One toggle drives both the Manhattan and the table beneath it, so the two
+  // never show mismatched levels of data.
+  const [manhattanMode, setManhattanMode] = useState<'gene' | 'variant'>('gene')
+
+  // Genome-wide variant overview (pixel-decimated Manhattan + the exhaustive
+  // P ≤ 0.01 tail for the table below). Built only for the cross-ancestry meta
+  // (see pipeline/build_variants.py), so this section always shows `All`
+  // regardless of the page's ancestry filter.
+  const { data: overview, error: overviewError } = useAsync(
+    () => (id ? fetchVariantOverview(id) : Promise.resolve(null)),
+    [id],
+  )
+
   const { data, loading, error } = useAsync(
     () =>
       id
@@ -75,6 +118,7 @@ export default function PhenotypePage() {
   )
 
   const [tableFilter, setTableFilter] = useState<TableFilter>(NO_TABLE_FILTER)
+  const [geneQuery, setGeneQuery] = useState('')
   const ancIdx = ANCESTRY_INDEX[ancestry]
 
   // Lazy-load every available ancestry file so the table can show a P + β
@@ -145,13 +189,15 @@ export default function PhenotypePage() {
     })
   }, [rows, lookups])
 
-  const tableRows = useMemo(
-    () =>
-      gridRows.filter((r) =>
-        passesTableFilter(tableFilter, r.lp[ancIdx], r.beta[ancIdx]),
-      ),
-    [gridRows, tableFilter, ancIdx],
-  )
+  const tableRows = useMemo(() => {
+    const q = geneQuery.trim().toLowerCase()
+    return gridRows.filter((r) => {
+      if (!passesTableFilter(tableFilter, r.lp[ancIdx], r.beta[ancIdx])) return false
+      if (!q) return true
+      const symbol = geneIndex?.symbols[r.geneIdx] || geneIndex?.ids[r.geneIdx] || ''
+      return symbol.toLowerCase().includes(q)
+    })
+  }, [gridRows, tableFilter, ancIdx, geneQuery, geneIndex])
   // Ancestry columns to render (all available), and which have loaded.
   const ancIdxs = useMemo(
     () => available.map((a) => ANCESTRY_INDEX[a]).sort((x, y) => x - y),
@@ -184,8 +230,8 @@ export default function PhenotypePage() {
               </span>
               <span className="text-ink-faint">
                 {pheno.id} · {pheno.type === 'binary' ? 'binary' : 'quantitative'} ·{' '}
-                <span className="tnum">{nSig}</span> genes past significance (P &lt;
-                2.5×10⁻⁶) here
+                <span className="tnum">{nSig}</span> genes past significance (P &lt;{' '}
+                {fmtP(SIG_GENE_CAUCHY)}) here
               </span>
             </div>
           </div>
@@ -199,6 +245,13 @@ export default function PhenotypePage() {
 
       <div className="mx-auto max-w-7xl px-4 py-4">
 
+      <AncestryPies
+        pheno={pheno}
+        available={available}
+        selected={ancestry}
+        onSelect={(a) => setFilters({ ...filters, ancestry: a })}
+      />
+
       {loading && <Spinner label="Loading association results…" />}
       {error && (
         <Notice title="Could not load results">{String(error.message)}</Notice>
@@ -207,57 +260,132 @@ export default function PhenotypePage() {
       {data && !loading && (
         <>
           <section className="mb-3 rounded-lg border border-line bg-surface p-2">
-            <ManhattanPlot
-              rows={rows}
-              geneIndex={geneIndex!}
-              onSelect={(gi) =>
-                setDrawer({
-                  ensg: geneIndex!.ids[gi],
-                  symbol: geneIndex!.symbols[gi] || geneIndex!.ids[gi],
-                })
-              }
-            />
+            <div className="mb-1 flex items-center gap-1.5 px-2">
+              <span className="text-[11px] font-semibold text-ink-soft">Manhattan</span>
+              <div className="inline-flex overflow-hidden rounded border border-line">
+                <ManhattanModeButton
+                  active={manhattanMode === 'gene'}
+                  onClick={() => setManhattanMode('gene')}
+                >
+                  Gene
+                </ManhattanModeButton>
+                <ManhattanModeButton
+                  active={manhattanMode === 'variant'}
+                  onClick={() => {
+                    setManhattanMode('variant')
+                    // Variant-level data is cross-ancestry meta only (see the
+                    // caption below), so keep the ancestry selector honest
+                    // about what's actually shown instead of leaving it on
+                    // whatever stratum the gene-level view had picked.
+                    setFilters((f) => ({ ...f, ancestry: 'All' }))
+                  }}
+                >
+                  Variant
+                </ManhattanModeButton>
+              </div>
+            </div>
+            {manhattanMode === 'gene' ? (
+              <ManhattanPlot
+                rows={rows}
+                geneIndex={geneIndex!}
+                highlightGeneIdx={hoverGeneIdx}
+                onSelect={(gi) =>
+                  setDrawer({
+                    ensg: geneIndex!.ids[gi],
+                    symbol: geneIndex!.symbols[gi] || geneIndex!.ids[gi],
+                  })
+                }
+              />
+            ) : overviewError ? (
+              <Notice title="Could not load variant overview">
+                {String(overviewError.message)}
+              </Notice>
+            ) : overview ? (
+              <VariantManhattanPlot
+                overview={overview}
+                geneIndex={geneIndex!}
+                traitType={pheno.type}
+                highlightIdx={hoverVariantIdx}
+                onSelect={(pick) =>
+                  setVariantDrawer({
+                    ...pick,
+                    ensg: geneIndex!.ids[pick.geneIdx],
+                    symbol: geneIndex!.symbols[pick.geneIdx] || geneIndex!.ids[pick.geneIdx],
+                  })
+                }
+              />
+            ) : (
+              <div className="flex h-[240px] items-center justify-center">
+                <Spinner label="Loading genome-wide variants…" />
+              </div>
+            )}
             <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 px-2 text-[11px] text-ink-faint">
-              <span>
-                {MASK_META[filters.maskIndex].label} · {filters.test}
-              </span>
-              <ThresholdLegend />
-              <span>· click a gene for its cross-ancestry forest</span>
+              {manhattanMode === 'gene' ? (
+                <>
+                  <span>
+                    {MASK_META[filters.maskIndex].label} · {filters.test}
+                  </span>
+                  <ThresholdLegend />
+                  <span>· click a gene for its cross-ancestry forest</span>
+                </>
+              ) : (
+                <span>
+                  Cross-ancestry meta only (not affected by the ancestry filter
+                  above) · click a variant for its cross-ancestry forest plot
+                </span>
+              )}
             </div>
           </section>
 
-          <div className="mb-1.5">
-            <TableFilters
-              value={tableFilter}
-              onChange={setTableFilter}
-              maxLp={maxLp}
-              maxAbsBeta={maxAbsBeta}
-            >
-              {tableRows.length.toLocaleString()}
-              {tableRows.length !== rows.length &&
-                ` of ${rows.length.toLocaleString()}`}{' '}
-              genes · click a row for the forest
-            </TableFilters>
-          </div>
-          <ResultsTable
-            rows={tableRows}
-            reservedRows={gridRows.length}
-            ancIdxs={ancIdxs}
-            selAncIdx={ancIdx}
-            loadedAnc={loadedAnc}
-            filters={filters}
-            pheno={pheno}
-            ancestry={ancestry}
-            ancestryN={pheno.n?.[ancestry]}
-            onOpenForest={setDrawer}
-          />
-
-          <AncestryPies
-            pheno={pheno}
-            available={available}
-            selected={ancestry}
-            onSelect={(a) => setFilters({ ...filters, ancestry: a })}
-          />
+          {manhattanMode === 'gene' ? (
+            <>
+              <div className="mb-1.5">
+                <TableFilters
+                  value={tableFilter}
+                  onChange={setTableFilter}
+                  maxLp={maxLp}
+                  maxAbsBeta={maxAbsBeta}
+                  search={geneQuery}
+                  onSearchChange={setGeneQuery}
+                >
+                  {tableRows.length.toLocaleString()}
+                  {tableRows.length !== rows.length &&
+                    ` of ${rows.length.toLocaleString()}`}{' '}
+                  genes · click a row for the forest
+                </TableFilters>
+              </div>
+              <ResultsTable
+                rows={tableRows}
+                reservedRows={gridRows.length}
+                ancIdxs={ancIdxs}
+                selAncIdx={ancIdx}
+                loadedAnc={loadedAnc}
+                filters={filters}
+                pheno={pheno}
+                ancestry={ancestry}
+                ancestryN={pheno.n?.[ancestry]}
+                onOpenForest={setDrawer}
+                onHoverRow={setHoverGeneIdx}
+              />
+            </>
+          ) : (
+            overview &&
+            !overviewError && (
+              <VariantOverviewTable
+                overview={overview}
+                geneIndex={geneIndex!}
+                pheno={pheno}
+                onOpenForest={(pick) =>
+                  setVariantDrawer({
+                    ...pick,
+                    ensg: geneIndex!.ids[pick.geneIdx],
+                    symbol: geneIndex!.symbols[pick.geneIdx] || geneIndex!.ids[pick.geneIdx],
+                  })
+                }
+                onHoverRow={setHoverVariantIdx}
+              />
+            )
+          )}
         </>
       )}
 
@@ -271,6 +399,20 @@ export default function PhenotypePage() {
           mafIndex={filters.mafIndex}
           onClose={() => setDrawer(null)}
           onOpenGene={() => navigate(`/gene/${drawer.ensg}`)}
+        />
+      )}
+
+      {variantDrawer && (
+        <VariantForestDrawer
+          ensg={variantDrawer.ensg}
+          symbol={variantDrawer.symbol}
+          chr={variantDrawer.chr}
+          pos={variantDrawer.pos}
+          approxLp={variantDrawer.lp}
+          phenoIdx={phenoIdx}
+          trait={pheno}
+          onClose={() => setVariantDrawer(null)}
+          onOpenGene={() => navigate(`/gene/${variantDrawer.ensg}`)}
         />
       )}
       </div>
@@ -348,6 +490,139 @@ function ForestDrawer({
   )
 }
 
+/**
+ * Cross-ancestry forest for a single variant clicked in the variant Manhattan
+ * — distinct from ForestDrawer's gene-level Burden/SKAT-O forest above.
+ * The overview point carries only chr/pos (+ an approximate lp for
+ * disambiguation), not ref/alt, so the exact variant is resolved from the
+ * gene's variant file by matching position within the current phenotype's
+ * slice, breaking multi-allelic ties by nearest lp.
+ */
+function VariantForestDrawer({
+  ensg,
+  symbol,
+  chr,
+  pos,
+  approxLp,
+  phenoIdx,
+  trait,
+  onClose,
+  onOpenGene,
+}: {
+  ensg: string
+  symbol: string
+  chr: string
+  pos: number
+  approxLp: number
+  phenoIdx: number
+  trait: PhenotypeMeta
+  onClose: () => void
+  onOpenGene: () => void
+}) {
+  const { data: variantSplit } = useAsync(
+    () => fetchVariantSplit().catch(() => ({ split: [] as string[] })),
+    [],
+  )
+  const split = variantSplit?.split.includes(ensg) ?? false
+
+  const { data, loading, error } = useAsync(
+    () => fetchGeneVariants(ensg, phenoIdx, split),
+    [ensg, phenoIdx, split],
+  )
+
+  const variant = useMemo(() => {
+    if (!data) return null
+    const sl = data.by_pheno[String(phenoIdx)]
+    if (!sl) return null
+    let best: { ref: string; alt: string; d: number } | null = null
+    for (let i = 0; i < sl.idx.length; i++) {
+      const v = sl.idx[i]
+      if (data.pos[v] !== pos) continue
+      const d = Math.abs((sl.lp[i] ?? 0) - approxLp)
+      if (!best || d < best.d) best = { ref: data.ref[v], alt: data.alt[v], d }
+    }
+    return best
+  }, [data, phenoIdx, pos, approxLp])
+
+  const anc = useAsync(
+    () =>
+      variant
+        ? fetchGeneVariantsAnc(ensg, phenoIdx, split)
+        : Promise.resolve(null),
+    [ensg, phenoIdx, split, variant != null],
+  )
+
+  const forestRows = useMemo(
+    () =>
+      data && variant
+        ? variantForest(data, anc.data, phenoIdx, pos, variant.ref, variant.alt)
+        : [],
+    [data, anc.data, variant, phenoIdx, pos],
+  )
+
+  const label = variant ? `chr${chr}-${pos}-${variant.ref}-${variant.alt}` : undefined
+
+  return (
+    <div className="fixed inset-0 z-40 flex justify-end">
+      <div className="absolute inset-0 bg-ink/20" onClick={onClose} />
+      <aside className="relative z-10 flex h-full w-full max-w-xl flex-col overflow-y-auto bg-surface shadow-2xl">
+        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+          <div>
+            <h2 className="tnum text-base font-semibold text-ink">
+              chr{chr}:{fmtPos(pos)}
+              {variant && ` ${variant.ref}›${variant.alt}`}
+            </h2>
+            <p className="text-[11px] text-ink-faint">
+              {symbol} · {trait.name} · effect across ancestries
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onOpenGene}
+              className="text-[12px] text-brand hover:underline"
+            >
+              open gene page →
+            </button>
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="rounded p-1 text-ink-faint hover:bg-surface-soft hover:text-ink"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+        <div className="p-4">
+          {loading && <Spinner label="Loading…" />}
+          {error &&
+            (error instanceof HttpError && error.status === 404 ? (
+              <Notice title="No variant data for this gene">
+                {trait.name} variants aren’t in the current data release.
+              </Notice>
+            ) : (
+              <Notice title="Could not load variant">{String(error.message)}</Notice>
+            ))}
+          {data && !variant && (
+            <Notice title="Variant not found">
+              This position couldn’t be matched to a variant in {symbol}’s data
+              for {trait.name}.
+            </Notice>
+          )}
+          {variant && (
+            <VariantForest
+              rows={forestRows}
+              trait={trait}
+              loading={anc.loading}
+              label={label}
+              symbol={symbol}
+            />
+          )}
+        </div>
+      </aside>
+    </div>
+  )
+}
+
 interface PhenoGridRow extends GridRow {
   geneIdx: number
 }
@@ -373,6 +648,27 @@ function chromRank(chr: string): number {
 /** Sortable genomic key: chromosome dominates, then base-pair position. */
 const locusKey = (chr: string, start: number) => chromRank(chr) * 1e9 + start
 
+function ManhattanModeButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-1.5 py-px text-[11px] ${
+        active ? 'bg-ink-soft text-white' : 'bg-surface text-ink-soft hover:bg-surface-alt'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
 function ResultsTable({
   rows,
   reservedRows,
@@ -384,6 +680,7 @@ function ResultsTable({
   ancestry,
   ancestryN,
   onOpenForest,
+  onHoverRow,
 }: {
   rows: PhenoGridRow[]
   reservedRows?: number
@@ -395,6 +692,7 @@ function ResultsTable({
   ancestry: Ancestry
   ancestryN?: { n: number; case?: number; ctrl?: number }
   onOpenForest: (g: { ensg: string; symbol: string }) => void
+  onHoverRow?: (geneIdx: number | null) => void
 }) {
   const { geneIndex } = useIndex()
   const [sorting, setSorting] = useState<SortingState>([
@@ -517,9 +815,285 @@ function ResultsTable({
       sorting={sorting}
       onSortingChange={setSorting}
       onRowClick={(r) => onOpenForest({ ensg: r.ensg, symbol: r.symbol })}
+      onRowHover={(r) => onHoverRow?.(r ? r.geneIdx : null)}
       caption={caption}
       exportSpec={exportSpec}
       reservedRows={reservedRows}
     />
+  )
+}
+
+interface VariantTableRow {
+  idx: number // index into the overview's parallel arrays
+  geneIdx: number
+  symbol: string
+  ensg: string
+  chr: string
+  pos: number
+  lp: number
+  dir: number
+}
+
+/**
+ * Small quiet icon-link beside a variant's location, to that exact variant
+ * pre-selected on the gene page's variant table (see GeneVariants'
+ * `seekVariant` + GenePage's `variantSectionPath`). Position + this row's
+ * (decimated) lp is all the overview carries — no ref/alt — so the gene page
+ * resolves the precise variant by matching position and, for a multi-allelic
+ * site, nearest lp. Styled like GeneVariants' own `GnomadLink`: faint until
+ * hover, since it's a secondary affordance beside the primary cell text.
+ * Click is stopped from bubbling so it doesn't also open the row's forest.
+ */
+function OnGenePageLink({
+  ensg,
+  phenoId,
+  pos,
+  lp,
+}: {
+  ensg: string
+  phenoId: string
+  pos: number
+  lp: number
+}) {
+  return (
+    <Tip label="View this variant on the gene page" className="inline-flex shrink-0 items-center">
+      <Link
+        to={variantSectionPath(ensg, phenoId, { pos, lp })}
+        onClick={(e) => e.stopPropagation()}
+        aria-label="View this variant on the gene page"
+        className="shrink-0 text-ink-faint transition-colors hover:text-brand"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          className="h-3 w-3"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="7" />
+          <line x1="12" y1="2" x2="12" y2="5" />
+          <line x1="12" y1="19" x2="12" y2="22" />
+          <line x1="2" y1="12" x2="5" y2="12" />
+          <line x1="19" y1="12" x2="22" y2="12" />
+        </svg>
+      </Link>
+    </Tip>
+  )
+}
+
+/**
+ * Table for the variant-level section: the exhaustive P ≤ overview.keep_lp
+ * tail of the genome-wide overview (the thinned null band below that isn't a
+ * complete list — one decorative point per pixel bin — so it's excluded here,
+ * unlike the Manhattan plot above which draws it for visual density). Rows
+ * without a resolved gene are dropped too: there's no gene file to open a
+ * forest from, so they'd be inert in a clickable table.
+ */
+function VariantOverviewTable({
+  overview,
+  geneIndex,
+  pheno,
+  onOpenForest,
+  onHoverRow,
+}: {
+  overview: VariantOverview
+  geneIndex: GeneIndex
+  pheno: PhenotypeMeta
+  onOpenForest: (pick: VariantPick) => void
+  onHoverRow?: (idx: number | null) => void
+}) {
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'lp', desc: true }])
+  const [geneQuery, setGeneQuery] = useState('')
+  const [minLp, setMinLp] = useState(0)
+
+  const rows = useMemo<VariantTableRow[]>(() => {
+    const out: VariantTableRow[] = []
+    for (let i = 0; i < overview.n; i++) {
+      if (overview.lp[i] < overview.keep_lp) continue
+      const geneIdx = overview.gene_idx[i]
+      if (geneIdx < 0) continue
+      out.push({
+        idx: i,
+        geneIdx,
+        symbol: geneIndex.symbols[geneIdx] || geneIndex.ids[geneIdx],
+        ensg: geneIndex.ids[geneIdx],
+        chr: VARIANT_CHR_LABELS[overview.chr[i]],
+        pos: overview.pos[i],
+        lp: overview.lp[i],
+        dir: overview.dir[i],
+      })
+    }
+    return out
+  }, [overview, geneIndex])
+
+  // Slider domain: every row already clears `overview.keep_lp` by construction
+  // (see `rows` above), so this is really the ceiling of an already-significant
+  // range, not 0..max — same idea as the gene table's `maxLp`.
+  const maxLp = useMemo(
+    () => rows.reduce((m, r) => Math.max(m, r.lp), overview.keep_lp),
+    [rows, overview.keep_lp],
+  )
+
+  const filteredRows = useMemo(() => {
+    const q = geneQuery.trim().toLowerCase()
+    return rows.filter(
+      (r) =>
+        (!q || r.symbol.toLowerCase().includes(q) || r.ensg.toLowerCase().includes(q)) &&
+        (minLp <= 0 || r.lp >= minLp),
+    )
+  }, [rows, geneQuery, minLp])
+
+  const columns = useMemo<ColumnDef<VariantTableRow, any>[]>(
+    () => [
+      {
+        accessorKey: 'symbol',
+        header: 'Gene',
+        size: 120,
+        cell: (c) => (
+          <Link
+            to={`/gene/${c.row.original.ensg}`}
+            onClick={(e) => e.stopPropagation()}
+            className="font-medium text-brand hover:underline"
+          >
+            {c.getValue<string>()}
+          </Link>
+        ),
+      },
+      {
+        id: 'loc',
+        header: 'Location',
+        accessorFn: (r) => locusKey(r.chr, r.pos),
+        invertSorting: true,
+        size: 150,
+        // `fill` (own layout, no truncating wrapper) so the link icon keeps
+        // its pixels — same reasoning as GeneVariants' Variant column.
+        meta: { fill: true },
+        cell: (c) => {
+          const r = c.row.original
+          return (
+            <div className="flex w-full min-w-0 items-center gap-1 px-2 whitespace-nowrap">
+              <span className="tnum truncate text-ink-soft">
+                chr{r.chr}:{fmtPos(r.pos)}
+              </span>
+              <OnGenePageLink ensg={r.ensg} phenoId={pheno.id} pos={r.pos} lp={r.lp} />
+            </div>
+          )
+        },
+      },
+      {
+        id: 'lp',
+        header: 'P-value',
+        accessorFn: (r) => r.lp,
+        size: 120,
+        meta: { help: 'Association p-value from the cross-ancestry meta-analysis.' },
+        cell: (c) => (
+          <span className="tnum inline-flex items-center gap-1.5">
+            <SigDot lp={c.getValue<number>()} />
+            {fmtPLog(c.getValue<number>())}
+          </span>
+        ),
+      },
+      {
+        id: 'dir',
+        header: 'Beta',
+        accessorFn: (r) => r.dir,
+        size: 110,
+        // Matches the gene page's variant table's Beta column (same DirDot),
+        // but the overview only carries sign(β), not magnitude — so there's
+        // no number here, just the direction; open the gene page for the
+        // exact effect size.
+        meta: {
+          help: "Effect direction for the alternate allele (this decimated view has no β magnitude — open the gene page for the exact effect size).",
+        },
+        cell: (c) => {
+          const dir = c.getValue<number>()
+          const e = effectInfo(dir, pheno.type)
+          return (
+            <span className="inline-flex items-center gap-1.5">
+              <DirDot beta={dir} type={pheno.type} />
+              <span className="text-ink-soft">{e?.label ?? '—'}</span>
+            </span>
+          )
+        },
+      },
+    ],
+    [pheno.type, pheno.id],
+  )
+
+  const exportSpec = useMemo<TableExport<VariantTableRow>>(
+    () => ({
+      noun: 'variants',
+      filename: `brava_${slug(pheno.id)}_variants.tsv`,
+      columns: [
+        { header: 'phenotype_id', value: () => pheno.id },
+        { header: 'phenotype', value: () => pheno.name },
+        { header: 'gene', value: (r) => r.symbol },
+        { header: 'ensembl_gene_id', value: (r) => r.ensg },
+        { header: 'chrom', value: (r) => r.chr },
+        { header: 'pos', value: (r) => r.pos },
+        { header: 'P', value: (r) => exportP(r.lp) },
+        { header: 'neglog10P', value: (r) => r.lp },
+        { header: 'direction', value: (r) => (r.dir > 0 ? '+' : r.dir < 0 ? '-' : '') },
+      ] satisfies ExportColumn<VariantTableRow>[],
+    }),
+    [pheno],
+  )
+
+  const caption = (
+    <span>
+      Variants with P &gt; {fmtP(Math.pow(10, -overview.keep_lp))} excluded ·
+      cross-ancestry meta
+    </span>
+  )
+  const filterActive = geneQuery.trim() !== '' || minLp > 0
+
+  return (
+    <>
+      <div className="mb-1.5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line bg-surface px-3 py-1.5">
+        <SearchInput label="Gene" value={geneQuery} onChange={setGeneQuery} />
+        <FilterRow
+          label="P ≤"
+          kind="p"
+          min={0}
+          max={maxLp}
+          step={0.1}
+          stored={minLp}
+          onChange={setMinLp}
+        />
+        {filterActive && (
+          <button
+            type="button"
+            onClick={() => {
+              setGeneQuery('')
+              setMinLp(0)
+            }}
+            className="text-[11px] text-ink-faint hover:text-ink hover:underline"
+          >
+            reset
+          </button>
+        )}
+        <span className="ml-auto text-[11px] text-ink-faint">
+          {filteredRows.length.toLocaleString()}
+          {filteredRows.length !== rows.length &&
+            ` of ${rows.length.toLocaleString()}`}{' '}
+          variants · click a row for its forest
+        </span>
+      </div>
+      <VirtualTable
+        data={filteredRows}
+        columns={columns}
+        sorting={sorting}
+        onSortingChange={setSorting}
+        onRowClick={(r) =>
+          onOpenForest({ geneIdx: r.geneIdx, chr: r.chr, pos: r.pos, lp: r.lp })
+        }
+        onRowHover={(r) => onHoverRow?.(r ? r.idx : null)}
+        caption={caption}
+        exportSpec={exportSpec}
+        reservedRows={rows.length}
+      />
+    </>
   )
 }

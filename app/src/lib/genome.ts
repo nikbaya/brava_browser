@@ -7,12 +7,18 @@ const CHR_ORDER = [
   '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', 'X',
 ]
 
+// Matches pipeline/build_variants.py's CHROM_ORDER (1..22, X, Y) — the chr
+// index encoding used by variant/overview/{PHENO}.json.
+export const VARIANT_CHR_LABELS = [...CHR_ORDER, 'Y']
+
 export interface GenomeLayout {
   total: number
   offset: Map<string, number>
   ticks: { chr: string; center: number }[]
   /** Global linear coordinate for a gene by its index, or null if off-map. */
   pos: (geneIdx: number) => number | null
+  /** Global linear coordinate for a raw chromosome + bp position, or null if off-map. */
+  posAt: (chr: string, bp: number) => number | null
 }
 
 /**
@@ -38,13 +44,14 @@ export function genomeLayout(gi: GeneIndex): GenomeLayout {
     acc += len
   }
   const total = acc
-  const pos = (geneIdx: number): number | null => {
-    const c = gi.chr[geneIdx]
+  const posAt = (c: string, bp: number): number | null => {
     const off = offset.get(c)
     if (off == null) return null
-    return off + (gi.start[geneIdx] + gi.end[geneIdx]) / 2
+    return off + bp
   }
-  return { total, offset, ticks, pos }
+  const pos = (geneIdx: number): number | null =>
+    posAt(gi.chr[geneIdx], (gi.start[geneIdx] + gi.end[geneIdx]) / 2)
+  return { total, offset, ticks, pos, posAt }
 }
 
 /** Alternating chromosome band color (Manhattan convention). */

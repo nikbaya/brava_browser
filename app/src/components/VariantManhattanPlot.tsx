@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { scaleLinear } from 'd3-scale'
-import type { GeneIndex } from '../data/types'
-import { chrColor, genomeLayout } from '../lib/genome'
-import { fmtPLog3 } from '../lib/format'
-import { SIG_GENE_CAUCHY, SIG_GENE_MASK_BONFERRONI } from '../lib/constants'
-import type { PhenoRow } from '../lib/select'
+import type { GeneIndex, PhenotypeMeta, VariantOverview } from '../data/types'
+import { chrColor, genomeLayout, VARIANT_CHR_LABELS } from '../lib/genome'
+import { fmtPLog3, fmtPos } from '../lib/format'
+import { effectInfo } from '../lib/effect'
 
-interface Plotted extends PhenoRow {
+interface Plotted {
+  idx: number // index into the overview's parallel arrays
   x: number // global genome coordinate
   y: number // -log10 p
+  chr: string
+  bp: number
+  dir: number
+  geneIdx: number // -1 if no overlapping gene
 }
 
 interface Hover {
@@ -19,27 +23,38 @@ interface Hover {
 
 const M = { top: 12, right: 16, bottom: 18, left: 46 }
 const HEIGHT = 240
-const R = 2.2
+const R = 1.6
 const HIGHLIGHT_R = R + 4.5
 const HIGHLIGHT_COLOR = '#15202b' // ink — matches LocusZoom's selected-variant ring
 
 /**
- * Canvas Manhattan plot. Renders up to ~20k points smoothly and hit-tests on
- * hover with a linear scan (fast at this point count). Clicking a point calls
- * onSelect with the gene index.
+ * Canvas Manhattan plot over a pixel-decimated genome-wide variant overview
+ * (variant/overview/{PHENO}.json — see docs/variant-v2-design.md item 7).
+ * Shares its genome layout with the gene-level ManhattanPlot so both axes
+ * line up when toggling between the two. Clicking a point with a resolved
+ * gene calls onSelect; intergenic points (no gene overlap) aren't clickable.
  */
-export default function ManhattanPlot({
-  rows,
+export interface VariantPick {
+  geneIdx: number
+  chr: string
+  pos: number
+  lp: number
+}
+
+export default function VariantManhattanPlot({
+  overview,
   geneIndex,
+  traitType,
   onSelect,
-  highlightGeneIdx,
+  highlightIdx,
 }: {
-  rows: PhenoRow[]
+  overview: VariantOverview
   geneIndex: GeneIndex
-  onSelect: (geneIdx: number) => void
-  /** Draw a subtle dashed ring around this gene's point (e.g. a hovered table
-   *  row), independent of the canvas's own mouse-driven hover state. */
-  highlightGeneIdx?: number | null
+  traitType: PhenotypeMeta['type']
+  onSelect: (pick: VariantPick) => void
+  /** Draw a subtle dashed ring around this overview index (e.g. a hovered
+   *  table row), independent of the canvas's own mouse-driven hover state. */
+  highlightIdx?: number | null
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -48,17 +63,25 @@ export default function ManhattanPlot({
 
   const layout = useMemo(() => genomeLayout(geneIndex), [geneIndex])
 
-  // Project rows into plot space once per data change.
   const points = useMemo<Plotted[]>(() => {
     const out: Plotted[] = []
-    for (const r of rows) {
-      if (r.lp == null) continue
-      const x = layout.pos(r.geneIdx)
+    for (let i = 0; i < overview.n; i++) {
+      const chr = VARIANT_CHR_LABELS[overview.chr[i]]
+      const bp = overview.pos[i]
+      const x = layout.posAt(chr, bp)
       if (x == null) continue
-      out.push({ ...r, x, y: r.lp })
+      out.push({
+        idx: i,
+        x,
+        y: overview.lp[i],
+        chr,
+        bp,
+        dir: overview.dir[i],
+        geneIdx: overview.gene_idx[i],
+      })
     }
     return out
-  }, [rows, layout])
+  }, [overview, layout])
 
   const maxY = useMemo(
     () => Math.max(8, ...points.map((p) => p.y)) * 1.05,
@@ -74,7 +97,6 @@ export default function ManhattanPlot({
     [maxY],
   )
 
-  // Track container width.
   useEffect(() => {
     const el = wrapRef.current
     if (!el) return
@@ -84,7 +106,6 @@ export default function ManhattanPlot({
     return () => ro.disconnect()
   }, [])
 
-  // Draw.
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -95,7 +116,6 @@ export default function ManhattanPlot({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, width, HEIGHT)
 
-    // Axes + gridlines
     ctx.strokeStyle = '#e3e8ee'
     ctx.fillStyle = '#8794a1'
     ctx.font = '11px system-ui'
@@ -110,35 +130,16 @@ export default function ManhattanPlot({
       ctx.fillText(String(t), M.left - 6, y + 3)
     }
 
-    // Significance thresholds (distinct colors; explained in the legend below)
-    const drawThresh = (p: number, color: string, dash: number[]) => {
-      const y = yScale(-Math.log10(p))
-      if (y < M.top || y > HEIGHT - M.bottom) return
-      ctx.save()
-      ctx.strokeStyle = color
-      ctx.setLineDash(dash)
-      ctx.beginPath()
-      ctx.moveTo(M.left, y)
-      ctx.lineTo(width - M.right, y)
-      ctx.stroke()
-      ctx.restore()
-    }
-    // Okabe-Ito colorblind-safe palette + distinct dash patterns (long-dash vs
-    // fine-dots) so the two lines are separable by pattern alone.
-    drawThresh(SIG_GENE_CAUCHY, '#d55e00', [7, 4])
-    drawThresh(SIG_GENE_MASK_BONFERRONI, '#0072b2', [2, 4])
-
-    // Points
     for (const p of points) {
       ctx.beginPath()
-      ctx.fillStyle = chrColor(geneIndex.chr[p.geneIdx])
+      ctx.fillStyle = chrColor(p.chr)
       ctx.arc(xScale(p.x), yScale(p.y), R, 0, Math.PI * 2)
       ctx.fill()
     }
 
     // Highlight ring for a row hovered outside the canvas (e.g. the table).
-    if (highlightGeneIdx != null) {
-      const hp = points.find((p) => p.geneIdx === highlightGeneIdx)
+    if (highlightIdx != null) {
+      const hp = points.find((p) => p.idx === highlightIdx)
       if (hp) {
         ctx.beginPath()
         ctx.strokeStyle = HIGHLIGHT_COLOR
@@ -148,23 +149,21 @@ export default function ManhattanPlot({
       }
     }
 
-    // Chromosome tick labels
     ctx.fillStyle = '#51606e'
     ctx.textAlign = 'center'
     for (const tk of layout.ticks) {
       ctx.fillText(tk.chr, xScale(tk.center), HEIGHT - 5)
     }
 
-    // y-axis label
     ctx.save()
     ctx.translate(12, HEIGHT / 2)
     ctx.rotate(-Math.PI / 2)
     ctx.fillStyle = '#51606e'
     ctx.fillText('-log₁₀(p)', 0, 0)
     ctx.restore()
-  }, [points, width, maxY, xScale, yScale, layout, geneIndex, highlightGeneIdx])
+  }, [points, width, maxY, xScale, yScale, layout, highlightIdx])
 
-  // Hit-test on hover (linear scan; ~20k pts is fine).
+  // Hit-test on hover (linear scan; tens of thousands of decimated points).
   const onMove = (e: React.MouseEvent) => {
     const rect = canvasRef.current!.getBoundingClientRect()
     const mx = e.clientX - rect.left
@@ -183,30 +182,39 @@ export default function ManhattanPlot({
     setHover(best ? { px: mx, py: my, row: best } : null)
   }
 
+  const hoverPick: VariantPick | null =
+    hover && hover.row.geneIdx >= 0
+      ? { geneIdx: hover.row.geneIdx, chr: hover.row.chr, pos: hover.row.bp, lp: hover.row.y }
+      : null
+  const hoverEffect = hover ? effectInfo(hover.row.dir, traitType) : null
+
   return (
     <div ref={wrapRef} className="relative w-full">
       <canvas
         ref={canvasRef}
         style={{ width, height: HEIGHT }}
-        className="cursor-pointer"
+        className={hoverPick ? 'cursor-pointer' : 'cursor-default'}
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
-        onClick={() => hover && onSelect(hover.row.geneIdx)}
+        onClick={() => hoverPick && onSelect(hoverPick)}
       />
       {hover && (
         <div
           className="pointer-events-none absolute z-10 rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-lg"
           style={{
-            left: Math.min(hover.px + 12, width - 160),
+            left: Math.min(hover.px + 12, width - 170),
             top: hover.py + 12,
           }}
         >
           <div className="font-semibold text-ink">
-            {geneIndex.symbols[hover.row.geneIdx] || geneIndex.ids[hover.row.geneIdx]}
+            {hoverPick
+              ? geneIndex.symbols[hoverPick.geneIdx] || geneIndex.ids[hoverPick.geneIdx]
+              : 'No overlapping gene'}
           </div>
           <div className="tnum text-ink-soft">
-            chr{geneIndex.chr[hover.row.geneIdx]} · p = {fmtPLog3(hover.row.y)}
+            chr{hover.row.chr}:{fmtPos(hover.row.bp)} · p = {fmtPLog3(hover.row.y)}
           </div>
+          {hoverEffect && <div className="text-ink-faint">{hoverEffect.label}</div>}
         </div>
       )}
     </div>

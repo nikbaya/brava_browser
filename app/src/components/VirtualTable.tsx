@@ -57,6 +57,7 @@ export default function VirtualTable<T>({
   onSortingChange,
   rowHeight = 30,
   onRowClick,
+  onRowHover,
   caption,
   exportSpec,
   reservedRows,
@@ -68,6 +69,12 @@ export default function VirtualTable<T>({
   onSortingChange: (s: SortingState) => void
   rowHeight?: number
   onRowClick?: (row: T) => void
+  /**
+   * Fires on pointer enter/leave of a row (null on leave). For a linked
+   * Manhattan plot: hovering a row highlights that point without needing the
+   * mouse over the plot itself.
+   */
+  onRowHover?: (row: T | null) => void
   /**
    * Summary (e.g. active filters) shown in a bar above the column headers. The
    * bar is outside the scroll region, so it stays put through both vertical and
@@ -265,6 +272,8 @@ export default function VirtualTable<T>({
                 <div
                   key={row.id}
                   onClick={() => onRowClick?.(row.original)}
+                  onMouseEnter={() => onRowHover?.(row.original)}
+                  onMouseLeave={() => onRowHover?.(null)}
                   style={{
                     transform: `translateY(${vi.start}px)`,
                     height: rowHeight,
