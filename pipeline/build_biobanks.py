@@ -40,9 +40,13 @@ COORDS: dict[str, tuple[float, float]] = {
 # Table S3 swaps the names of these two US biobanks (confirmed with the
 # consortium): pmbb is Penn Medicine, mgbb is Mass General Brigham. Override the
 # S3 "Biobank" text so the catalogue is correct.
+#
+# bbj is a capitalisation fix, not a correction: the project styles itself
+# "BioBank Japan".
 NAME_OVERRIDE: dict[str, str] = {
     "pmbb": "Penn Medicine BioBank",
     "mgbb": "Mass General Brigham Biobank",
+    "bbj": "BioBank Japan",
 }
 
 # Country name (as written in Table S3) -> ISO-3166 alpha-2 (for the flag emoji).
