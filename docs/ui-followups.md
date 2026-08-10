@@ -444,3 +444,66 @@ gzips down to very little.
 - **Tag or filter or both?** A dot strip on every row is a lot of ink in a dense
   table; a single "EUR-only / multi-ancestry" marker plus a filter may read
   better. Worth mocking both before committing to a column.
+
+## Search: map lay / synonym terms to the phenotypes they mean
+
+The header search
+([IndexContext.tsx](../app/src/data/IndexContext.tsx)) is a case-insensitive
+**substring** match on a phenotype's name, id and category (and on gene symbol /
+ENSG). That works when the user already types our wording and fails completely
+otherwise — measured against the shipped `phenotypes.json`, all of these return
+**zero** results today:
+
+| typed | means | today |
+|---|---|---|
+| heart attack, myocardial infarction | CAD | — |
+| high blood pressure | HTN | — |
+| colorectal, bowel cancer | ColonRectCanc ("Colon and rectum cancer") | — |
+| kidney stones, stones | Urolith | — |
+| blood clot, DVT, PE | VTE | — |
+| emphysema | COPD | — |
+| Crohn, ulcerative colitis | IBD | — |
+| obesity | BMI / WHRBMI | — |
+| liver enzymes | ALT / AST | — |
+| inflammation | CRP | — |
+| heavy periods | EFRMB_F | — |
+| womb cancer | BenCervUterNeo_F | — |
+| osteoarthritis | HipRep (its usual indication) | — |
+
+Note `colorectal` in particular: it isn't a lay term at all, it's the standard
+clinical word for a phenotype we happen to name "Colon and rectum cancer".
+
+### Shape
+
+A curated **alias list per phenotype**, bundled — not embeddings. This is a
+static site with no backend, the vocabulary is 44 phenotypes, and a precomputed
+embedding index would be both heavier and less predictable than a few hundred
+hand-checked strings. Emit it from
+[build_phenotypes.py](../pipeline/build_phenotypes.py) as an `aliases` array on
+each phenotype (a curated dict in the script, like `COORDS` / `NAME_OVERRIDE` in
+[build_biobanks.py](../pipeline/build_biobanks.py)), so it ships in
+`meta/phenotypes.json` — bundled with the app, zero R2 cost, nothing to
+re-upload.
+
+Then in `search`: match aliases too, but rank alias hits **below** name/id
+prefix hits, and keep displaying the canonical name in the result row. Probably
+show what matched ("heart attack → Coronary artery disease") so a lay term
+doesn't look like it silently returned something else.
+
+### Get the terms from the curation, then review them
+
+Prefer seeding from the phenotype definitions in
+[BRaVa_curation](https://github.com/BRaVa-genetics/BRaVa_curation) — the ICD-10 /
+phecode descriptions behind each trait are real clinical vocabulary and are
+defensible as sourced, rather than invented here. Hand-curation on top for the
+genuinely lay terms.
+
+**These need a consortium review before shipping.** Several of the pairs above
+are near-synonyms rather than equivalences — a myocardial infarction is an event,
+CAD is the disease; osteoarthritis is the usual indication for a hip replacement,
+not the phenotype. That's fine for *finding* a trait and wrong as a *label*, so
+aliases must stay strictly in the search index: never rendered as a subtitle,
+never in a page title, never in an export.
+
+Same mechanism would carry gene-symbol aliases (previous/withdrawn HGNC symbols),
+which the Ensembl GTF the gene index is built from already has.
