@@ -382,3 +382,65 @@ Fix direction: ensure the divider (left rule) is drawn on the same box/weight
 for group headers, leaf headers, and body cells — e.g. move the divider onto the
 flex item itself (consistently) rather than the padded inner wrapper, or share a
 single border-position helper across header + body.
+
+## Phenotype page, variant-level: tag each row with the ancestries behind it
+
+Requested after the variant Manhattan shipped. On the phenotype page's
+variant-level view a row is currently just chr/pos, p and effect direction —
+nothing says whether that signal came from every stratum or from EUR alone,
+which for a consortium whose whole point is ancestral diversity is the first
+thing a reader wants to know. Proposed: a compact ancestry tag per row (dot
+strip or chips in `ANCESTRY_COLOR`), and probably a filter built on it
+("variants with a non-EUR contributing stratum").
+
+### What the data says today
+
+`variant/overview/{PHENO}.json` — the file the view reads — carries only
+`chr`, `pos`, `lp`, `dir`, `gene_idx` (`Overview.payload` in
+[build_variants.py](../pipeline/build_variants.py)), and it is built from the
+**meta** VCF only. So there is nothing to tag with; this needs a pipeline
+change, unlike the gene-page variant table, where the per-gene meta file
+already carries `ed` per variant.
+
+### Where the ancestries come from
+
+Exactly the `ED` decoding worked out under *Option C* above — that research
+applies unchanged here, and it's the reason this is worth doing:
+
+- `ED` is one character per **biobank × ancestry stratum**, and the stratum
+  identities/order are recoverable from each meta VCF's `##bcftools_metalCommand`
+  header (validated across all 44 phenotypes / 875 strata; summing the `+`/`-`
+  strata reproduces `NS`/`NC`/`NE` exactly).
+- So per variant we know precisely which strata contributed, hence which
+  ancestries — collapsing biobank × ancestry down to the 5 superpops.
+
+Same caveat as there: this is *which strata carried the variant*, cohort-level,
+not per-ancestry allele counts. The tag should read "ancestries represented",
+never "ancestry-specific frequency".
+
+### Cost — small, and nothing like a full re-upload
+
+Add one parallel `anc` array to the overview payload: a 5-bit mask per row
+(EUR/AFR/AMR/EAS/SAS → 0–31), which is a low-cardinality integer column and so
+gzips down to very little.
+
+- **Build:** only pass 1 emits the overview, and only for the meta stratum, so
+  this does *not* need the full `full-variants` run. Worth adding an
+  `--overview-only` mode that streams just the 44 meta VCFs and skips the gene
+  stash/shard/merge entirely — that's the difference between minutes and the
+  ~1–2 h full ETL.
+- **R2:** `v2/variant/overview/` is **44 objects**, one per phenotype. Re-uploading
+  them is ~44 Class A ops against the 1M/month ceiling — i.e. free. This is the
+  key point: the 176k-object variant tree is untouched.
+- Also emit the bundled `meta/variant_studies.json` from Option C while in
+  there (kilobytes, ships with the app, zero Class B cost); the gene-page
+  N-meter work wants the same file, so the two items share a build step.
+
+### Decide before building
+
+- **Superpops or strata?** A 5-bit mask loses "which biobank", which the gene
+  page's per-variant view could still show from `ed`. Simplest is the mask here
+  and full detail on the gene page.
+- **Tag or filter or both?** A dot strip on every row is a lot of ink in a dense
+  table; a single "EUR-only / multi-ancestry" marker plus a filter may read
+  better. Worth mocking both before committing to a column.
