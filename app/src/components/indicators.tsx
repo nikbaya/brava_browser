@@ -3,15 +3,17 @@ import {
   SIG_GENE_MASK_BONFERRONI,
 } from '../lib/constants'
 import { effectInfo } from '../lib/effect'
+import { fmtP } from '../lib/format'
 import type { PhenotypeMeta } from '../data/types'
 
 const LP_GENE = -Math.log10(SIG_GENE_CAUCHY) // ≈ 5.60
 const LP_SUGGEST = 4 // p < 1e-4
+const SIG_SUGGEST = Math.pow(10, -LP_SUGGEST)
 
 /**
  * Significance indicator dot, keyed off -log10(p):
- *   green  = past gene-level significance (P < 2.5×10⁻⁶)
- *   amber  = suggestive (P < 1×10⁻⁴)
+ *   green  = past gene-level significance (P < 2.5e-6)
+ *   amber  = suggestive (P < 1e-4)
  *   hollow = not significant
  */
 // Same semantic hues, alpha-softened so they read lighter than the bold,
@@ -159,13 +161,13 @@ export function SigDot({ lp }: { lp: number | null | undefined }) {
   if (lp != null) {
     if (lp >= LP_GENE) {
       cls = SIG_GENE_COLOR
-      title = 'Gene-level significant (P < 2.5×10⁻⁶)'
+      title = `Gene-level significant (P < ${fmtP(SIG_GENE_CAUCHY)})`
     } else if (lp >= -Math.log10(SIG_GENE_MASK_BONFERRONI)) {
       cls = SIG_MASK_COLOR
-      title = 'Gene-mask significant (P < 1.39×10⁻⁷)'
+      title = `Gene-mask significant (P < ${fmtP(SIG_GENE_MASK_BONFERRONI)})`
     } else if (lp >= LP_SUGGEST) {
       cls = SIG_SUGGEST_COLOR
-      title = 'Suggestive (P < 1×10⁻⁴)'
+      title = `Suggestive (P < ${fmtP(SIG_SUGGEST)})`
     }
   }
   return (
