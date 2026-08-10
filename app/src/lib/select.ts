@@ -167,12 +167,19 @@ export function variantAncRows(
   return out
 }
 
-/** Effect estimate for one variant in one ancestry, for the forest plot. */
+/**
+ * Effect estimate for one variant in one ancestry, for the forest plot.
+ * `ne`/`i2` are meta-only (undefined on every non-meta row): the per-ancestry
+ * `.anc.json` slices carry just beta/se/lp, so there's nothing to put there —
+ * same reasoning as the variant table dropping those columns for a stratum.
+ */
 export interface VariantForestRow {
   ancIdx: number
   beta: number | null
   se: number | null
   lp: number | null
+  ne?: number | null
+  i2?: number | null
 }
 
 /**
@@ -201,6 +208,8 @@ export function variantForest(
           beta: metaSl.beta[i] ?? null,
           se: metaSl.se[i] ?? null,
           lp: metaSl.lp[i] ?? null,
+          ne: metaSl.ne[i] ?? null,
+          i2: metaSl.i2[i] ?? null,
         })
         break
       }

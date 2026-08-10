@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { scaleLinear } from 'd3-scale'
 import { ANCESTRIES, ANCESTRY_COLOR, ANCESTRY_META, type Ancestry } from '../lib/constants'
-import { fmtBeta, fmtBeta3, fmtPLog, fmtPLog3 } from '../lib/format'
+import { fmtBeta, fmtBeta3, fmtCount, fmtPLog, fmtPLog3 } from '../lib/format'
 import { figureFilename } from '../lib/exportImage'
 import { bodyFont, textWidth } from '../lib/textWidth'
 import type { PhenotypeMeta } from '../data/types'
@@ -18,14 +18,25 @@ const ROW_H = 24
 // instead of squeezing the CIs into nothing.
 const MIN_PLOT = 250
 
+/** " · N=228k · I²=0%" appended to the meta row's label; "" for a stratum row
+ *  (`ne`/`i2` are meta-only, see `VariantForestRow`). Shared by the label-width
+ *  measurement and the actual SVG text so the two can't drift apart. */
+function metaSuffix(r: VariantForestRow & { anc: Ancestry }): string {
+  if (r.anc !== 'All' || r.ne == null) return ''
+  const i2 = r.i2 != null ? `  · I²=${Math.round(r.i2)}%` : ''
+  return `  · N=${fmtCount(r.ne)}${i2}`
+}
+
 /**
  * Per-variant multi-ancestry forest: single-variant meta β with 95% CI for each
  * ancestry, `All` last as a diamond. Distinct from the gene-level ForestPlot
  * (which shows Burden/SKAT-O); here there is one p-value per stratum.
  *
  * Hovering a row highlights it and opens a tooltip with the full-precision
- * numbers. Note the per-ancestry variant slices carry only beta/se/lp — no
- * N, I² or Cochran's Q — so unlike the gene-level forest there is no N column.
+ * numbers. The per-ancestry variant slices carry only beta/se/lp — no N or
+ * I² — so unlike the gene-level forest there's no dedicated N column; the
+ * meta ("All") row's own slice does carry both, though, so they're appended
+ * to just that row's label instead (see `VariantForestRow.ne`/`.i2`).
  */
 export default function VariantForest({
   rows,
@@ -88,9 +99,11 @@ export default function VariantForest({
     () =>
       ordered.map((r) => {
         const [lo, hi] = ci(r.beta!, r.se)
-        return r.se == null
-          ? fmtBeta(r.beta)
-          : `${fmtBeta(r.beta)}  [${fmtBeta(lo)}, ${fmtBeta(hi)}] · p=${fmtPLog(r.lp)}`
+        const base =
+          r.se == null
+            ? fmtBeta(r.beta)
+            : `${fmtBeta(r.beta)}  [${fmtBeta(lo)}, ${fmtBeta(hi)}] · p=${fmtPLog(r.lp)}`
+        return r.anc === 'All' ? base + metaSuffix(r) : base
       }),
     [ordered],
   )
@@ -230,6 +243,7 @@ export default function VariantForest({
                     {'  '}[{fmtBeta(lo)}, {fmtBeta(hi)}] · p={fmtPLog(r.lp)}
                   </tspan>
                 )}
+                {isMeta && <tspan className="fill-ink-faint">{metaSuffix(r)}</tspan>}
               </text>
             </g>
           )
@@ -247,7 +261,14 @@ function Tooltip({
   row,
   ci,
 }: {
-  row: { anc: Ancestry; beta: number | null; se: number | null; lp: number | null }
+  row: {
+    anc: Ancestry
+    beta: number | null
+    se: number | null
+    lp: number | null
+    ne?: number | null
+    i2?: number | null
+  }
   ci: [number, number]
 }) {
   return (
@@ -257,6 +278,12 @@ function Tooltip({
         β = {fmtBeta3(row.beta)}
         {row.se != null && <> ± {fmtBeta3(row.se)}</>}
       </div>
+      {row.ne != null && (
+        <div className="tnum text-ink-faint">
+          N (eff.) = {fmtCount(row.ne)}
+          {row.i2 != null && <> · I² = {Math.round(row.i2)}%</>}
+        </div>
+      )}
       {row.se != null && (
         <div className="tnum text-ink-faint">
           95% CI [{fmtBeta3(ci[0])}, {fmtBeta3(ci[1])}]
