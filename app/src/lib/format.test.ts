@@ -174,16 +174,22 @@ describe('fmtCount', () => {
 
 describe('biobankShort', () => {
   // The real catalogue (app/public/data/meta/biobanks.json), so the rule is
-  // pinned against the names the legend actually renders.
-  it('keeps names that fit a legend row', () => {
-    expect(biobankShort('uk-biobank', 'UK Biobank')).toBe('UK Biobank')
-    expect(biobankShort('all-of-us', 'All of Us')).toBe('All of Us')
-    expect(biobankShort('gel', 'Genomics England')).toBe('Genomics England')
-    expect(biobankShort('bbj', 'BioBank Japan')).toBe('BioBank Japan')
+  // pinned against the labels the legend actually renders.
+  it('uses the abbreviation, not the name', () => {
+    expect(biobankShort('uk-biobank', 'UK Biobank')).toBe('UKB')
+    expect(biobankShort('all-of-us', 'All of Us')).toBe('AoU')
+    expect(biobankShort('genes-and-health', 'Genes & Health')).toBe('G&H')
+    expect(biobankShort('biome', 'BioMe')).toBe('BioMe')
   })
-  it("falls back to the biobank's own ID when the name is too long", () => {
+  it("derives it from the biobank's own ID where that is the acronym", () => {
     expect(biobankShort('ccpm', 'Colorado Center for Personalized Medicine')).toBe('CCPM')
     expect(biobankShort('mgbb', 'Mass General Brigham Biobank')).toBe('MGBB')
     expect(biobankShort('pmbb', 'Penn Medicine BioBank')).toBe('PMBB')
+    expect(biobankShort('bbj', 'BioBank Japan')).toBe('BBJ')
+    expect(biobankShort('gel', 'Genomics England')).toBe('GEL')
+    expect(biobankShort('egcut', 'Estonian Biobank')).toBe('EGCUT')
+  })
+  it('falls back to the name for an unknown multi-word id', () => {
+    expect(biobankShort('some-new-biobank', 'Some New Biobank')).toBe('Some New Biobank')
   })
 })

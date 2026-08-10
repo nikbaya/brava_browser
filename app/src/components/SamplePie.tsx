@@ -122,10 +122,13 @@ function SliceLegend({
     // already says. This is the one width test — a pie asked for a legend
     // renders in row layout at every width, so hiding the list here collapses
     // it back to exactly the legend-less pie.
-    // w-36 is set by the longest name kept in full (`biobankShort`'s 18-char
-    // cut-off, i.e. "Genomics England") plus the swatch and the percentage.
-    // Five of these units still fit one row at the `xl` breakpoint itself.
-    <ul className="hidden w-36 shrink-0 space-y-px text-left text-[10px] leading-tight xl:block">
+    // No fixed width: each legend shrinks to its own widest row, so a pie whose
+    // slices are all short labels doesn't reserve space for the longest label
+    // anywhere on the row. `ml-auto` on the percentage still right-aligns it
+    // *within* that width, keeping a clean column per legend without padding
+    // the ul out. Together with the abbreviations this is what lets all seven
+    // pies share one line.
+    <ul className="hidden shrink-0 space-y-px text-left text-[10px] leading-tight whitespace-nowrap xl:block">
       {shown.map((s) => (
         <li
           key={s.key}
@@ -138,8 +141,8 @@ function SliceLegend({
             style={{ backgroundColor: s.fill }}
             aria-hidden="true"
           />
-          <span className="truncate text-ink-soft">{s.label}</span>
-          <span className="tnum ml-auto pl-1 text-ink-faint">
+          <span className="text-ink-soft">{s.label}</span>
+          <span className="tnum ml-auto pl-1.5 text-ink-faint">
             {Math.round((100 * s.n) / total)}%
           </span>
         </li>

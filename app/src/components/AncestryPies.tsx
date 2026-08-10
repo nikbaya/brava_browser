@@ -157,12 +157,11 @@ export default function AncestryPies({
         </span>
       </h2>
 
-      {/* Below `xl` the two groups sit side by side, split by a vertical rule,
-          and the pies are bare. From `xl` each pie gains a legend (see
-          SliceLegend), which makes the strata group too wide to share a row —
-          so the groups stack and the rule turns horizontal rather than leaving
-          a stranded left border on a wrapped row. */}
-      <div className="flex flex-wrap items-stretch gap-x-1 gap-y-2 xl:flex-col xl:items-start">
+      {/* From `xl` each pie gains a legend (see SliceLegend). Both groups still
+          share one row at that width — the abbreviated labels and the
+          content-sized legends are sized so all seven pies fit — so the
+          side-by-side layout and its vertical rule are unchanged. */}
+      <div className="flex flex-wrap items-stretch gap-x-1 gap-y-2">
         <div className="flex flex-col">
           <span className="mb-0.5 pl-2 text-[10px] font-medium tracking-wide text-ink-faint uppercase">
             Per-ancestry strata
@@ -173,7 +172,7 @@ export default function AncestryPies({
         </div>
 
         {built.metaPies.length > 0 && (
-          <div className="flex flex-col border-l border-line pl-2 xl:self-stretch xl:border-l-0 xl:border-t xl:pt-2 xl:pl-0">
+          <div className="flex flex-col border-l border-line pl-2">
             <span className="mb-0.5 pl-2 text-[10px] font-medium tracking-wide text-ink-faint uppercase">
               Meta-analyses
             </span>

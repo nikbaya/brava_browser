@@ -137,20 +137,32 @@ export function fmtCount(n: number | null | undefined): string {
 /** Genomic position with thousands separators. */
 export const fmtPos = format(',')
 
-/** Longest biobank name a compact legend row can hold before it needs the ID. */
-const BIOBANK_NAME_MAX = 18
+/**
+ * Biobanks whose usual abbreviation isn't just their ID upper-cased. Everything
+ * else — ccpm, pmbb, mgbb, bbj, gel, egcut — already *is* its own acronym in
+ * Table S3's "Biobank ID" column.
+ */
+const BIOBANK_ABBREV: Record<string, string> = {
+  'uk-biobank': 'UKB',
+  'all-of-us': 'AoU',
+  'genes-and-health': 'G&H',
+  biome: 'BioMe', // not an acronym; "BIOME" would just look wrong
+}
 
 /**
- * Biobank label for a narrow legend: the full name when it fits, otherwise the
- * biobank's own **ID** upper-cased — `ccpm` → `CCPM`, `pmbb` → `PMBB`.
+ * Biobank label for a dense legend: the abbreviation, not the name.
  *
- * Those IDs are Table S3's "Biobank ID" column, i.e. each biobank's own
- * abbreviation, so nothing here is invented; a truncated "Colorado Center for…"
- * would be both longer and less recognisable. Names that already fit (UK
- * Biobank, All of Us, BioMe, Genomics England) are left alone rather than
- * abbreviated for consistency's sake — the point is legibility, not uniformity.
- * The full name is always a hover away, in the slice tooltip.
+ * Names are the length of a sentence ("Colorado Center for Personalized
+ * Medicine"), and a legend sized to hold them costs more width than the pie it
+ * annotates — with seven pies on the row, that's the difference between one
+ * line and two. The paper itself writes UKB, BBJ, GEL and G&H, and the rest are
+ * each biobank's own initials, so nothing here is a coinage. The full name is
+ * always one hover away, in the slice tooltip.
  */
 export function biobankShort(id: string, name: string): string {
-  return name.length <= BIOBANK_NAME_MAX ? name : id.toUpperCase()
+  if (BIOBANK_ABBREV[id]) return BIOBANK_ABBREV[id]
+  // A new biobank joining with a multi-word id has no acronym to derive
+  // ("genes-and-health" → "GENES-AND-HEALTH"), so fall back to its name and
+  // let the row be wide rather than shouting nonsense.
+  return id.includes('-') ? name : id.toUpperCase()
 }
