@@ -485,6 +485,7 @@ function GeneTable({
   const { phenotypes } = useIndex()
   const [sorting, setSorting] = useState<SortingState>([{ id: 'p0', desc: true }])
   const [tableFilter, setTableFilter] = useState<TableFilter>(NO_TABLE_FILTER)
+  const [phenoQuery, setPhenoQuery] = useState('')
 
   // One row per phenotype, carrying every ancestry's P + β (mask/maf/test).
   const allRows = useMemo<GTGridRow[]>(() => {
@@ -539,13 +540,20 @@ function GeneTable({
     return m
   }, [allRows])
 
-  const rows = useMemo(
-    () =>
-      allRows.filter((r) =>
-        passesTableFilter(tableFilter, r.lp[ancIdx], r.beta[ancIdx]),
-      ),
-    [allRows, tableFilter, ancIdx],
-  )
+  const rows = useMemo(() => {
+    const q = phenoQuery.trim().toLowerCase()
+    return allRows.filter((r) => {
+      if (!passesTableFilter(tableFilter, r.lp[ancIdx], r.beta[ancIdx])) return false
+      if (!q) return true
+      // Name, id and category — the same three fields the header search matches
+      // a phenotype on, so a query that finds a trait up there finds it here.
+      return (
+        r.phenoName.toLowerCase().includes(q) ||
+        r.phenoId.toLowerCase().includes(q) ||
+        r.category.toLowerCase().includes(q)
+      )
+    })
+  }, [allRows, tableFilter, ancIdx, phenoQuery])
 
   const columns = useMemo<ColumnDef<GTGridRow, any>[]>(
     () => [
@@ -617,6 +625,9 @@ function GeneTable({
           onChange={setTableFilter}
           maxLp={maxLp}
           maxAbsBeta={maxAbsBeta}
+          search={phenoQuery}
+          onSearchChange={setPhenoQuery}
+          searchLabel="Phenotype"
         >
           {rows.length.toLocaleString()}
           {rows.length !== allRows.length &&
