@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { ANCESTRY_COLOR, ANCESTRY_META, SUPERPOPS, type Ancestry } from '../lib/constants'
+import { biobankShort } from '../lib/format'
 import type { Biobank } from '../data/types'
 import SamplePie, {
   NON_EUR,
@@ -47,6 +48,7 @@ export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
         n: r.n,
         fill: lighten(base, rows.length > 1 ? (i / (rows.length - 1)) * 0.62 : 0),
         title: `${r.name}: ${fmtN(r.n)} (${fmtPct(r.n / total)})`,
+        label: biobankShort(r.id, r.name),
       }))
       return { anc: a as Ancestry, slices, total, radius: scaledRadius(total, strataMax) }
     })
@@ -55,7 +57,13 @@ export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
     const metaSlice = (keys: readonly string[]): Slice[] =>
       keys
         .filter((a) => byAnc.get(a)?.length)
-        .map((a) => ({ key: a, n: ancTotal(a), fill: ANCESTRY_COLOR[a as Ancestry], title: '' }))
+        .map((a) => ({
+          key: a,
+          n: ancTotal(a),
+          fill: ANCESTRY_COLOR[a as Ancestry],
+          title: '',
+          label: ANCESTRY_META[a as Ancestry].label,
+        }))
         .sort((x, y) => y.n - x.n)
     const metaDefs: { anc: Ancestry; keys: readonly string[] }[] = [
       { anc: 'All', keys: SUPERPOPS },
@@ -85,6 +93,7 @@ export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
       total={p.total}
       radius={p.radius}
       interactive={false}
+      legend
       onHover={show}
       onLeave={hide}
     />
@@ -97,7 +106,9 @@ export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
           <span className="mb-0.5 pl-2 text-[11px] font-medium tracking-wide text-ink-faint uppercase">
             Per-ancestry strata
           </span>
-          <div className="flex flex-wrap items-end gap-1">{stratumPies.map(render)}</div>
+          <div className="flex flex-wrap items-end gap-1 xl:items-start">
+            {stratumPies.map(render)}
+          </div>
         </div>
 
         {metaPies.length > 0 && (
@@ -105,7 +116,9 @@ export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
             <span className="mb-0.5 pl-2 text-[11px] font-medium tracking-wide text-ink-faint uppercase">
               Meta-analyses
             </span>
-            <div className="flex flex-wrap items-end gap-1">{metaPies.map(render)}</div>
+            <div className="flex flex-wrap items-end gap-1 xl:items-start">
+              {metaPies.map(render)}
+            </div>
           </div>
         )}
       </div>
