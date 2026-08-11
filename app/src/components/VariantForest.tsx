@@ -130,7 +130,7 @@ export default function VariantForest({
   return (
     <div ref={wrapRef} className="relative w-full overflow-x-auto">
       <div className="flex items-baseline justify-between gap-x-3 px-1 pb-1">
-        <span className="text-[11px] text-ink-faint">
+        <span className="text-xs text-ink-faint">
           Single-variant meta {axisLabel} ± 95% CI · hover a stratum for detail
         </span>
         <SaveFigureButton
@@ -162,7 +162,7 @@ export default function VariantForest({
             x={x(t)}
             y={height - 8}
             textAnchor="middle"
-            className="fill-ink-faint text-[10px] tabular-nums"
+            className="fill-ink-faint text-[11px] tabular-nums"
           >
             {t}
           </text>
@@ -207,7 +207,7 @@ export default function VariantForest({
                 y={cy}
                 textAnchor="end"
                 dominantBaseline="central"
-                className={`text-[11px] ${isMeta ? 'fill-ink font-semibold' : 'fill-ink-soft'}`}
+                className={`text-xs ${isMeta ? 'fill-ink font-semibold' : 'fill-ink-soft'}`}
               >
                 {ANCESTRY_META[r.anc].label}
               </text>
@@ -235,7 +235,7 @@ export default function VariantForest({
                 x={width - MR + LABEL_GAP}
                 y={cy}
                 dominantBaseline="central"
-                className={`text-[11px] tabular-nums ${isMeta ? 'fill-ink font-semibold' : 'fill-ink-soft'}`}
+                className={`text-xs tabular-nums ${isMeta ? 'fill-ink font-semibold' : 'fill-ink-soft'}`}
               >
                 {fmtBeta(r.beta)}
                 {r.se != null && (

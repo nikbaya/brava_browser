@@ -159,7 +159,7 @@ export default function VirtualTable<T>({
     // the rounded border.
     <div className="overflow-hidden rounded-lg border border-line bg-surface text-[13px]">
       {(caption || exportSpec) && (
-        <div className="flex items-center gap-2 border-b border-line bg-surface-soft px-2.5 py-1 text-[11px] text-ink-faint">
+        <div className="flex items-center gap-2 border-b border-line bg-surface-soft px-2.5 py-1 text-xs text-ink-faint">
           <span className="min-w-0 flex-1">{caption}</span>
           {exportSpec && (
             // Row extraction is deferred to the click: this bar re-renders on
@@ -222,7 +222,7 @@ export default function VirtualTable<T>({
                       >
                         {h.isPlaceholder ? null : (
                           <div
-                            className={`flex w-full min-w-0 items-center gap-0.5 px-2 py-1 text-[11px] font-semibold tracking-wide ${
+                            className={`flex w-full min-w-0 items-center gap-0.5 px-2 py-1 text-xs font-semibold tracking-wide ${
                               isLeaf
                                 ? 'text-ink-soft uppercase'
                                 : 'justify-center text-ink normal-case'

@@ -81,7 +81,7 @@ export function PieTip({ tip }: { tip: PieTipState | null }) {
   return createPortal(
     <div
       style={{ position: 'fixed', left: tip.x + 14, top: tip.y }}
-      className="pointer-events-none z-[100] -translate-y-1/2 rounded-md border border-line bg-surface px-2 py-1 text-[11px] whitespace-nowrap text-ink shadow-lg"
+      className="pointer-events-none z-[100] -translate-y-1/2 rounded-md border border-line bg-surface px-2 py-1 text-xs whitespace-nowrap text-ink shadow-lg"
     >
       {tip.text}
     </div>,
@@ -128,7 +128,7 @@ function SliceLegend({
     // *within* that width, keeping a clean column per legend without padding
     // the ul out. Together with the abbreviations this is what lets all seven
     // pies share one line.
-    <ul className="hidden shrink-0 space-y-px text-left text-[10px] leading-tight whitespace-nowrap xl:block">
+    <ul className="hidden shrink-0 space-y-px text-left text-[11px] leading-tight whitespace-nowrap xl:block">
       {shown.map((s) => (
         <li
           key={s.key}
@@ -213,10 +213,10 @@ export default function SamplePie({
           ))
         )}
       </svg>
-      <span className={`text-[11px] font-semibold ${selected ? 'text-brand' : 'text-ink'}`}>
+      <span className={`text-xs font-semibold ${selected ? 'text-brand' : 'text-ink'}`}>
         {ANCESTRY_META[anc].label}
       </span>
-      <span className="tnum text-[10px] text-ink-faint">{fmtN(total)}</span>
+      <span className="tnum text-[11px] text-ink-faint">{fmtN(total)}</span>
     </>
   )
 

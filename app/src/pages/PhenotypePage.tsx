@@ -224,7 +224,7 @@ export default function PhenotypePage() {
         <div className="flex items-start justify-between gap-x-4">
           <div className="flex min-w-0 flex-col gap-1">
             <h1 className="text-xl font-semibold text-ink">{pheno.name}</h1>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
               <span className="rounded bg-surface px-1.5 py-0.5 font-medium text-ink-soft">
                 {pheno.category}
               </span>
@@ -261,7 +261,7 @@ export default function PhenotypePage() {
         <>
           <section className="mb-3 rounded-lg border border-line bg-surface p-2">
             <div className="mb-1 flex items-center gap-1.5 px-2">
-              <span className="text-[11px] font-semibold text-ink-soft">Manhattan</span>
+              <span className="text-xs font-semibold text-ink-soft">Manhattan</span>
               <div className="inline-flex overflow-hidden rounded border border-line">
                 <ManhattanModeButton
                   active={manhattanMode === 'gene'}
@@ -319,7 +319,7 @@ export default function PhenotypePage() {
                 <Spinner label="Loading genome-wide variants…" />
               </div>
             )}
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 px-2 text-[11px] text-ink-faint">
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 px-2 text-xs text-ink-faint">
               {manhattanMode === 'gene' ? (
                 <>
                   <span>
@@ -454,7 +454,7 @@ function ForestDrawer({
             <h2 className="text-base font-semibold text-ink">
               {symbol} × {trait.name}
             </h2>
-            <p className="text-[11px] text-ink-faint">Effect across ancestries</p>
+            <p className="text-xs text-ink-faint">Effect across ancestries</p>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -572,7 +572,7 @@ function VariantForestDrawer({
               chr{chr}:{fmtPos(pos)}
               {variant && ` ${variant.ref}›${variant.alt}`}
             </h2>
-            <p className="text-[11px] text-ink-faint">
+            <p className="text-xs text-ink-faint">
               {symbol} · {trait.name} · effect across ancestries
             </p>
           </div>
@@ -660,7 +660,7 @@ function ManhattanModeButton({
   return (
     <button
       onClick={onClick}
-      className={`px-1.5 py-px text-[11px] ${
+      className={`px-1.5 py-px text-xs ${
         active ? 'bg-ink-soft text-white' : 'bg-surface text-ink-soft hover:bg-surface-alt'
       }`}
     >
@@ -1069,12 +1069,12 @@ function VariantOverviewTable({
               setGeneQuery('')
               setMinLp(0)
             }}
-            className="text-[11px] text-ink-faint hover:text-ink hover:underline"
+            className="text-xs text-ink-faint hover:text-ink hover:underline"
           >
             reset
           </button>
         )}
-        <span className="ml-auto text-[11px] text-ink-faint">
+        <span className="ml-auto text-xs text-ink-faint">
           {filteredRows.length.toLocaleString()}
           {filteredRows.length !== rows.length &&
             ` of ${rows.length.toLocaleString()}`}{' '}

@@ -202,7 +202,7 @@ export default function GeneVariants({
             </h3>
             <button
               onClick={() => setSelected(null)}
-              className="text-[11px] text-ink-faint hover:text-ink"
+              className="text-xs text-ink-faint hover:text-ink"
             >
               close ✕
             </button>

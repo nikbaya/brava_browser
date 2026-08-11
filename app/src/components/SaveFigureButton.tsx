@@ -85,7 +85,7 @@ export default function SaveFigureButton({
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={`Save ${what} as an image`}
-          className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium transition ${
+          className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium transition ${
             open
               ? 'border-brand text-brand'
               : 'border-line text-ink-soft hover:border-brand hover:text-brand'
@@ -122,7 +122,7 @@ export default function SaveFigureButton({
                 title={withExtension(filename, format)}
               >
                 <span className="font-semibold">{label}</span>
-                <span className="text-[11px] text-ink-faint">{hint}</span>
+                <span className="text-xs text-ink-faint">{hint}</span>
               </button>
             </li>
           ))}

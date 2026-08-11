@@ -51,7 +51,7 @@ export default function CopyLinkButton({
         type="button"
         onClick={copy}
         aria-label={label}
-        className="flex items-center gap-1 rounded-md border border-line px-1.5 py-0.5 text-[11px] font-medium text-ink-soft transition hover:border-brand hover:text-brand"
+        className="flex items-center gap-1 rounded-md border border-line px-1.5 py-0.5 text-xs font-medium text-ink-soft transition hover:border-brand hover:text-brand"
       >
         {/* Two interlocking chain links, sized to the 11px caption text. */}
         <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden="true">

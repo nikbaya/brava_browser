@@ -94,7 +94,7 @@ export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
     <div>
       <div className="flex flex-wrap items-stretch gap-x-1 gap-y-2">
         <div className="flex flex-col">
-          <span className="mb-0.5 pl-2 text-[10px] font-medium tracking-wide text-ink-faint uppercase">
+          <span className="mb-0.5 pl-2 text-[11px] font-medium tracking-wide text-ink-faint uppercase">
             Per-ancestry strata
           </span>
           <div className="flex flex-wrap items-end gap-1">{stratumPies.map(render)}</div>
@@ -102,7 +102,7 @@ export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
 
         {metaPies.length > 0 && (
           <div className="flex flex-col border-l border-line pl-2">
-            <span className="mb-0.5 pl-2 text-[10px] font-medium tracking-wide text-ink-faint uppercase">
+            <span className="mb-0.5 pl-2 text-[11px] font-medium tracking-wide text-ink-faint uppercase">
               Meta-analyses
             </span>
             <div className="flex flex-wrap items-end gap-1">{metaPies.map(render)}</div>

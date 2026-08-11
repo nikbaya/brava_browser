@@ -35,7 +35,7 @@ export default function DownloadButton<T>({
         disabled={n === 0}
         onClick={() => downloadText(spec.filename, toTSV(spec.columns, getRows()))}
         aria-label={`Download ${spec.noun} as TSV`}
-        className="flex items-center gap-1 rounded-md border border-line px-1.5 py-0.5 text-[11px] font-medium text-ink-soft transition hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink-soft"
+        className="flex items-center gap-1 rounded-md border border-line px-1.5 py-0.5 text-xs font-medium text-ink-soft transition hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink-soft"
       >
         {/* Tray-with-arrow download glyph, sized to the 11px caption text. */}
         <svg width="11" height="11" viewBox="0 0 16 16" aria-hidden="true">

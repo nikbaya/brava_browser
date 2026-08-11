@@ -110,7 +110,7 @@ export function SearchInput({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[11px] font-medium tracking-wide text-ink-faint uppercase whitespace-nowrap">
+      <span className="text-xs font-medium tracking-wide text-ink-faint uppercase whitespace-nowrap">
         {label}
       </span>
       <input
@@ -152,7 +152,7 @@ export function FilterRow({
   const pct = max > min ? ((sliderVal - min) / (max - min)) * 100 : 0
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[11px] font-medium tracking-wide text-ink-faint uppercase whitespace-nowrap">
+      <span className="text-xs font-medium tracking-wide text-ink-faint uppercase whitespace-nowrap">
         {label}
       </span>
       <input
@@ -232,7 +232,7 @@ export default function TableFilters({
         onClick={() => onChange({ ...value, minLp: sigOn ? 0 : SIG_LP })}
         aria-pressed={sigOn}
         title={`Gene-level significance · P < ${fmtP(SIG_GENE_CAUCHY)}`}
-        className={`rounded-md border px-2 py-0.5 text-[11px] font-medium transition ${
+        className={`rounded-md border px-2 py-0.5 text-xs font-medium transition ${
           sigOn
             ? 'border-brand bg-brand/10 text-brand'
             : 'border-line text-ink-soft hover:border-brand hover:text-brand'
@@ -247,13 +247,13 @@ export default function TableFilters({
             onChange(NO_TABLE_FILTER)
             onSearchChange?.('')
           }}
-          className="text-[11px] text-ink-faint hover:text-ink hover:underline"
+          className="text-xs text-ink-faint hover:text-ink hover:underline"
         >
           reset
         </button>
       )}
       {children && (
-        <span className="ml-auto text-[11px] text-ink-faint">{children}</span>
+        <span className="ml-auto text-xs text-ink-faint">{children}</span>
       )}
     </div>
   )

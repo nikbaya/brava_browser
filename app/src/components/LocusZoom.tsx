@@ -280,7 +280,7 @@ export default function LocusZoom({
 
   return (
     <div ref={wrapRef} className="relative w-full">
-      <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-1 text-[11px] text-ink-soft">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-1 text-xs text-ink-soft">
         {model ? (
           <div className="inline-flex items-center gap-1.5">
             <span className="text-ink-faint">Axis</span>
@@ -359,7 +359,7 @@ function AxisButton({
   return (
     <button
       onClick={onClick}
-      className={`px-1.5 py-px text-[11px] ${
+      className={`px-1.5 py-px text-xs ${
         active ? 'bg-ink-soft text-white' : 'bg-surface text-ink-soft hover:bg-surface-alt'
       }`}
     >

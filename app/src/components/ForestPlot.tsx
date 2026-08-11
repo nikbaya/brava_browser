@@ -126,13 +126,13 @@ export default function ForestPlot({ series, trait, maskIndex, mafIndex, symbol 
   return (
     <div ref={wrapRef} className="relative w-full">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 px-1 pb-1">
-        <span className="text-[11px] text-ink-faint">
+        <span className="text-xs text-ink-faint">
           {mask.label} · {maf.label} · IVW Burden {axisLabel} ± 95% CI
         </span>
         <div className="flex items-center gap-2">
           {series.hetLp != null && (
             <span
-              className={`text-[11px] ${heterogeneous ? 'text-risk' : 'text-ink-faint'}`}
+              className={`text-xs ${heterogeneous ? 'text-risk' : 'text-ink-faint'}`}
               title="Cochran's Q heterogeneity test across contributing strata"
             >
               P_het = {fmtPLog(series.hetLp)}
@@ -190,7 +190,7 @@ export default function ForestPlot({ series, trait, maskIndex, mafIndex, symbol 
                 x={x(t)}
                 y={height - 8}
                 textAnchor="middle"
-                className="fill-ink-faint text-[10px] tabular-nums"
+                className="fill-ink-faint text-[11px] tabular-nums"
               >
                 {t}
               </text>
@@ -237,7 +237,7 @@ export default function ForestPlot({ series, trait, maskIndex, mafIndex, symbol 
                   y={cy}
                   textAnchor="end"
                   dominantBaseline="central"
-                  className={`text-[11px] ${isMeta ? 'fill-ink font-semibold' : 'fill-ink-soft'}`}
+                  className={`text-xs ${isMeta ? 'fill-ink font-semibold' : 'fill-ink-soft'}`}
                 >
                   {ANCESTRY_META[r.anc].label}
                 </text>
@@ -247,7 +247,7 @@ export default function ForestPlot({ series, trait, maskIndex, mafIndex, symbol 
                   y={cy}
                   textAnchor="end"
                   dominantBaseline="central"
-                  className="fill-ink-faint text-[10px] tabular-nums"
+                  className="fill-ink-faint text-[11px] tabular-nums"
                 >
                   {trait.n?.[r.anc] ? `N=${fmtCount(trait.n[r.anc].n)}` : ''}
                 </text>
@@ -278,7 +278,7 @@ export default function ForestPlot({ series, trait, maskIndex, mafIndex, symbol 
                   x={w - MR + LABEL_GAP}
                   y={cy}
                   dominantBaseline="central"
-                  className={`text-[11px] tabular-nums ${isMeta ? 'fill-ink font-semibold' : 'fill-ink-soft'}`}
+                  className={`text-xs tabular-nums ${isMeta ? 'fill-ink font-semibold' : 'fill-ink-soft'}`}
                 >
                   {fmtBeta(r.beta)}
                   {r.se != null && (

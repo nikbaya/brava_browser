@@ -163,7 +163,7 @@ function Copyable({
       }`}
     >
       <div className="mb-1 flex items-center justify-between">
-        <span className="text-[11px] font-medium tracking-wide text-ink-faint uppercase">
+        <span className="text-xs font-medium tracking-wide text-ink-faint uppercase">
           {label}
         </span>
         <button

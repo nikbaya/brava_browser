@@ -63,7 +63,7 @@ export default function Dropdown<T extends string | number>({
 
   return (
     <div
-      className={`flex flex-col gap-0.5 text-[11px] font-medium tracking-wide text-ink-faint uppercase ${width ?? ''}`}
+      className={`flex flex-col gap-0.5 text-xs font-medium tracking-wide text-ink-faint uppercase ${width ?? ''}`}
     >
       {label && <span>{label}</span>}
       <div ref={boxRef} className="relative">

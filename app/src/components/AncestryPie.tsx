@@ -99,7 +99,7 @@ export default function AncestryPie({
         )}
       </svg>
       {showLegend && (
-        <ul className="grid grid-cols-1 gap-x-3 gap-y-0.5 text-[11px] sm:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-x-3 gap-y-0.5 text-xs sm:grid-cols-2">
           {slices.map((s) => (
             <li
               key={s.anc}

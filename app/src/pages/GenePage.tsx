@@ -272,7 +272,7 @@ export default function GenePage() {
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-baseline gap-x-2">
               <h1 className="text-xl font-semibold text-ink">{symbol}</h1>
-              <span className="tnum text-[11px] text-ink-faint">
+              <span className="tnum text-xs text-ink-faint">
                 {ensg}
                 {chr && start && end && (
                   <>
@@ -281,7 +281,7 @@ export default function GenePage() {
                 )}
               </span>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
               {/* Single-variant results sit below three gene-level sections, so
                   they were being missed entirely. This jump chip advertises them
                   from the header; it's rendered only once the section it targets
@@ -345,7 +345,7 @@ export default function GenePage() {
               <h2 className="text-[13px] font-semibold text-ink">
                 Phenome-wide associations
               </h2>
-              <span className="text-[11px] text-ink-faint">
+              <span className="text-xs text-ink-faint">
                 {ANCESTRY_META[filters.ancestry].long} ·{' '}
                 {MASK_META[filters.maskIndex].label} ·{' '}
                 {MAF_META[filters.mafIndex].label} · {filters.test}
@@ -373,7 +373,7 @@ export default function GenePage() {
                 </div>
                 <Link
                   to={`/phenotype/${forestTrait.id}`}
-                  className="text-[11px] text-brand hover:underline"
+                  className="text-xs text-brand hover:underline"
                 >
                   open {forestTrait.name} →
                 </Link>
@@ -420,7 +420,7 @@ export default function GenePage() {
                     help={`Copy a link that opens ${symbol} at these single-variant results — same phenotype (${forestTrait.name}) and ancestry (${ANCESTRY_META[filters.ancestry].label})`}
                   />
                 </div>
-                <span className="text-[11px] text-ink-faint">
+                <span className="text-xs text-ink-faint">
                   {ANCESTRY_META[filters.ancestry].long} · single-variant
                   {filters.ancestry === 'All' ? ' meta' : ''} · overlapping this gene by
                   position

@@ -48,7 +48,7 @@ function CohortCard({ c, b }: { c: Cohort; b?: Biobank }) {
             <div className="text-lg font-bold tabular-nums text-ink">
               {fmtCount(b.sample_size)}
             </div>
-            <div className="text-[10px] text-ink-faint">samples</div>
+            <div className="text-[11px] text-ink-faint">samples</div>
           </div>
         )}
       </div>
@@ -67,7 +67,7 @@ function CohortCard({ c, b }: { c: Cohort; b?: Biobank }) {
         </>
       )}
 
-      <div className="mt-3 border-t border-line pt-2 text-[11px] text-ink-faint">
+      <div className="mt-3 border-t border-line pt-2 text-xs text-ink-faint">
         {c.people.join(' · ')}
       </div>
     </div>

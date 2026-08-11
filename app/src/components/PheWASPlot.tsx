@@ -99,7 +99,7 @@ export default function PheWASPlot({
   return (
     <div ref={wrapRef} className="relative w-full">
       {/* category legend (key for point colors + bands) */}
-      <div className="flex flex-wrap gap-x-3 gap-y-1 px-1 pb-2 text-[11px] text-ink-soft">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 px-1 pb-2 text-xs text-ink-soft">
         {bands.map((b) => (
           <span key={b.category} className="inline-flex items-center gap-1">
             <span
@@ -138,7 +138,7 @@ export default function PheWASPlot({
               x={M.left - 6}
               y={y(t) + 3}
               textAnchor="end"
-              className="fill-ink-faint text-[11px]"
+              className="fill-ink-faint text-xs"
             >
               {t}
             </text>
@@ -194,7 +194,7 @@ export default function PheWASPlot({
                 x={cx}
                 y={HEIGHT - M.bottom + 12}
                 transform={`rotate(45 ${cx} ${HEIGHT - M.bottom + 12})`}
-                className={`text-[10px] ${isHover ? 'fill-ink font-semibold' : 'fill-ink-faint'}`}
+                className={`text-[11px] ${isHover ? 'fill-ink font-semibold' : 'fill-ink-faint'}`}
                 style={{ cursor: 'pointer' }}
                 onMouseEnter={() => setHover(i)}
                 onMouseLeave={() => setHover(null)}
@@ -208,14 +208,14 @@ export default function PheWASPlot({
         <text
           transform={`translate(14 ${HEIGHT / 2}) rotate(-90)`}
           textAnchor="middle"
-          className="fill-ink-soft text-[11px]"
+          className="fill-ink-soft text-xs"
         >
           -log₁₀(p)
         </text>
       </svg>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pt-1 text-[11px] text-ink-faint">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pt-1 text-xs text-ink-faint">
         <ThresholdLegend />
       </div>
 

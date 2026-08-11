@@ -123,7 +123,7 @@ export default function SearchBar({
       {open && items.length > 0 && (
         <ul className="absolute z-20 mt-2 max-h-96 w-full overflow-auto rounded-2xl border border-line bg-surface text-left shadow-xl">
           {!typing && (
-            <li className="px-4 pt-2.5 pb-1 text-[10px] font-semibold tracking-wide text-ink-faint uppercase">
+            <li className="px-4 pt-2.5 pb-1 text-[11px] font-semibold tracking-wide text-ink-faint uppercase">
               Browse phenotypes
             </li>
           )}

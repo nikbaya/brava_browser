@@ -10,7 +10,7 @@
  * Three details make the output actually usable in a manuscript:
  *
  * 1. **Styles are inlined.** Our plots colour themselves with Tailwind classes
- *    (`fill-ink-faint`, `text-[11px]`), which resolve against the document's
+ *    (`fill-ink-faint`, `text-xs`), which resolve against the document's
  *    stylesheet. A serialised SVG has no access to that stylesheet — rendered in
  *    an `<img>` or opened in Illustrator, every element would fall back to black
  *    16px text. We copy the *computed* value of a small set of presentation

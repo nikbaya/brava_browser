@@ -84,7 +84,7 @@ export default function Tip({
               left: place?.x ?? anchor.x,
               top: place?.below ? anchor.bottom + 6 : anchor.top - 6,
             }}
-            className={`pointer-events-none z-[100] block -translate-x-1/2 rounded-md bg-ink px-2 py-1 text-[11px] leading-snug font-medium text-surface shadow-lg ${
+            className={`pointer-events-none z-[100] block -translate-x-1/2 rounded-md bg-ink px-2 py-1 text-xs leading-snug font-medium text-surface shadow-lg ${
               place?.below ? '' : '-translate-y-full'
             } ${
               wide

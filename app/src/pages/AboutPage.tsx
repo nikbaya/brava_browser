@@ -191,7 +191,7 @@ function Leadership() {
               className="mx-auto h-24 w-24 rounded-full object-cover ring-1 ring-line"
             />
             <div className="mt-3 text-sm font-semibold text-ink">{l.name}</div>
-            <div className="mt-0.5 text-[11px] text-ink-faint">{l.affiliation}</div>
+            <div className="mt-0.5 text-xs text-ink-faint">{l.affiliation}</div>
           </div>
         ))}
       </div>
@@ -202,7 +202,7 @@ function Leadership() {
           <div key={g.name} className="rounded-2xl border border-line bg-surface p-4">
             <div className="flex items-baseline justify-between gap-2">
               <div className="font-semibold text-ink">{g.name}</div>
-              <div className="text-[11px] text-ink-faint">{g.members.length} members</div>
+              <div className="text-xs text-ink-faint">{g.members.length} members</div>
             </div>
             <p className="mt-1.5 text-sm leading-relaxed text-ink-soft">
               {g.members.join(' · ')}

@@ -45,7 +45,7 @@ export function Select<T extends string | number>({
   options: { value: T; label: string }[]
 }) {
   return (
-    <label className="flex flex-col gap-0.5 text-[11px] font-medium tracking-wide text-ink-faint uppercase">
+    <label className="flex flex-col gap-0.5 text-xs font-medium tracking-wide text-ink-faint uppercase">
       {label && <span>{label}</span>}
       <select
         value={value}
@@ -91,7 +91,7 @@ export function Tooltip({
       {children}
       <span
         role="tooltip"
-        className={`pointer-events-none absolute bottom-full z-50 mb-1 rounded-md bg-ink px-2 py-1 text-[11px] whitespace-nowrap text-surface opacity-0 shadow-lg transition-opacity duration-75 group-hover:opacity-100 ${pos}`}
+        className={`pointer-events-none absolute bottom-full z-50 mb-1 rounded-md bg-ink px-2 py-1 text-xs whitespace-nowrap text-surface opacity-0 shadow-lg transition-opacity duration-75 group-hover:opacity-100 ${pos}`}
       >
         {label}
       </span>
