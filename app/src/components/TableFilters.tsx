@@ -152,7 +152,7 @@ export function FilterRow({
   const pct = max > min ? ((sliderVal - min) / (max - min)) * 100 : 0
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs font-medium tracking-wide text-ink-faint uppercase whitespace-nowrap">
+      <span className="text-sm font-medium tracking-wide text-ink-faint uppercase whitespace-nowrap">
         {label}
       </span>
       <input
