@@ -396,6 +396,7 @@ export default function GenePage() {
             ensg={ensg}
             filters={filters}
             ancIdx={ancIdx}
+            focusedPhenoIdx={forestIdx}
             onFocus={setForestPheno}
           />
 
@@ -475,6 +476,7 @@ function GeneTable({
   ensg,
   filters,
   ancIdx,
+  focusedPhenoIdx,
   onFocus,
 }: {
   data: GeneData
@@ -482,6 +484,8 @@ function GeneTable({
   ensg: string
   filters: FilterState
   ancIdx: number
+  /** The phenotype whose forest plot is currently on screen (default or clicked). */
+  focusedPhenoIdx: number | null
   onFocus: (phenoIdx: number) => void
 }) {
   const { phenotypes } = useIndex()
@@ -645,6 +649,7 @@ function GeneTable({
         sorting={sorting}
         onSortingChange={setSorting}
         onRowClick={(r) => onFocus(r.key)}
+        isRowSelected={(r) => r.key === focusedPhenoIdx}
         caption={caption}
         exportSpec={exportSpec}
         reservedRows={allRows.length}

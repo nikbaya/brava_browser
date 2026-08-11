@@ -58,6 +58,7 @@ export default function VirtualTable<T>({
   rowHeight = 30,
   onRowClick,
   onRowHover,
+  isRowSelected,
   caption,
   exportSpec,
   reservedRows,
@@ -75,6 +76,13 @@ export default function VirtualTable<T>({
    * mouse over the plot itself.
    */
   onRowHover?: (row: T | null) => void
+  /**
+   * Marks a row as the current selection — e.g. the row whose forest plot is
+   * on screen. Unlike the transient `hover:` wash, this persists until a
+   * different row is selected, so it uses the same `bg-brand-light` but as a
+   * plain class rather than a pseudo-class variant.
+   */
+  isRowSelected?: (row: T) => boolean
   /**
    * Summary (e.g. active filters) shown in a bar above the column headers. The
    * bar is outside the scroll region, so it stays put through both vertical and
@@ -268,6 +276,7 @@ export default function VirtualTable<T>({
           <div style={{ height: virt.getTotalSize(), position: 'relative' }}>
             {virt.getVirtualItems().map((vi) => {
               const row = rows[vi.index]
+              const selected = isRowSelected?.(row.original) ?? false
               return (
                 <div
                   key={row.id}
@@ -279,7 +288,10 @@ export default function VirtualTable<T>({
                     height: rowHeight,
                   }}
                   className={`group absolute flex w-full border-b border-line/50 ${
-                    vi.index % 2 ? 'bg-surface-soft/40' : ''
+                    // Mutually exclusive with the alternating tint: both are plain
+                    // background-color utilities, so layering them risks losing to
+                    // whichever Tailwind happens to emit later in the stylesheet.
+                    selected ? 'bg-brand-light' : vi.index % 2 ? 'bg-surface-soft/40' : ''
                   } ${onRowClick ? 'cursor-pointer hover:bg-brand-light' : ''}`}
                 >
                   {row.getVisibleCells().map((cell, i) => {
@@ -299,7 +311,16 @@ export default function VirtualTable<T>({
                         className={`flex min-w-0 ${
                           frozen
                             ? `sticky left-0 z-[1] ${
-                                vi.index % 2 ? 'frozen-cell-alt' : 'frozen-cell'
+                                // Selected skips .frozen-cell(-alt) entirely rather
+                                // than layering bg-brand-light on top of it: both
+                                // are single-class selectors of equal specificity,
+                                // so which one wins would depend on generation
+                                // order rather than intent.
+                                selected
+                                  ? 'bg-brand-light'
+                                  : vi.index % 2
+                                    ? 'frozen-cell-alt'
+                                    : 'frozen-cell'
                               } ${onRowClick ? 'group-hover:bg-brand-light' : ''}`
                             : ''
                         } ${

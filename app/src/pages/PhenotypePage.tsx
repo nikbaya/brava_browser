@@ -368,6 +368,7 @@ export default function PhenotypePage() {
                 pheno={pheno}
                 ancestry={ancestry}
                 ancestryN={pheno.n?.[ancestry]}
+                focusedEnsg={drawer?.ensg ?? null}
                 onOpenForest={setDrawer}
                 onHoverRow={setHoverGeneIdx}
               />
@@ -379,6 +380,7 @@ export default function PhenotypePage() {
                 overview={overview}
                 geneIndex={geneIndex!}
                 pheno={pheno}
+                focusedVariant={variantDrawer}
                 onOpenForest={(pick) =>
                   setVariantDrawer({
                     ...pick,
@@ -683,6 +685,7 @@ function ResultsTable({
   pheno,
   ancestry,
   ancestryN,
+  focusedEnsg,
   onOpenForest,
   onHoverRow,
 }: {
@@ -695,6 +698,8 @@ function ResultsTable({
   pheno: PhenotypeMeta
   ancestry: Ancestry
   ancestryN?: { n: number; case?: number; ctrl?: number }
+  /** The gene whose forest drawer is currently open, if any. */
+  focusedEnsg: string | null
   onOpenForest: (g: { ensg: string; symbol: string }) => void
   onHoverRow?: (geneIdx: number | null) => void
 }) {
@@ -822,6 +827,7 @@ function ResultsTable({
       onSortingChange={setSorting}
       onRowClick={(r) => onOpenForest({ ensg: r.ensg, symbol: r.symbol })}
       onRowHover={(r) => onHoverRow?.(r ? r.geneIdx : null)}
+      isRowSelected={(r) => r.ensg === focusedEnsg}
       caption={caption}
       exportSpec={exportSpec}
       reservedRows={reservedRows}
@@ -901,12 +907,15 @@ function VariantOverviewTable({
   overview,
   geneIndex,
   pheno,
+  focusedVariant,
   onOpenForest,
   onHoverRow,
 }: {
   overview: VariantOverview
   geneIndex: GeneIndex
   pheno: PhenotypeMeta
+  /** The variant currently shown in the forest drawer, if any. */
+  focusedVariant: VariantPick | null
   onOpenForest: (pick: VariantPick) => void
   onHoverRow?: (idx: number | null) => void
 }) {
@@ -1096,6 +1105,11 @@ function VariantOverviewTable({
           onOpenForest({ geneIdx: r.geneIdx, chr: r.chr, pos: r.pos, lp: r.lp })
         }
         onRowHover={(r) => onHoverRow?.(r ? r.idx : null)}
+        isRowSelected={(r) =>
+          focusedVariant != null &&
+          r.chr === focusedVariant.chr &&
+          r.pos === focusedVariant.pos
+        }
         caption={caption}
         exportSpec={exportSpec}
         reservedRows={rows.length}

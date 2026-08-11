@@ -224,6 +224,7 @@ export default function GeneVariants({
         trait={trait}
         chr={chr}
         ancIdx={ancIdx}
+        selected={selected}
         onSelect={setSelected}
       />
     </div>
@@ -335,6 +336,7 @@ function VariantTable({
   trait,
   chr,
   ancIdx,
+  selected,
   onSelect,
 }: {
   rows: VariantRow[]
@@ -343,6 +345,8 @@ function VariantTable({
   trait: PhenotypeMeta
   chr?: string | null
   ancIdx: number
+  /** The variant currently shown in the forest panel above, if any. */
+  selected: VariantRow | null
   onSelect: (v: VariantRow) => void
 }) {
   const isMeta = ancIdx === 0
@@ -546,6 +550,12 @@ function VariantTable({
       sorting={sorting}
       onSortingChange={setSorting}
       onRowClick={onSelect}
+      isRowSelected={(r) =>
+        selected != null &&
+        r.pos === selected.pos &&
+        r.ref === selected.ref &&
+        r.alt === selected.alt
+      }
       caption={caption}
       exportSpec={exportSpec}
     />
