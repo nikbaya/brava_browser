@@ -8,18 +8,24 @@ import Tip from './Tip'
 /** −log10(0.05); below this the cross-ancestry Burden effect is heterogeneous. */
 const HET_LP = -Math.log10(0.05)
 
-/** Inline key for the Burden β triangles, for a table caption. */
+/**
+ * Inline key for the Burden β triangles, for a table caption. This table mixes
+ * binary and quantitative phenotypes in one column (unlike `effect.ts`'s
+ * per-trait risk/higher wording), so the arrows use plain higher/lower —
+ * correct for both readings rather than picking one that's wrong for half the
+ * rows.
+ */
 export function BetaLegend() {
   return (
     <span className="whitespace-nowrap">
       β{' '}
-      <span style={{ color: DIR_POS }}>▲</span> risk{' '}
+      <span style={{ color: DIR_POS }}>▲</span> higher{' '}
       {/* "∝" (U+221D) isn't in Inter, so it falls back to a system font whose
           glyph renders far smaller than the surrounding text at this size —
           "~" reads the same ("size scales with |effect|") without the
           fallback-font trap. */}
-      <span style={{ color: DIR_NEG }}>▼</span> protective, size ~ |effect| —
-      hover for value
+      <span style={{ color: DIR_NEG }}>▼</span> lower, size ~ |effect| — hover
+      for value
     </span>
   )
 }
