@@ -14,7 +14,11 @@ export function BetaLegend() {
     <span className="whitespace-nowrap">
       β{' '}
       <span style={{ color: DIR_POS }}>▲</span> risk{' '}
-      <span style={{ color: DIR_NEG }}>▼</span> protective, size ∝ |effect| —
+      {/* "∝" (U+221D) isn't in Inter, so it falls back to a system font whose
+          glyph renders far smaller than the surrounding text at this size —
+          "~" reads the same ("size scales with |effect|") without the
+          fallback-font trap. */}
+      <span style={{ color: DIR_NEG }}>▼</span> protective, size ~ |effect| —
       hover for value
     </span>
   )

@@ -140,7 +140,7 @@ export function FilterRow({
   stored,
   onChange,
 }: {
-  label: string
+  label: ReactNode
   kind: 'p' | 'beta'
   min: number
   max: number
@@ -219,7 +219,17 @@ export default function TableFilters({
         onChange={(minLp) => onChange({ ...value, minLp })}
       />
       <FilterRow
-        label="|β| ≥"
+        // The label span is CSS `uppercase` (see FilterRow) so every other
+        // caption in this strip can stay written in plain case. That
+        // transform maps lowercase β (U+03B2) to Greek capital Β (U+0392),
+        // which is a dead ringer for Latin "B" — so this one glyph opts out
+        // with `normal-case` to render as the real β, matching the "Burden
+        // β" column it filters.
+        label={
+          <>
+            |<span className="normal-case">β</span>| ≥
+          </>
+        }
         kind="beta"
         min={0}
         max={betaMax}
