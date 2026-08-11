@@ -8,7 +8,7 @@ import {
   MASK_META,
   type Ancestry,
 } from '../lib/constants'
-import { fmtBeta, fmtBeta3, fmtCount, fmtPLog, fmtPLog3, fmtPos } from '../lib/format'
+import { fmtBeta, fmtBeta3, fmtCount, fmtPLog3, fmtPos } from '../lib/format'
 import { figureFilename } from '../lib/exportImage'
 import { bodyFont, textWidth } from '../lib/textWidth'
 import type { ForestSeries } from '../lib/select'
@@ -135,7 +135,7 @@ export default function ForestPlot({ series, trait, maskIndex, mafIndex, symbol 
               className={`text-xs ${heterogeneous ? 'text-risk' : 'text-ink-faint'}`}
               title="Cochran's Q heterogeneity test across contributing strata"
             >
-              P_het = {fmtPLog(series.hetLp)}
+              P_het = {fmtPLog3(series.hetLp)}
               {heterogeneous ? ' · heterogeneous' : ''}
             </span>
           )}
@@ -160,7 +160,7 @@ export default function ForestPlot({ series, trait, maskIndex, mafIndex, symbol 
                 mask.label,
                 maf.label,
                 `IVW Burden ${axisLabel} ± 95% CI`,
-                series.hetLp == null ? null : `P_het = ${fmtPLog(series.hetLp)}`,
+                series.hetLp == null ? null : `P_het = ${fmtPLog3(series.hetLp)}`,
                 'BRaVa',
               ]
                 .filter(Boolean)

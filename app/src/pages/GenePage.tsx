@@ -29,6 +29,8 @@ import {
   ancestryExportColumns,
   ancestryGridColumns,
   BetaLegend,
+  hetColumn,
+  hetExportColumn,
 } from '../components/ancestryColumns'
 import PheWASPlot, { type PheWASPoint } from '../components/PheWASPlot'
 import ForestPlot from '../components/ForestPlot'
@@ -582,6 +584,7 @@ function GeneTable({
         betaMax: betaGridMax,
         test: filters.test,
       }),
+      hetColumn<GTGridRow>(),
     ],
     [ancIdxs, ancIdx, betaGridMax, filters.test],
   )
@@ -605,6 +608,7 @@ function GeneTable({
         { header: 'max_maf', value: () => MAF_META[filters.mafIndex].value },
         { header: 'test', value: () => filters.test },
         ...ancestryExportColumns<GTGridRow>(ancIdxs),
+        ...hetExportColumn<GTGridRow>(),
       ] satisfies ExportColumn<GTGridRow>[],
     }
   }, [symbol, ensg, filters.maskIndex, filters.mafIndex, filters.test, ancIdxs])

@@ -5,6 +5,9 @@ import { exportP, type ExportColumn } from '../lib/exportTable'
 import { DIR_NEG, DIR_POS, EffectTriangle, isSig, sigTextClass } from './indicators'
 import Tip from './Tip'
 
+/** −log10(0.05); below this the cross-ancestry Burden effect is heterogeneous. */
+const HET_LP = -Math.log10(0.05)
+
 /** Inline key for the Burden β triangles, for a table caption. */
 export function BetaLegend() {
   return (
@@ -155,6 +158,64 @@ export function ancestryGridColumns<T extends GridRowLike>(
       },
       columns: bCols,
     },
+  ]
+}
+
+/**
+ * Trailing single column: cross-ancestry Burden heterogeneity (from the
+ * All-meta row), one value per row — unlike `ancestryGridColumns`' blocks,
+ * this doesn't repeat per ancestry, so it isn't affected by which ancestry is
+ * highlighted. `hetLp` is `undefined` for a row whose builder doesn't
+ * populate it (see `GridRow`), which renders the same as no data.
+ *
+ * `pending` (the phenotype page's All-meta file may still be loading in the
+ * background, same as any other ancestry column there) shows "…" instead of
+ * "—" so a still-loading cell doesn't read as "no heterogeneity data".
+ */
+export function hetColumn<T extends { hetLp?: number | null }>(
+  opts: { pending?: (row: T) => boolean } = {},
+): ColumnDef<T, any> {
+  const { pending } = opts
+  return {
+    id: 'phet',
+    header: () => <span>P_het</span>,
+    meta: {
+      divider: true,
+      fill: true,
+      help: 'Heterogeneity of the Burden effect across ancestries (cross-ancestry meta).',
+    },
+    accessorFn: (r: T) => r.hetLp ?? undefined,
+    sortUndefined: 'last',
+    size: 80, // "P_HET" (uppercased) clips at 68, same as "NON-EUR" above
+
+    cell: (c) => {
+      const lp = c.getValue() as number | null | undefined
+      if (lp == null && pending?.(c.row.original))
+        return <span className={`${CELL_HIT} text-ink-faint/50`}>…</span>
+      if (lp == null)
+        return <span className={`${CELL_HIT} text-ink-faint/50`}>—</span>
+      const heterogeneous = lp > HET_LP
+      return (
+        <Tip
+          label={`P_het = ${fmtPLog3(lp)}${heterogeneous ? ' · heterogeneous' : ''}`}
+          className={CELL_HIT}
+        >
+          <span
+            className={`truncate tnum ${heterogeneous ? 'text-risk' : 'text-ink-faint'}`}
+          >
+            {fmtPCompact(lp)}
+          </span>
+        </Tip>
+      )
+    },
+  }
+}
+
+/** The export counterpart of `hetColumn`. */
+export function hetExportColumn<T extends { hetLp?: number | null }>(): ExportColumn<T>[] {
+  return [
+    { header: 'P_het', value: (r: T) => exportP(r.hetLp) },
+    { header: 'neglog10P_het', value: (r: T) => r.hetLp ?? null },
   ]
 }
 

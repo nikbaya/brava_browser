@@ -256,19 +256,25 @@ const N_ANC = ANCESTRIES.length
 /**
  * One table row of the per-ancestry grid: a p-value (for the chosen test) and
  * an IVW Burden β per ancestry, indexed by the canonical ancestry order
- * (0 = All meta … 6 = non_EUR). Missing strata are null.
+ * (0 = All meta … 6 = non_EUR). Missing strata are null. `hetLp` is the
+ * cross-ancestry Burden heterogeneity (from the All-meta row) — one value per
+ * row, not per ancestry — populated only by builders that read it (currently
+ * `geneAncestryGrid`); undefined elsewhere, which callers treat the same as
+ * null.
  */
 export interface GridRow {
   /** Row key: phenotype index (gene page) or gene index (phenotype page). */
   key: number
   lp: (number | null)[]
   beta: (number | null)[]
+  hetLp?: number | null
 }
 
 const emptyGridRow = (key: number): GridRow => ({
   key,
   lp: new Array(N_ANC).fill(null),
   beta: new Array(N_ANC).fill(null),
+  hetLp: null,
 })
 
 /**
@@ -295,24 +301,36 @@ export function geneAncestryGrid(
       row.lp[a] = lp[i] ?? null
       row.beta[a] = d.beta[i] ?? null
     }
+    if (a === 0) row.hetLp = d.lp_het[i] ?? null // anc 0 = All (meta)
   }
   return [...byPheno.values()]
 }
 
 /**
- * Phenotype page: build a geneIdx → {lp, β} lookup for one ancestry's payload
- * (selected mask + maf + test). The page fetches each ancestry file separately,
- * then merges these lookups column-by-column into the grid.
+ * Phenotype page: build a geneIdx → {lp, β, hetLp} lookup for one ancestry's
+ * payload (selected mask + maf + test). The page fetches each ancestry file
+ * separately, then merges these lookups column-by-column into the grid.
+ * `hetLp` is only meaningful when `d` is the All-meta ancestry file — same
+ * "anc 0" convention as `geneAncestryGrid` — so callers must gate on that
+ * themselves; it's returned unconditionally here since a single-ancestry
+ * payload doesn't know its own ancestry index.
  */
 export function phenoLookup(
   d: PhenotypeData,
   f: Filters,
-): Map<number, { lp: number | null; beta: number | null }> {
+): Map<number, { lp: number | null; beta: number | null; hetLp: number | null }> {
   const lp = lpArray(d, f.test)
-  const m = new Map<number, { lp: number | null; beta: number | null }>()
+  const m = new Map<
+    number,
+    { lp: number | null; beta: number | null; hetLp: number | null }
+  >()
   for (let i = 0; i < d.n; i++) {
     if (d.mask[i] !== f.maskIndex || d.maf[i] !== f.mafIndex) continue
-    m.set(d.gene_idx[i], { lp: lp[i] ?? null, beta: d.beta[i] ?? null })
+    m.set(d.gene_idx[i], {
+      lp: lp[i] ?? null,
+      beta: d.beta[i] ?? null,
+      hetLp: d.lp_het[i] ?? null,
+    })
   }
   return m
 }

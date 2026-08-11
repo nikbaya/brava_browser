@@ -39,6 +39,8 @@ import {
   ancestryExportColumns,
   ancestryGridColumns,
   BetaLegend,
+  hetColumn,
+  hetExportColumn,
 } from '../components/ancestryColumns'
 import { DirDot, SigDot } from '../components/indicators'
 import { effectInfo } from '../lib/effect'
@@ -177,15 +179,17 @@ export default function PhenotypePage() {
     return rows.map((br) => {
       const lp = new Array(ANCESTRIES.length).fill(null)
       const beta = new Array(ANCESTRIES.length).fill(null)
+      let hetLp: number | null = null
       for (const aStr in lookups) {
         const a = Number(aStr)
         const hit = lookups[a].get(br.geneIdx)
         if (hit) {
           lp[a] = hit.lp
           beta[a] = hit.beta
+          if (a === 0) hetLp = hit.hetLp // anc 0 = All (meta)
         }
       }
-      return { key: br.geneIdx, geneIdx: br.geneIdx, lp, beta }
+      return { key: br.geneIdx, geneIdx: br.geneIdx, lp, beta, hetLp }
     })
   }, [rows, lookups])
 
@@ -754,6 +758,7 @@ function ResultsTable({
         betaMax: betaGridMax,
         test: filters.test,
       }),
+      hetColumn<TableRow>({ pending: () => !loadedAnc.has(0) }),
     ],
     [ancIdxs, selAncIdx, loadedAnc, betaGridMax, filters.test],
   )
@@ -779,6 +784,7 @@ function ResultsTable({
         { header: 'max_maf', value: () => MAF_META[filters.mafIndex].value },
         { header: 'test', value: () => filters.test },
         ...ancestryExportColumns<TableRow>(ancIdxs),
+        ...hetExportColumn<TableRow>(),
       ] satisfies ExportColumn<TableRow>[],
     }
   }, [pheno, filters.maskIndex, filters.mafIndex, filters.test, ancIdxs])

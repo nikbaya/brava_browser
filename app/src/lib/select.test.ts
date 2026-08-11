@@ -4,6 +4,7 @@ import {
   phenoRows,
   geneRows,
   forestSeries,
+  geneAncestryGrid,
   variantAncRows,
 } from './select'
 import type { GeneData, GeneVariantAncData, PhenotypeData } from '../data/types'
@@ -119,6 +120,16 @@ describe('forestSeries', () => {
     })
     expect(rows.map((r) => r.ancIdx)).toEqual([0])
     expect(hetLp).toBeNull() // lp_het is null on that row
+  })
+})
+
+describe('geneAncestryGrid', () => {
+  it('carries hetLp from the All (anc 0) row, one value per pheno×mask×maf', () => {
+    const rows = geneAncestryGrid(GENE, { test: 'SKAT-O', maskIndex: 4, mafIndex: 0 })
+    const pheno0 = rows.find((r) => r.key === 0)
+    const pheno1 = rows.find((r) => r.key === 1)
+    expect(pheno0?.hetLp).toBe(2.5)
+    expect(pheno1?.hetLp).toBeNull() // lp_het is null on that row
   })
 })
 
