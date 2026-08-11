@@ -241,7 +241,7 @@ export default function SamplePie({
     : 'flex flex-col items-center gap-1'
 
   if (!interactive)
-    return <div className={`${layout} px-2 py-1.5`}>{body}</div>
+    return <div className={`${layout} px-1.5 py-1`}>{body}</div>
 
   // Sample size exists but no association results for this stratum: keep it
   // visible (it still conveys N) but faded and clearly not clickable.
@@ -250,7 +250,7 @@ export default function SamplePie({
       <div
         aria-disabled
         title={`No association results for ${ANCESTRY_META[anc].long}`}
-        className={`${layout} cursor-not-allowed rounded-lg px-2 py-1.5 opacity-40 grayscale`}
+        className={`${layout} cursor-not-allowed rounded-lg px-1.5 py-1 opacity-40 grayscale`}
       >
         {body}
       </div>
@@ -262,7 +262,7 @@ export default function SamplePie({
       onClick={onSelect}
       aria-pressed={selected}
       aria-label={`Show ${ANCESTRY_META[anc].long} results`}
-      className={`${layout} rounded-lg px-2 py-1.5 transition ${
+      className={`${layout} rounded-lg px-1.5 py-1 transition ${
         selected ? 'bg-brand-light ring-1 ring-brand/40' : 'hover:bg-surface-soft'
       }`}
     >
