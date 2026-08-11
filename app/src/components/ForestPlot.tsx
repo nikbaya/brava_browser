@@ -102,7 +102,8 @@ export default function ForestPlot({ series, trait, maskIndex, mafIndex, symbol 
     [rows],
   )
   const MR = useMemo(() => {
-    const font = bodyFont(11)
+    // 600 (font-semibold) matches the meta ("All") row, rendered bold.
+    const font = bodyFont(12, 600)
     const widest = labels.reduce((m, l) => Math.max(m, textWidth(l, font)), 0)
     return Math.ceil(LABEL_GAP + widest + LABEL_PAD)
   }, [labels])

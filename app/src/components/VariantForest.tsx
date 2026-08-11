@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { scaleLinear } from 'd3-scale'
 import { ANCESTRIES, ANCESTRY_COLOR, ANCESTRY_META, type Ancestry } from '../lib/constants'
-import { fmtBeta, fmtBeta3, fmtCount, fmtPLog, fmtPLog3 } from '../lib/format'
+import { fmtBeta, fmtBeta3, fmtCount, fmtPLog, fmtPLog3, fmtPos } from '../lib/format'
 import { figureFilename } from '../lib/exportImage'
 import { bodyFont, textWidth } from '../lib/textWidth'
 import type { PhenotypeMeta } from '../data/types'
@@ -108,7 +108,9 @@ export default function VariantForest({
     [ordered],
   )
   const MR = useMemo(() => {
-    const font = bodyFont(11)
+    // 600 (font-semibold) matches the meta row, which is both the widest
+    // label (it alone carries the N/I² suffix) and the boldest.
+    const font = bodyFont(12, 600)
     const widest = labels.reduce((m, l) => Math.max(m, textWidth(l, font)), 0)
     return Math.ceil(LABEL_GAP + widest + LABEL_PAD)
   }, [labels])
@@ -280,7 +282,7 @@ function Tooltip({
       </div>
       {row.ne != null && (
         <div className="tnum text-ink-faint">
-          N (eff.) = {fmtCount(row.ne)}
+          N (eff.) = {fmtPos(row.ne)}
           {row.i2 != null && <> · I² = {Math.round(row.i2)}%</>}
         </div>
       )}

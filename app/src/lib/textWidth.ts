@@ -29,14 +29,18 @@ export function textWidth(text: string, font: string): number {
 }
 
 /**
- * The page's body font at `px` — the font an SVG <text> inherits unless it says
- * otherwise, so measuring in it matches what the browser will draw.
+ * The page's body font at `px`/`weight` — the font an SVG <text> inherits
+ * unless it says otherwise, so measuring in it matches what the browser will
+ * draw. `weight` matters here: the forest plots' meta ("All") row renders
+ * `font-semibold`, and bold glyphs measure wider than the same string at the
+ * default weight — measuring at 400 when the widest row draws at 600
+ * under-reserved the gutter and clipped that row's tail.
  */
-export function bodyFont(px: number): string {
+export function bodyFont(px: number, weight = 400): string {
   const family =
     (typeof document !== 'undefined' && getComputedStyle(document.body).fontFamily) ||
     'sans-serif'
-  return `${px}px ${family}`
+  return `${weight} ${px}px ${family}`
 }
 
 function font2px(font: string): number {
