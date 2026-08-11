@@ -34,8 +34,6 @@ type Tab = (typeof TABS)[number]
  * docs/data-followups.md.
  */
 const PARTICIPANTS = '~1.2M'
-const PARTICIPANTS_HELP =
-  'Ten biobanks and cohorts comprising over 1.2 million participants, as reported in the BRaVa flagship paper. Per-biobank totals are published as round figures, so no exact sum is meaningful; the ancestral-diversity pies below give the exact sequenced, ancestry-assigned counts.'
 
 export default function AboutPage() {
   const { data, loading, error } = useAsync(fetchBiobankIndex, [])
@@ -55,7 +53,7 @@ export default function AboutPage() {
       <p className="mt-2 max-w-3xl text-sm text-ink-soft">{ABOUT_BLURB}</p>
 
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat value={PARTICIPANTS} label="Participants" help={PARTICIPANTS_HELP} />
+        <Stat value={PARTICIPANTS} label="Participants" />
         <Stat value={String(COHORTS.length)} label="Cohorts" />
         <Stat value={String(phenotypes.length)} label="Phenotypes" />
         <Stat value={fmtPos(nGenes)} label="Genes tested" />
