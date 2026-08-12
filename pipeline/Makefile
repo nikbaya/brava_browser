@@ -1,9 +1,11 @@
 # BRaVa browser ETL.
 #
-#   make meta     # gene + phenotype indexes -> ../app/public/data/meta
-#   make sample   # small local dataset for dev (a few traits + example genes)
-#   make full     # full dataset -> ./build  (then: make upload)
-#   make upload    # push ./build to the public GCS bucket (gzip-transcoded)
+#   make meta        # gene + phenotype indexes -> ../app/public/data/meta
+#   make sample      # small local dataset for dev (a few traits + example genes)
+#   make full        # full dataset -> ./build  (then: make upload-genes)
+#   make upload-genes # push ./build/{gene,phenotype} to the live R2 bucket
+#   make upload      # STALE -- pushes to a GCS bucket the live site doesn't
+#                     # read from (pre-R2-migration leftover). Use upload-genes.
 #
 # Variant (v2):
 #   make full-variants   # build variant JSON -> ./build/variant
@@ -22,6 +24,8 @@ R2_REMOTE ?= r2
 R2_BUCKET ?= brava-browser
 # Gzip-transcode staging dir (see upload-variants).
 VARIANT_GZ := $(OUT_FULL)/variant.gz
+# Gzip-transcode staging dir (see upload-genes).
+GENE_GZ := $(OUT_FULL)/gene_pheno.gz
 
 SAMPLE_PHENOS ?= LDLC,T2Diab,Height,CAD,AFib
 SAMPLE_GENES  ?= PCSK9,LDLR,APOB,TTN,GIGYF1,BRCA2,APOC3,ANGPTL3,ASGR1,GCK,PCSK1,MC4R
@@ -30,7 +34,7 @@ SAMPLE_GENES  ?= PCSK9,LDLR,APOB,TTN,GIGYF1,BRCA2,APOC3,ANGPTL3,ASGR1,GCK,PCSK1,
 # back to the bundled app indexes (always up to date after `make meta`).
 META_DIR ?= $(shell [ -f $(OUT_FULL)/meta/genes.json ] && echo $(OUT_FULL)/meta || echo $(OUT_DEV)/meta)
 
-.PHONY: meta sample full upload clean all-results \
+.PHONY: meta sample full upload upload-genes clean all-results \
         sample-variants full-variants upload-variants copy-variant-split
 
 # build_phenotypes / build_biobanks fetch the supp tables from medRxiv (cached).
@@ -58,10 +62,47 @@ full:
 	python build_data.py --out $(OUT_FULL) --phenos all --genes all --gene-shards 16
 
 upload:
+	# STALE: pushes to a GCS bucket the live site does not read from (see the
+	# header comment). Kept only for reference; use upload-genes instead.
 	# -Z gzip-transcodes (sets Content-Encoding: gzip); object names stay .json.
 	gsutil -m -h "Cache-Control:public,max-age=86400" cp -Z -r $(OUT_FULL)/meta $(BUCKET)/
 	gsutil -m -h "Cache-Control:public,max-age=86400" cp -Z -r $(OUT_FULL)/gene $(BUCKET)/
 	gsutil -m -h "Cache-Control:public,max-age=86400" cp -Z -r $(OUT_FULL)/phenotype $(BUCKET)/
+
+# Upload v1 gene + phenotype JSON to Cloudflare R2, at the root-level gene/ and
+# phenotype/ prefixes -- this is what the deployed app's dataUrl() actually
+# reads (VITE_DATA_BASE_URL in deploy.yml points at the R2 pub URL). NOT the
+# `upload` target above, which pushes to a GCS bucket left over from before
+# the R2 migration that the live site never reads.
+#
+# rclone has no gzip-transcode (unlike gsutil -Z), so stage a gzipped copy
+# first -- same reasoning as upload-variants. Cache-Control is 24h, not
+# "immutable" like v2/variant/, because this data does get periodically
+# rebuilt (matches the original gsutil -Z upload's header).
+# --checksum skips re-uploading unchanged files -- gene/+phenotype/ is ~19,800
+# objects, so a blind re-copy would burn a meaningful slice of the 1M/month
+# Class A op budget on files that didn't actually change.
+upload-genes:
+	@echo "Gzip-transcoding gene/ + phenotype/ -> $(GENE_GZ) ..."
+	rm -rf $(GENE_GZ)
+	mkdir -p $(GENE_GZ)/gene $(GENE_GZ)/phenotype
+	@cd $(OUT_FULL)/gene && find . -type f -name '*.json' -print0 | \
+	  xargs -0 -P 8 sh -c 'for f; do gzip -9 -c "$$f" > "$(abspath $(GENE_GZ))/gene/$$f"; done' _
+	@cd $(OUT_FULL)/phenotype && find . -type f -name '*.json' -print0 | \
+	  xargs -0 -P 8 sh -c 'for f; do gzip -9 -c "$$f" > "$(abspath $(GENE_GZ))/phenotype/$$f"; done' _
+	@echo "Staged $$(find $(GENE_GZ) -type f | wc -l | tr -d ' ') gzipped files ($$(du -sh $(GENE_GZ) | cut -f1))."
+	rclone copy --progress --checksum --transfers 16 \
+	  --header-upload "Content-Encoding: gzip" \
+	  --header-upload "Content-Type: application/json" \
+	  --header-upload "Cache-Control: public, max-age=86400" \
+	  $(GENE_GZ)/gene $(R2_REMOTE):$(R2_BUCKET)/gene
+	rclone copy --progress --checksum --transfers 16 \
+	  --header-upload "Content-Encoding: gzip" \
+	  --header-upload "Content-Type: application/json" \
+	  --header-upload "Cache-Control: public, max-age=86400" \
+	  $(GENE_GZ)/phenotype $(R2_REMOTE):$(R2_BUCKET)/phenotype
+	@echo "Upload complete. Total R2 usage:"
+	rclone size $(R2_REMOTE):$(R2_BUCKET)
 
 # --- variant-level (v2) --------------------------------------------------------
 # Requires meta indexes (genes.json + phenotypes.json) for gene-body overlap.
@@ -111,4 +152,4 @@ upload-variants:
 	rclone size $(R2_REMOTE):$(R2_BUCKET)
 
 clean:
-	rm -rf $(OUT_FULL) $(VARIANT_GZ) _tmp _tmp_variant
+	rm -rf $(OUT_FULL) $(VARIANT_GZ) $(GENE_GZ) _tmp _tmp_variant
