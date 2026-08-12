@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import gzip
 import io
+import math
 import subprocess
 import urllib.request
 from pathlib import Path
@@ -52,6 +53,21 @@ MASK_INDEX = {m: i for i, m in enumerate(MASKS)}
 # MAF cutoff index order: 0 -> 0.001, 1 -> 0.0001.
 MAFS = [0.001, 0.0001]
 MAF_INDEX = {0.001: 0, 0.0001: 1, 1e-4: 1}
+
+# R/SAIGE's own p-value tail computation (Satterthwaite/Liu moment-matching for
+# SKAT/SKAT-O, pnorm for Burden) underflows to a literal 0.0 well before the
+# true double-precision floor -- e.g. APOB x LDL-C/EUR pLoF (Stat ~46) prints
+# Pvalue=0 in the raw TSV. That 0 is a real, extremely significant result, not
+# missing data, so neglog10() below floors it instead of nulling it -- nulling
+# it silently made the most significant genes render as blank/non-significant.
+LP_FLOOR = -math.log10(5e-324)  # smallest positive double ~= 323.3
+
+# Genome-wide significance thresholds from the BRaVa flagship paper. Mirrors
+# app/src/lib/constants.ts's SIG_GENE_CAUCHY / SIG_GENE_MASK_BONFERRONI --
+# keep the two in sync.
+SIG_GENE_CAUCHY = 2.5e-6  # gene-level Cauchy
+SIG_GENE_MASK_BONFERRONI = 1.39e-7  # gene x mask Bonferroni
+SIG_SUGGEST = 1e-4  # suggestive tier; build_all_results.py's inclusion cutoff
 
 # Raw filenames are "{STEM}_gene_meta_analysis_100_cutoff{suffix}.tsv.gz" where
 # STEM is "{base}_ALL" for all-sex analyses or "{base}_F" for female-specific
@@ -198,9 +214,12 @@ def parse_gene_tsv(raw: bytes) -> pl.DataFrame:
     )
 
     def neglog10(col: str) -> pl.Expr:
+        p = pl.col(col)
         return (
-            pl.when(pl.col(col) > 0)
-            .then(-pl.col(col).log10())
+            pl.when(p > 0)
+            .then(-p.log10())
+            .when(p == 0)
+            .then(pl.lit(LP_FLOOR))
             .otherwise(None)
             .round(2)
         )

@@ -23,7 +23,7 @@ import math
 import polars as pl
 import pytest
 
-from common import parse_gene_tsv, pivot_tests
+from common import LP_FLOOR, parse_gene_tsv, pivot_tests
 from build_data import GENE_KEYS, finite_round
 
 # 13-column raw schema, header + rows. One gene (G1) at the pLoF mask, MAF 0.001,
@@ -64,6 +64,9 @@ def _synthetic_tsv() -> bytes:
         # G2, pLoF, 0.001 — only a Stouffer Burden row (IVW absent → fall back)
         _row("G2", "pLoF", "0.001", "5e-06", STF, "0.3", "NA", "NA", "Burden"),
         _row("G2", "pLoF", "0.001", "6e-06", STF, "NA", "NA", "NA", "SKAT-O"),
+        # G3, pLoF, 0.001 — SKAT-O Pvalue underflowed to a literal 0 in the raw
+        # TSV (real example: APOB x LDL-C/EUR). Must floor, not null.
+        _row("G3", "pLoF", "0.001", "0", STF, "NA", "NA", "NA", "SKAT-O"),
     ]
     return ("\n".join(rows) + "\n").encode()
 
@@ -114,6 +117,16 @@ def test_neglog10_roundtrip(parsed: pl.DataFrame):
 def test_lp_is_rounded_2dp(parsed: pl.DataFrame):
     for v in parsed["lp"].drop_nulls().to_list():
         assert round(v, 2) == v
+
+
+def test_underflowed_pvalue_floors_instead_of_nulling(parsed: pl.DataFrame):
+    """Regression: SAIGE's own tail computation can print Pvalue=0 for a
+    genuinely significant result (e.g. APOB x LDL-C/EUR pLoF). That must floor
+    to LP_FLOOR, not become null — null renders as a blank, non-significant
+    cell in the table."""
+    g3 = parsed.filter((pl.col("ensg") == "G3") & (pl.col("cls") == "SKAT-O"))
+    assert g3.height == 1
+    assert g3["lp"].item() == pytest.approx(LP_FLOOR, abs=0.01)
 
 
 # --------------------------------------------------------------------------- #
