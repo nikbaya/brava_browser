@@ -30,7 +30,7 @@ SAMPLE_GENES  ?= PCSK9,LDLR,APOB,TTN,GIGYF1,BRCA2,APOC3,ANGPTL3,ASGR1,GCK,PCSK1,
 # back to the bundled app indexes (always up to date after `make meta`).
 META_DIR ?= $(shell [ -f $(OUT_FULL)/meta/genes.json ] && echo $(OUT_FULL)/meta || echo $(OUT_DEV)/meta)
 
-.PHONY: meta sample full upload clean \
+.PHONY: meta sample full upload clean all-results \
         sample-variants full-variants upload-variants copy-variant-split
 
 # build_phenotypes / build_biobanks fetch the supp tables from medRxiv (cached).
@@ -42,6 +42,13 @@ meta:
 
 sample: meta
 	python build_data.py --out $(OUT_DEV) --phenos $(SAMPLE_PHENOS) --genes $(SAMPLE_GENES)
+
+# Bundled cross-phenotype "significant results" index for the all-results page
+# (meta/all_results.{ANC}.json). Needs gsutil access to the raw bucket like
+# `full` below -- not part of `meta` because it's not just annotation, and not
+# part of `full`/`upload` because its output is bundled, not R2-hosted.
+all-results: meta
+	python build_all_results.py --out $(OUT_DEV) --phenos all
 
 full:
 	python build_annotation.py --out $(OUT_FULL)

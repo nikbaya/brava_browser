@@ -1,5 +1,6 @@
 import { dataUrl, metaUrl, variantUrl } from './config'
 import type {
+  AllResultsData,
   BiobankIndex,
   ExonShard,
   GeneData,
@@ -48,6 +49,14 @@ export const fetchBiobankIndex = () =>
   getJSON<BiobankIndex>(metaUrl('meta/biobanks.json'))
 export const fetchPhenoSizes = () =>
   getJSON<PhenoSizes>(metaUrl('meta/pheno_sizes.json'))
+
+/**
+ * All-results index for one ancestry stratum (bundled, sharded — see
+ * AllResultsData). Lazy per-ancestry, like fetchExonShard; getJSON's cache
+ * means switching back to an already-loaded ancestry is free.
+ */
+export const fetchAllResults = (ancestrySuffix: string) =>
+  getJSON<AllResultsData>(metaUrl(`meta/all_results.${ancestrySuffix || 'All'}.json`))
 
 /**
  * Gene models (exon structure) for one chromosome. Sharded so the gene page

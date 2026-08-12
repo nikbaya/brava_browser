@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import SearchBar from './SearchBar'
 
 const NAV = [
+  { to: '/all-results', label: 'All results' },
   { to: '/downloads', label: 'Downloads' },
   { to: '/about', label: 'About' },
   { to: '/faq', label: 'FAQ' },

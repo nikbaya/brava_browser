@@ -7,15 +7,35 @@ export default function DownloadsPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-bold text-ink">Downloads</h1>
-      <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-        All BRaVa meta-analysis results are available for download from Google
-        Cloud Storage at <code className="font-mono text-ink">{BUCKET}</code>,
-        using <strong className="font-semibold text-ink">Requester Pays</strong>.
-        These consist of ancestry-specific and cross-ancestry meta-analysis test
-        statistics at both the <strong className="font-semibold text-ink">variant</strong>{' '}
-        and <strong className="font-semibold text-ink">gene</strong> level — the
-        full summary statistics behind this browser, not a subset.
-      </p>
+
+      <Section title="Just need what's on screen? Use the download button">
+        <p>
+          Every results table in this browser — gene page, phenotype page,
+          variant tables, the{' '}
+          <Link to="/all-results" className="text-brand hover:underline">
+            all-results page
+          </Link>{' '}
+          — has a download button in its caption bar. It exports exactly the
+          rows you're looking at: whatever you've filtered to, in the order
+          you've sorted them, as a TSV.
+        </p>
+      </Section>
+
+      <div className="mt-10 border-t border-line pt-8">
+        <h2 className="text-xl font-bold text-ink">Bulk downloads</h2>
+        <p className="mt-2 text-sm leading-relaxed text-ink-soft">
+          For anything beyond a single table — the complete summary statistics
+          across every phenotype, ancestry, mask and MAF cutoff — the full data
+          are available from Google Cloud Storage at{' '}
+          <code className="font-mono text-ink">{BUCKET}</code>, using{' '}
+          <strong className="font-semibold text-ink">Requester Pays</strong>.
+          These consist of ancestry-specific and cross-ancestry meta-analysis
+          test statistics at both the{' '}
+          <strong className="font-semibold text-ink">variant</strong> and{' '}
+          <strong className="font-semibold text-ink">gene</strong> level — the
+          full summary statistics behind this browser, not a subset.
+        </p>
+      </div>
 
       <Section title="What “Requester Pays” means for you">
         <p>

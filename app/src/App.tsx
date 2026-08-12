@@ -12,6 +12,7 @@ import { Spinner } from './components/ui'
 const AboutPage = lazy(() => import('./pages/AboutPage'))
 const FaqPage = lazy(() => import('./pages/FaqPage'))
 const DownloadsPage = lazy(() => import('./pages/DownloadsPage'))
+const AllResultsPage = lazy(() => import('./pages/AllResultsPage'))
 
 export default function App() {
   const { pathname } = useLocation()
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/gene/:id" element={<GenePage />} />
             <Route path="/phenotype/:id" element={<PhenotypePage />} />
+            <Route path="/all-results" element={<AllResultsPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/faq" element={<FaqPage />} />
             <Route path="/downloads" element={<DownloadsPage />} />

@@ -1,10 +1,11 @@
 import type {
+  AllResultsData,
   GeneData,
   GeneVariantAncData,
   GeneVariantData,
   PhenotypeData,
 } from '../data/types'
-import { ANCESTRIES, type Test } from './constants'
+import { ANCESTRIES, TESTS, type Test } from './constants'
 
 /** Pick the -log10(p) array for a given test from a columnar payload. */
 export function lpArray(
@@ -43,6 +44,40 @@ export function phenoRows(d: PhenotypeData, f: Filters): PhenoRow[] {
       lp: lp[i] ?? null,
       beta: d.beta[i] ?? null,
       se: d.se[i] ?? null,
+    })
+  }
+  return out
+}
+
+/** One row of the all-results table / Manhattan point: a significant hit for
+ *  some gene x phenotype at the selected mask + maf + test. */
+export interface AllResultsRow {
+  geneIdx: number
+  phenoIdx: number
+  lp: number
+  beta: number | null
+}
+
+/**
+ * Filter one ancestry's all-results shard to the selected mask + maf + test.
+ * Every row in `d` already clears the gene-level Cauchy threshold by
+ * construction (see pipeline/build_all_results.py), so unlike `phenoRows` this
+ * has no null `lp` to skip.
+ */
+export function allResultsRows(
+  d: AllResultsData,
+  f: { maskIndex: number; mafIndex: number; test: Test },
+): AllResultsRow[] {
+  const testIdx = TESTS.indexOf(f.test)
+  const out: AllResultsRow[] = []
+  for (let i = 0; i < d.n; i++) {
+    if (d.mask_idx[i] !== f.maskIndex || d.maf_idx[i] !== f.mafIndex) continue
+    if (d.test_idx[i] !== testIdx) continue
+    out.push({
+      geneIdx: d.gene_idx[i],
+      phenoIdx: d.pheno_idx[i],
+      lp: d.lp[i],
+      beta: d.beta[i] ?? null,
     })
   }
   return out

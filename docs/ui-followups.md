@@ -445,6 +445,67 @@ gzips down to very little.
   table; a single "EUR-only / multi-ancestry" marker plus a filter may read
   better. Worth mocking both before committing to a column.
 
+## Per-ancestry filter sliders: P-value, beta, and P_het
+
+The gene/phenotype tables have a global P ≤ / |β| ≥ slider filter, but nothing
+lets a user filter on a **specific ancestry's** P or β (or on `P_het`) in the
+per-ancestry grid — e.g. "show genes significant in AFR" or "flag rows with
+P_het < 0.05". Worth adding ancestry-scoped sliders alongside the existing
+ones once the UI for stacking multiple filter controls is worked out.
+
+## Miami plot: compare two ancestries
+
+Either (a) for one trait, both ancestries' full gene Manhattan back-to-back
+(the classic Miami layout — one ancestry mirrored below the axis), or (b) for
+one ancestry pair, only the genes significant in at least one, across all
+traits. Would reuse `genomeLayout`/`ManhattanPlot`'s x-scale; the "all sig
+genes across all traits" variant (b) is the same underlying data as the
+proposed all-results page below, just re-sliced by ancestry instead of by
+mask/maf/test.
+
+## All-results page — SHIPPED (v1 scaffold)
+
+`/all-results`: every (gene, phenotype) result past the gene-level Cauchy
+threshold (P < 2.5e-6), across all 44 traits, with the same mask/MAF/test/
+ancestry dropdowns as the phenotype page. [AllResultsPage.tsx](../app/src/pages/AllResultsPage.tsx)
++ [AllResultsManhattan.tsx](../app/src/components/AllResultsManhattan.tsx).
+
+**Data: bundled, sharded by ancestry, not R2.** [build_all_results.py](../pipeline/build_all_results.py)
+scans every phenotype × ancestry gene TSV and keeps only rows clearing
+`SIG_GENE_CAUCHY`, melting each pivoted (gene, mask, maf) row into up to 3 hit
+rows (one per test). Measured on the real bucket: the cross-ancestry "All"
+meta alone yields **8,653 hits** across 44 phenotypes × 6 masks × 2 MAFs × 3
+tests (~900 KB raw TSV worth of rows); LDLC's 7 ancestry files individually
+range from 4 (EAS) to 287 (All) rows, a few KB each as JSON. So per-ancestry
+sharding (`meta/all_results.{ANC}.json`, 7 files) — not one combined file —
+both bounds any single fetch and lets ancestry switching stay lazy (same
+pattern as `meta/exons/chr{N}.json` and the gene page's `.anc.json`); every
+shard is comfortably small enough to bundle with the app rather than host on
+R2, so switching mask/MAF/test/ancestry costs zero R2 reads either way.
+
+**`beta` is always the IVW Burden effect**, regardless of which test's
+p-value triggered the hit — this mirrors `phenoRows`/`geneRows` in
+[select.ts](../app/src/lib/select.ts), which show Burden's β alongside
+whichever test the user has selected. An earlier draft nulled `beta` for
+non-Burden hits and had to be corrected before the real build ran.
+
+**Points are colored by chromosome, not phenotype** — same as `ManhattanPlot`.
+44 traits can land on the same gene, and a 44-way categorical legend would be
+noisier than useful; the tooltip + click disambiguate which trait a point is.
+
+**Not done / next:**
+- Clicking a point navigates to `/gene/{ensg}` with no phenotype
+  pre-selection — same gap as the phenotype page (see the item above about
+  wiring phenotype → gene forest navigation); fixing that lands here for free
+  once built.
+- No further P/β threshold slider on the table — every row already clears the
+  inclusion threshold, so a slider would only narrow within an already-tiny
+  set; a gene/phenotype search box covers the common case for now.
+- Rebuild story: `make all-results` (needs gsutil access; ~7.8 GiB across all
+  280 gene TSVs) whenever the underlying data changes, then commit the 7
+  `meta/all_results.*.json` shards. Standalone target, not wired into `make
+  full`/`upload` — its output is bundled, not R2-hosted.
+
 ## Search: map lay / synonym terms to the phenotypes they mean
 
 The header search

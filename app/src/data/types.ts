@@ -205,3 +205,23 @@ export interface VariantOverview {
 export interface VariantSplit {
   split: string[]
 }
+
+/**
+ * meta/all_results.{ANC}.json — every (gene, phenotype, mask, maf, test) row
+ * for one ancestry that clears the gene-level Cauchy significance threshold
+ * (see pipeline/build_all_results.py), columnar. Sharded per ancestry (like
+ * meta/exons/) so a page only pays for the stratum it's showing; each shard is
+ * small enough to bundle with the app rather than host on R2. `test_idx`
+ * indexes TESTS (0=Burden, 1=SKAT, 2=SKAT-O); `beta` is null outside Burden.
+ */
+export interface AllResultsData {
+  anc: string
+  n: number
+  pheno_idx: number[]
+  gene_idx: number[]
+  mask_idx: number[]
+  maf_idx: number[]
+  test_idx: number[]
+  lp: number[]
+  beta: (number | null)[]
+}

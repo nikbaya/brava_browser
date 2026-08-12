@@ -143,6 +143,12 @@ export type Test = (typeof TESTS)[number]
 // Genome-wide significance thresholds from the BRaVa flagship paper.
 export const SIG_GENE_CAUCHY = 2.5e-6 // gene-level Cauchy
 export const SIG_GENE_MASK_BONFERRONI = 1.39e-7 // gene-mask Bonferroni
+// Suggestive tier used by SigDot's amber dot, and (as of the all-results page)
+// as the inclusion cutoff for pipeline/build_all_results.py's bundled index —
+// loose enough to show everything past genome-wide significance plus the
+// suggestive band, tight enough to keep that bundle small (see
+// docs/ui-followups.md's All-results entry for the measured size tradeoff).
+export const SIG_SUGGEST = 1e-4
 
 // Sensible defaults tuned to surface real signal.
 export const DEFAULTS = {

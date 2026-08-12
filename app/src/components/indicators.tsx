@@ -1,14 +1,14 @@
 import {
   SIG_GENE_CAUCHY,
   SIG_GENE_MASK_BONFERRONI,
+  SIG_SUGGEST,
 } from '../lib/constants'
 import { effectInfo } from '../lib/effect'
 import { fmtP } from '../lib/format'
 import type { PhenotypeMeta } from '../data/types'
 
 const LP_GENE = -Math.log10(SIG_GENE_CAUCHY) // ≈ 5.60
-const LP_SUGGEST = 4 // p < 1e-4
-const SIG_SUGGEST = Math.pow(10, -LP_SUGGEST)
+const LP_SUGGEST = -Math.log10(SIG_SUGGEST) // = 4, p < 1e-4
 
 /**
  * Significance indicator dot, keyed off -log10(p):
