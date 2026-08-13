@@ -76,7 +76,20 @@ function Diversity({ biobanks }: { biobanks: Biobank[] }) {
   return (
     <Section
       title="Ancestral diversity"
-      blurb="BRaVa's strength is the breadth of genetic ancestries it brings together. Each pie is one genetic-ancestry group, sized by sample count; the slices show how that ancestry is assembled across the contributing biobanks (hover for counts)."
+      blurb={
+        <>
+          BRaVa's strength is the breadth of genetic ancestries it brings
+          together. Each pie is one genetic-ancestry group, sized by sample
+          count; the slices show how that ancestry is assembled across the
+          contributing biobanks (hover for counts).{' '}
+          <Link
+            to={{ pathname: '/faq', hash: '#what-is-ancestry' }}
+            className="text-brand whitespace-nowrap hover:underline"
+          >
+            What is ancestry?
+          </Link>
+        </>
+      }
     >
       <div className="rounded-2xl border border-line bg-surface p-4">
         <DiversityPies biobanks={biobanks} />
@@ -104,7 +117,7 @@ function Section({
   children,
 }: {
   title: string
-  blurb: string
+  blurb: React.ReactNode
   children: React.ReactNode
 }) {
   return (

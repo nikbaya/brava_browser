@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import {
   SIG_GENE_CAUCHY,
   SIG_GENE_MASK_BONFERRONI,
@@ -50,10 +50,12 @@ const BIBTEX = `@article{brava2026,
 export default function FaqPage() {
   const { hash } = useLocation()
 
-  // Scroll to the "How to cite" section when arrived via the footer link.
+  // Scroll to a specific section/question when arrived via a cross-page link
+  // (e.g. "How to cite" from the footer, "What is ancestry?" from the pie
+  // sections on the landing and About pages).
   useEffect(() => {
-    if (hash === '#cite') {
-      document.getElementById('cite')?.scrollIntoView({ behavior: 'smooth' })
+    if (hash) {
+      document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [hash])
 
@@ -78,7 +80,7 @@ export default function FaqPage() {
           test. Single-variant results are also available within each gene.
         </Faq>
 
-        <Faq q="What is ancestry? Is it the same as race or ethnicity?">
+        <Faq id="what-is-ancestry" q="What is ancestry? Is it the same as race or ethnicity?">
           <blockquote className="border-l-2 border-line pl-3 text-ink italic">
             The “ancestry” of a group of people is related to the set of
             ancestors from whom they inherited their genetic variants. It does
@@ -96,6 +98,17 @@ export default function FaqPage() {
               pan.ukbb.broadinstitute.org
             </a>{' '}
             for a detailed description of genetic ancestry.
+          </p>
+          <p className="mt-2">
+            See BRaVa's own{' '}
+            <Link
+              to={{ pathname: '/about', hash: '#ancestral-diversity' }}
+              className="text-brand whitespace-nowrap hover:underline"
+            >
+              ancestral diversity
+            </Link>{' '}
+            for how the ancestry groups in this browser are assembled across
+            biobanks.
           </p>
         </Faq>
 
@@ -173,9 +186,9 @@ export default function FaqPage() {
   )
 }
 
-function Faq({ q, children }: { q: string; children: ReactNode }) {
+function Faq({ q, id, children }: { q: string; id?: string; children: ReactNode }) {
   return (
-    <div>
+    <div id={id} className={id ? 'scroll-mt-20' : undefined}>
       <h3 className="font-semibold text-ink">{q}</h3>
       <div className="mt-1 text-sm leading-relaxed text-ink-soft">{children}</div>
     </div>

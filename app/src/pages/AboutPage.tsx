@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { useAsync } from '../lib/useAsync'
 import { useIndex } from '../data/IndexContext'
 import { fetchBiobankIndex } from '../data/client'
@@ -34,6 +35,16 @@ export default function AboutPage() {
   const { data, loading, error } = useAsync(fetchBiobankIndex, [])
   const { phenotypes, geneIndex } = useIndex()
   const [tab, setTab] = useState<Tab>('Overview')
+  const { hash } = useLocation()
+
+  // Scroll to the "Ancestral diversity" pies when arrived via a cross-page link
+  // (e.g. the FAQ's "What is ancestry?" answer). Overview is already the
+  // default tab, so the section is present as soon as data loads.
+  useEffect(() => {
+    if (hash === '#ancestral-diversity' && !loading && data) {
+      document.getElementById('ancestral-diversity')?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [hash, loading, data])
 
   if (loading) return <Spinner label="Loading consortium data…" />
   if (error || !data)
@@ -104,13 +115,19 @@ function Overview({ biobanks }: { biobanks: Biobank[] }) {
 
   return (
     <div className="space-y-8">
-      <section>
+      <section id="ancestral-diversity" className="scroll-mt-20">
         <h2 className="mb-1 text-lg font-semibold text-ink">Ancestral diversity</h2>
         <p className="mb-4 max-w-3xl text-sm text-ink-soft">
           BRaVa's strength is the breadth of genetic ancestries it brings together.
           Each pie is one genetic-ancestry group; the slices show how that
           ancestry's representation is assembled across the contributing biobanks
-          (hover for counts).
+          (hover for counts).{' '}
+          <Link
+            to={{ pathname: '/faq', hash: '#what-is-ancestry' }}
+            className="text-brand whitespace-nowrap hover:underline"
+          >
+            What is ancestry?
+          </Link>
         </p>
         <div className="rounded-2xl border border-line bg-surface p-4">
           <DiversityPies biobanks={biobanks} />
