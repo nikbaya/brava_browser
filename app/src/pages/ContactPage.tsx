@@ -9,22 +9,20 @@ export default function ContactPage() {
     <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-bold text-ink">Contact</h1>
       <p className="mt-2 text-sm text-ink-soft">
-        Questions, feedback, and bug reports are all welcome.
       </p>
 
       <Section title="Email">
         <p>
-          Reach the consortium directly at{' '}
+          If you are interested in joining BRaVa or have questions about the consortium, reach us directly at{' '}
           <a href={`mailto:${EMAIL}`} className="text-brand hover:underline">
             {EMAIL}
           </a>
-          , including if you represent a biobank interested in joining BRaVa.
         </p>
       </Section>
 
       <Section title="Feedback form">
         <p>
-          Share feedback on the browser through our{' '}
+          Share feedback on the browser through our anonymous{' '}
           <a
             href={FEEDBACK_FORM_URL}
             target="_blank"

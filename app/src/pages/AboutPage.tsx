@@ -228,7 +228,7 @@ function Leadership() {
 
       <h2 className="mt-8 mb-1 text-lg font-semibold text-ink">Website</h2>
       <p className="max-w-3xl text-sm text-ink-soft">
-        This browser was created by Nikolas A Baya, with the assistance of
+        This browser was created by Nikolas Baya, with the assistance of
         Claude Code. Source code is available on{' '}
         <a
           href="https://github.com/nikbaya/brava_browser"
