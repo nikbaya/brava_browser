@@ -25,7 +25,7 @@ export default function Tip({
   className,
   wide = false,
 }: {
-  label: string
+  label: ReactNode
   children: ReactNode
   className?: string
   /**
@@ -88,7 +88,7 @@ export default function Tip({
               place?.below ? '' : '-translate-y-full'
             } ${
               wide
-                ? 'w-max max-w-[min(300px,calc(100vw-16px))] text-left whitespace-normal'
+                ? 'w-max max-w-[min(300px,calc(100vw-16px))] text-left whitespace-pre-line'
                 : 'whitespace-nowrap'
             }`}
           >

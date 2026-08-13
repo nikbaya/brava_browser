@@ -66,10 +66,6 @@ function CohortCard({ c, b }: { c: Cohort; b?: Biobank }) {
           </div>
         </>
       )}
-
-      <div className="mt-3 border-t border-line pt-2 text-xs text-ink-faint">
-        {c.people.join(' · ')}
-      </div>
     </div>
   )
 }

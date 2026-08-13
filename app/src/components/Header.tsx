@@ -7,6 +7,7 @@ const NAV = [
   { to: '/downloads', label: 'Downloads' },
   { to: '/about', label: 'About' },
   { to: '/faq', label: 'FAQ' },
+  { to: '/contact', label: 'Contact' },
 ]
 
 /** Top bar shown on every page except the landing page. Fixed height (h-14) so

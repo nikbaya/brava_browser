@@ -8,14 +8,9 @@ import { Notice, Spinner } from '../components/ui'
 import CohortCards from '../components/CohortCards'
 import DiversityPies from '../components/DiversityPies'
 import Tip from '../components/Tip'
-import {
-  ABOUT_BLURB,
-  COHORTS,
-  FOUNDED,
-  LEADERSHIP,
-  PRINCIPLES,
-  WORKING_GROUPS,
-} from '../data/consortium'
+import { ABOUT_BLURB, COHORTS, FOUNDED, LEADERSHIP, PRINCIPLES } from '../data/consortium'
+import { AUTHORS } from '../data/authors'
+import { PAPER_URL } from '../data/paper'
 import type { Biobank } from '../data/types'
 
 const TABS = ['Overview', 'Governing Principles', 'Leadership'] as const
@@ -194,20 +189,57 @@ function Leadership() {
         ))}
       </div>
 
-      <h2 className="mt-8 mb-3 text-lg font-semibold text-ink">Working groups</h2>
-      <div className="space-y-3">
-        {WORKING_GROUPS.map((g) => (
-          <div key={g.name} className="rounded-2xl border border-line bg-surface p-4">
-            <div className="flex items-baseline justify-between gap-2">
-              <div className="font-semibold text-ink">{g.name}</div>
-              <div className="text-xs text-ink-faint">{g.members.length} members</div>
-            </div>
-            <p className="mt-1.5 text-sm leading-relaxed text-ink-soft">
-              {g.members.join(' · ')}
-            </p>
-          </div>
-        ))}
+      <h2 className="mt-8 mb-1 text-lg font-semibold text-ink">Authors</h2>
+      <p className="mb-3 max-w-3xl text-sm text-ink-soft">
+        The full BRaVa gene-level meta-analysis author list, as it appears on the{' '}
+        <a href={PAPER_URL} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+          flagship preprint
+        </a>
+        .
+      </p>
+      <div className="rounded-2xl border border-line bg-surface p-4">
+        <p className="text-sm leading-relaxed text-ink-soft">
+          {AUTHORS.map((a, i) => (
+            <span key={a.name}>
+              {i > 0 && ' · '}
+              {a.affiliations.length > 0 ? (
+                <Tip
+                  label={
+                    <div className="divide-y divide-surface/15">
+                      {a.affiliations.map((aff, j) => (
+                        <div key={j} className="py-1.5 first:pt-0 last:pb-0">
+                          {aff}
+                        </div>
+                      ))}
+                    </div>
+                  }
+                  wide
+                  className="cursor-help text-ink underline decoration-ink-faint/70 decoration-dotted underline-offset-[3px]"
+                >
+                  {a.name}
+                </Tip>
+              ) : (
+                <span className="text-ink">{a.name}</span>
+              )}
+            </span>
+          ))}
+        </p>
       </div>
+
+      <h2 className="mt-8 mb-1 text-lg font-semibold text-ink">Website</h2>
+      <p className="max-w-3xl text-sm text-ink-soft">
+        This browser was created by Nikolas A Baya, with the assistance of
+        Claude Code. Source code is available on{' '}
+        <a
+          href="https://github.com/nikbaya/brava_browser"
+          target="_blank"
+          rel="noreferrer"
+          className="text-brand hover:underline"
+        >
+          GitHub
+        </a>
+        .
+      </p>
     </section>
   )
 }

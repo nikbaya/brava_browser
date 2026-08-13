@@ -4,3 +4,6 @@ docs/local-notes.md
 # Supplementary tables are fetched from medRxiv by the pipeline, not committed.
 media-2*.xlsx
 supp_tables.xlsx
+# Contains authors' personal email addresses; the derived, email-free
+# app/src/data/authors.ts is what ships in the repo.
+BRaVa author list*.tsv

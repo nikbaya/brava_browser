@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
-import { Link, Route, Routes, useLocation } from 'react-router-dom'
+import { Route, Routes, useLocation } from 'react-router-dom'
 import { countPageview } from './lib/analytics'
 import Header from './components/Header'
 import LandingPage from './pages/LandingPage'
@@ -13,6 +13,7 @@ const AboutPage = lazy(() => import('./pages/AboutPage'))
 const FaqPage = lazy(() => import('./pages/FaqPage'))
 const DownloadsPage = lazy(() => import('./pages/DownloadsPage'))
 const AllResultsPage = lazy(() => import('./pages/AllResultsPage'))
+const ContactPage = lazy(() => import('./pages/ContactPage'))
 
 export default function App() {
   const { pathname, hash } = useLocation()
@@ -24,7 +25,7 @@ export default function App() {
 
   // React Router doesn't reset scroll on navigation by itself, so without this
   // a page opens wherever the previous page's scroll happened to be. Skip when
-  // a hash anchor is present (e.g. /faq#cite from the footer) so the target
+  // a hash anchor is present (e.g. /faq#cite from the Downloads page) so the target
   // page's own scroll-to-anchor effect can land there instead.
   useEffect(() => {
     if (!hash) window.scrollTo(0, 0)
@@ -43,32 +44,11 @@ export default function App() {
             <Route path="/about" element={<AboutPage />} />
             <Route path="/faq" element={<FaqPage />} />
             <Route path="/downloads" element={<DownloadsPage />} />
+            <Route path="/contact" element={<ContactPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </main>
-      <Footer />
     </div>
-  )
-}
-
-function Footer() {
-  return (
-    <footer className="border-t border-line bg-surface px-4 py-6 text-center text-xs text-ink-faint">
-      <p>
-        BRaVa — Biobank Rare Variant Analysis consortium · meta-analysis of
-        ~1.2M individuals across 10 biobanks.
-      </p>
-      <p className="mt-1">
-        Summary statistics only · not for clinical use ·{' '}
-        <Link to="/downloads" className="text-brand hover:underline">
-          Download the data
-        </Link>{' '}
-        ·{' '}
-        <Link to={{ pathname: '/faq', hash: '#cite' }} className="text-brand hover:underline">
-          How to cite
-        </Link>
-      </p>
-    </footer>
   )
 }

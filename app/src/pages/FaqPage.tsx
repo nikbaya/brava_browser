@@ -4,17 +4,44 @@ import {
   SIG_GENE_CAUCHY,
   SIG_GENE_MASK_BONFERRONI,
 } from '../lib/constants'
+import { PAPER_DOI, PAPER_TITLE, PAPER_URL } from '../data/paper'
 
-const PAPER_TITLE =
-  'The Biobank Rare Variant consortium powers the discovery of rare genetic associations through global collaboration'
-const PAPER_DOI = '10.64898/2026.05.21.26353759'
-const PAPER_URL = `https://doi.org/${PAPER_DOI}`
+/** Full author list, in the order they appear on the paper. */
+const PAPER_AUTHORS = [
+  'Duncan S Palmer', 'Barney Hill', 'Sam Hodgson', 'Maarja Jõeloo', 'Georgios Kalantzis',
+  'Athanasios Kousathanas', 'Satoshi Koyama', 'Wenhan Lu', 'Shinichi Namba',
+  'Zachary B Rodriguez', 'Jonathan A Shortt', 'Kyuto Sonehara', 'Nicholas Vartanian',
+  'Ha My T Vy', 'Isaac A Wade', 'Samantha L White', 'Nikolas A Baya', 'Nathalie Chami',
+  'Ron Do', 'Karol Estrada', 'Sarah Finer', 'Giulio Genovese', 'Jeremy Guez', 'Yuval Itan',
+  'Masahiro Kanai', 'Frederik H Lassen', 'Koichi Matsuda', 'Loukas Moutsianas',
+  'Gina M Peloso', 'Priit Palta', 'Daniel J Rader', 'Augusto Rendon', 'Ghislain Rocheleau',
+  'Omid Sadeghi-Alavijeh', 'Margaret Sunitha Selvaraj', 'Roelof AJ Smit', 'Dapeng Wang',
+  'Emilie M Wigdor', 'Zhi Yu', 'Colorado Center for Personalized Medicine',
+  'Estonian Biobank Research Team', 'Genes & Health Industry Consortium1',
+  'Genes & Health Research Team', 'Penn Medicine BioBank', 'The BioBank Japan Project',
+  'Christopher R Gignoux', 'Henrike Heyne', 'Ruth JF Loos', 'Hilary C Martin',
+  'Lili Milani', 'Pradeep Natarajan', 'Yukinori Okada', 'Nikita Pozdeyev',
+  'David A van Heel', 'Anurag Verma', 'Wei Zhou', 'Konrad J Karczewski',
+  'Cecilia M Lindgren', 'Benjamin M Neale',
+]
 
-const CITATION = `Biobank Rare Variant Analysis (BRaVa) consortium. ${PAPER_TITLE}. medRxiv (2026). doi:${PAPER_DOI}`
+/** Collective / consortium credits, wrapped in braces in BibTeX so it isn't parsed as "First Last". */
+const GROUP_AUTHORS = new Set([
+  'Colorado Center for Personalized Medicine',
+  'Estonian Biobank Research Team',
+  'Genes & Health Industry Consortium1',
+  'Genes & Health Research Team',
+  'Penn Medicine BioBank',
+  'The BioBank Japan Project',
+])
+
+const AUTHORS_STRING = PAPER_AUTHORS.join(', ')
+
+const CITATION = `${AUTHORS_STRING}. ${PAPER_TITLE}. medRxiv (2026). doi:${PAPER_DOI}`
 
 const BIBTEX = `@article{brava2026,
   title   = {${PAPER_TITLE}},
-  author  = {{Biobank Rare Variant Analysis (BRaVa) consortium}},
+  author  = {${PAPER_AUTHORS.map((a) => (GROUP_AUTHORS.has(a) ? `{${a}}` : a)).join(' and ')}},
   journal = {medRxiv},
   year    = {2026},
   doi     = {${PAPER_DOI}}
@@ -49,6 +76,27 @@ export default function FaqPage() {
           (and each ancestry stratum), plus the inverse-variance-weighted Burden
           effect size (β), its standard error, and a cross-cohort heterogeneity
           test. Single-variant results are also available within each gene.
+        </Faq>
+
+        <Faq q="What is ancestry? Is it the same as race or ethnicity?">
+          <blockquote className="border-l-2 border-line pl-3 text-ink italic">
+            The “ancestry” of a group of people is related to the set of
+            ancestors from whom they inherited their genetic variants. It does
+            not have natural boundaries and it is not the same as race or
+            ethnicity.
+          </blockquote>
+          <p className="mt-2 text-xs text-ink-faint">
+            — Pan-UK Biobank, reused with permission. See{' '}
+            <a
+              href="https://pan.ukbb.broadinstitute.org/docs/background#what-is-ancestry-is-it-the-same-as-race-or-ethnicity"
+              target="_blank"
+              rel="noreferrer"
+              className="text-brand hover:underline"
+            >
+              pan.ukbb.broadinstitute.org
+            </a>{' '}
+            for a detailed description of genetic ancestry.
+          </p>
         </Faq>
 
         <Faq q="Why are there so few variant-level results?">
@@ -111,8 +159,7 @@ export default function FaqPage() {
         </p>
         <Copyable label="Citation" text={CITATION}>
           <p className="text-sm text-ink">
-            Biobank Rare Variant Analysis (BRaVa) consortium.{' '}
-            <em>{PAPER_TITLE}</em>. medRxiv (2026). doi:{' '}
+            {AUTHORS_STRING}. <em>{PAPER_TITLE}</em>. medRxiv (2026). doi:{' '}
             <a href={PAPER_URL} target="_blank" rel="noreferrer" className="text-brand hover:underline">
               {PAPER_DOI}
             </a>
@@ -130,7 +177,7 @@ function Faq({ q, children }: { q: string; children: ReactNode }) {
   return (
     <div>
       <h3 className="font-semibold text-ink">{q}</h3>
-      <p className="mt-1 text-sm leading-relaxed text-ink-soft">{children}</p>
+      <div className="mt-1 text-sm leading-relaxed text-ink-soft">{children}</div>
     </div>
   )
 }
