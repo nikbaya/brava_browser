@@ -6,7 +6,6 @@ import SamplePie, {
   NON_EUR,
   PieTip,
   fmtN,
-  fmtPct,
   lighten,
   scaledRadius,
   usePieTip,
@@ -47,7 +46,10 @@ export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
         key: r.id,
         n: r.n,
         fill: lighten(base, rows.length > 1 ? (i / (rows.length - 1)) * 0.62 : 0),
-        title: `${r.name}: ${fmtN(r.n)} (${fmtPct(r.n / total)})`,
+        // No embedded percentage here — `SliceLegend` (in SamplePie.tsx) adds
+        // one for the "+N more" tail, and a title carrying its own would
+        // double up with that.
+        title: `${r.name}: ${fmtN(r.n)}`,
         label: biobankShort(r.id, r.name),
       }))
       return { anc: a as Ancestry, slices, total, radius: scaledRadius(total, strataMax) }
@@ -73,9 +75,10 @@ export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
       .map((d) => {
         const slices = metaSlice(d.keys)
         const total = slices.reduce((s, x) => s + x.n, 0)
-        // fill titles now that we know the pie total
+        // fill titles now that we know the pie total (see the stratum-pie
+        // note above on why there's no percentage embedded here)
         for (const s of slices)
-          s.title = `${ANCESTRY_META[s.key as Ancestry].long}: ${fmtN(s.n)} (${fmtPct(s.n / total)})`
+          s.title = `${ANCESTRY_META[s.key as Ancestry].long}: ${fmtN(s.n)}`
         return { anc: d.anc, slices, total }
       })
       .filter((m) => m.slices.length > 0)
