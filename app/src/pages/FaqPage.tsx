@@ -113,24 +113,6 @@ export default function FaqPage() {
           </p>
         </Faq>
 
-        <Faq q="Why are there so few variant-level results?">
-          Single-variant tests, unlike gene-based tests, cannot pool information
-          across a gene, so the variant-level meta-analysis was restricted to
-          variants with sufficient power to be tested on their own. Every
-          qualifying variant still contributes to its gene's mask-based results,
-          but only that powered subset is reported as individual variants.
-        </Faq>
-
-        <Faq q="What is N (eff.) for a variant?">
-          The effective sample size contributing to that variant. For binary
-          (case-control) traits it's N<sub>eff</sub> = 4 / (1/N<sub>cases</sub>{' '}
-          + 1/N<sub>controls</sub>), summed across every stratum that
-          contributed to the variant — it tracks the rarer class, so it can be
-          far below the total sample size when cases are rare. For
-          quantitative traits it's simply the total sample size contributing
-          to the variant.
-        </Faq>
-
         <Faq q="What are the variant masks?">
           Genes are tested under annotation masks that pool qualifying variants:
           predicted loss-of-function (pLoF), damaging missense / protein-altering,
@@ -168,6 +150,27 @@ export default function FaqPage() {
           p-value flagging when effects differ across ancestries.
         </Faq>
 
+        <Faq q="Why are there so few variant-level results?">
+          Single-variant tests, unlike gene-based tests, cannot pool information
+          across a gene, so the variant-level meta-analysis was restricted to
+          variants with sufficient power to be tested on their own. Every
+          qualifying variant still contributes to its gene's mask-based results,
+          but only that powered subset is reported as individual variants.
+        </Faq>
+
+        <Faq
+          q={
+            <>
+              What is N<sub>eff</sub> (effective sample size) for a variant?
+            </>
+          }
+        >
+          For binary (case-control) traits it's N<sub>eff</sub> = 4 / (1/N<sub>cases</sub>{' '}
+          + 1/N<sub>controls</sub>), with N<sub>cases</sub> and N<sub>controls</sub> summed across 
+          every stratum that contributed to the variant. For quantitative traits it's simply the total sample size contributing
+          to the variant.
+        </Faq>
+
         <Faq q="Which genome build are positions on?">
           All gene coordinates and chromosomal positions in this browser are on
           GRCh38 (hg38), annotated from Ensembl release 110.
@@ -201,7 +204,7 @@ export default function FaqPage() {
   )
 }
 
-function Faq({ q, id, children }: { q: string; id?: string; children: ReactNode }) {
+function Faq({ q, id, children }: { q: ReactNode; id?: string; children: ReactNode }) {
   return (
     <div id={id} className={id ? 'scroll-mt-20' : undefined}>
       <h3 className="font-semibold text-ink">{q}</h3>
