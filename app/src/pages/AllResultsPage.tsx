@@ -16,6 +16,7 @@ import {
 } from '../lib/constants'
 import { fmtP, fmtPLog, fmtPos } from '../lib/format'
 import { exportP, slug, type ExportColumn, type TableExport } from '../lib/exportTable'
+import { categoryColors } from '../lib/categoryColor'
 import { Notice, Spinner, ThresholdLegend } from '../components/ui'
 import { DirDot, SigDot } from '../components/indicators'
 import { effectInfo } from '../lib/effect'
@@ -46,6 +47,7 @@ interface TableRow extends AllResultsRow {
   phenoId: string
   phenoName: string
   phenoType: 'binary' | 'quantitative'
+  phenoCategory: string
   phenoN: Record<string, AncestryN> | undefined
   totalN: number
 }
@@ -70,6 +72,7 @@ export default function AllResultsPage() {
   })
   const [query, setQuery] = useState('')
   const [minLp, setMinLp] = useState(0)
+  const [minN, setMinN] = useState(0)
   const [hover, setHover] = useState<{ geneIdx: number; phenoIdx: number } | null>(null)
   const [sorting, setSorting] = useState<SortingState>([{ id: 'lp', desc: true }])
 
@@ -103,6 +106,7 @@ export default function AllResultsPage() {
         phenoId: p?.id ?? '',
         phenoName: p?.name ?? `pheno ${r.phenoIdx}`,
         phenoType: p?.type ?? 'quantitative',
+        phenoCategory: p?.category ?? '',
         phenoN: p?.n,
         totalN,
       }
@@ -122,38 +126,33 @@ export default function AllResultsPage() {
     [tableRows],
   )
 
+  // Same input as the PheWAS plot / search dropdown, so a category's colour
+  // is identical everywhere it shows up in the browser.
+  const catColor = useMemo(
+    () => categoryColors(phenotypes.map((p) => p.category)),
+    [phenotypes],
+  )
+
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase()
     return tableRows.filter((r) => {
       if (minLp > 0 && r.lp < minLp) return false
+      if (minN > 0 && r.totalN < minN) return false
       if (!q) return true
       return (
         r.symbol.toLowerCase().includes(q) ||
         r.ensg.toLowerCase().includes(q) ||
         r.phenoName.toLowerCase().includes(q) ||
-        r.phenoId.toLowerCase().includes(q)
+        r.phenoId.toLowerCase().includes(q) ||
+        r.phenoCategory.toLowerCase().includes(q)
       )
     })
-  }, [tableRows, query, minLp])
+  }, [tableRows, query, minLp, minN])
 
   const openGene = (ensg: string) => navigate(`/gene/${ensg}`)
 
   const columns = useMemo<ColumnDef<TableRow, any>[]>(
     () => [
-      {
-        accessorKey: 'symbol',
-        header: 'Gene',
-        size: 110,
-        cell: (c) => (
-          <Link
-            to={`/gene/${c.row.original.ensg}`}
-            onClick={(e) => e.stopPropagation()}
-            className="font-medium text-brand hover:underline"
-          >
-            {c.getValue<string>()}
-          </Link>
-        ),
-      },
       {
         accessorKey: 'phenoName',
         header: 'Phenotype',
@@ -163,6 +162,37 @@ export default function AllResultsPage() {
             to={`/phenotype/${c.row.original.phenoId}`}
             onClick={(e) => e.stopPropagation()}
             className="text-brand hover:underline"
+          >
+            {c.getValue<string>()}
+          </Link>
+        ),
+      },
+      {
+        accessorKey: 'phenoCategory',
+        header: 'Category',
+        size: 150,
+        cell: (c) => {
+          const cat = c.getValue<string>()
+          return (
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: catColor.get(cat) }}
+              />
+              <span className="text-ink-soft">{cat}</span>
+            </span>
+          )
+        },
+      },
+      {
+        accessorKey: 'symbol',
+        header: 'Gene',
+        size: 110,
+        cell: (c) => (
+          <Link
+            to={`/gene/${c.row.original.ensg}`}
+            onClick={(e) => e.stopPropagation()}
+            className="font-medium text-brand hover:underline"
           >
             {c.getValue<string>()}
           </Link>
@@ -227,7 +257,7 @@ export default function AllResultsPage() {
         ),
       },
     ],
-    [maxTotalN, filters.ancestry],
+    [maxTotalN, filters.ancestry, catColor],
   )
 
   const exportSpec = useMemo<TableExport<TableRow>>(() => {
@@ -242,6 +272,7 @@ export default function AllResultsPage() {
         { header: 'gene_start', value: (r) => r.start },
         { header: 'phenotype_id', value: (r) => r.phenoId },
         { header: 'phenotype', value: (r) => r.phenoName },
+        { header: 'category', value: (r) => r.phenoCategory },
         { header: 'variant_mask', value: () => mask.raw },
         { header: 'max_maf', value: () => MAF_META[filters.mafIndex].value },
         { header: 'test', value: () => filters.test },
@@ -315,12 +346,22 @@ export default function AllResultsPage() {
                 stored={minLp}
                 onChange={setMinLp}
               />
-              {(query.trim() !== '' || minLp > 0) && (
+              <FilterRow
+                label="N ≥"
+                kind="n"
+                min={0}
+                max={maxTotalN}
+                step={Math.max(1, Math.round(maxTotalN / 200))}
+                stored={minN}
+                onChange={setMinN}
+              />
+              {(query.trim() !== '' || minLp > 0 || minN > 0) && (
                 <button
                   type="button"
                   onClick={() => {
                     setQuery('')
                     setMinLp(0)
+                    setMinN(0)
                   }}
                   className="text-xs text-ink-faint hover:text-ink hover:underline"
                 >

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { fmtBeta, fmtP, fmtPLog } from '../lib/format'
+import { fmtBeta, fmtCount, fmtP, fmtPLog } from '../lib/format'
 import { SIG_GENE_CAUCHY } from '../lib/constants'
 
 /** Threshold filter applied to result-table rows (not the plots). */
@@ -37,12 +37,12 @@ function ThresholdInput({
   stored,
   onCommit,
 }: {
-  kind: 'p' | 'beta'
+  kind: 'p' | 'beta' | 'n'
   stored: number
   onCommit: (v: number) => void
 }) {
   const shown = (v: number) =>
-    v > 0 ? (kind === 'p' ? fmtPLog(v) : fmtBeta(v)) : ''
+    v > 0 ? (kind === 'p' ? fmtPLog(v) : kind === 'beta' ? fmtBeta(v) : fmtCount(v)) : ''
   const [text, setText] = useState(shown(stored))
   const [editing, setEditing] = useState(false)
 
@@ -59,6 +59,8 @@ function ThresholdInput({
     if (kind === 'p') {
       // Field takes a p-value; store −log10(p). Out-of-range clears the filter.
       onCommit(num > 0 && num < 1 ? -Math.log10(num) : 0)
+    } else if (kind === 'n') {
+      onCommit(Math.max(0, Math.round(num)))
     } else {
       onCommit(Math.max(0, Math.abs(num)))
     }
@@ -70,7 +72,7 @@ function ThresholdInput({
       inputMode="decimal"
       value={text}
       placeholder="any"
-      aria-label={kind === 'p' ? 'P-value threshold' : 'Minimum |β|'}
+      aria-label={kind === 'p' ? 'P-value threshold' : kind === 'n' ? 'Minimum sample size' : 'Minimum |β|'}
       onFocus={() => setEditing(true)}
       onChange={(e) => setText(e.target.value)}
       onBlur={(e) => {
@@ -141,7 +143,7 @@ export function FilterRow({
   onChange,
 }: {
   label: ReactNode
-  kind: 'p' | 'beta'
+  kind: 'p' | 'beta' | 'n'
   min: number
   max: number
   step: number
