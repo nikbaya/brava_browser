@@ -59,3 +59,13 @@ export function chrColor(chr: string): string {
   const idx = CHR_ORDER.indexOf(chr)
   return idx % 2 === 0 ? '#3b7ea1' : '#9bb7c4'
 }
+
+/**
+ * Y-axis gridline spacing for a -log10(p) Manhattan, coarsened as the range
+ * grows so the axis never crowds: 5 up to 40, 10 up to 200, 20 up to 500,
+ * then 50 beyond that (a handful of ultra-significant hits routinely push
+ * maxY past 300, and underflow-floor p-values can push it past 500).
+ */
+export function yTickStep(maxY: number): number {
+  return maxY > 500 ? 50 : maxY > 200 ? 20 : maxY > 40 ? 10 : 5
+}

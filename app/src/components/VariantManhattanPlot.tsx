@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { scaleLinear } from 'd3-scale'
 import type { GeneIndex, PhenotypeMeta, VariantOverview } from '../data/types'
-import { chrColor, genomeLayout, VARIANT_CHR_LABELS } from '../lib/genome'
+import { chrColor, genomeLayout, VARIANT_CHR_LABELS, yTickStep } from '../lib/genome'
 import { fmtPLog3, fmtPos } from '../lib/format'
 import { effectInfo } from '../lib/effect'
 
@@ -47,6 +47,7 @@ export default function VariantManhattanPlot({
   traitType,
   onSelect,
   highlightIdx,
+  onlyIdx,
 }: {
   overview: VariantOverview
   geneIndex: GeneIndex
@@ -55,6 +56,11 @@ export default function VariantManhattanPlot({
   /** Draw a subtle dashed ring around this overview index (e.g. a hovered
    *  table row), independent of the canvas's own mouse-driven hover state. */
   highlightIdx?: number | null
+  /** When set (a table filter is active), draw only these overview indices —
+   *  drops the pixel-decimated null band along with everything else the
+   *  filter excludes, since none of it would pass anyway. Null/undefined
+   *  (no filter) draws the full genome-wide overview as before. */
+  onlyIdx?: Set<number> | null
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -66,6 +72,7 @@ export default function VariantManhattanPlot({
   const points = useMemo<Plotted[]>(() => {
     const out: Plotted[] = []
     for (let i = 0; i < overview.n; i++) {
+      if (onlyIdx && !onlyIdx.has(i)) continue
       const chr = VARIANT_CHR_LABELS[overview.chr[i]]
       const bp = overview.pos[i]
       const x = layout.posAt(chr, bp)
@@ -81,7 +88,7 @@ export default function VariantManhattanPlot({
       })
     }
     return out
-  }, [overview, layout])
+  }, [overview, layout, onlyIdx])
 
   const maxY = useMemo(
     () => Math.max(8, ...points.map((p) => p.y)) * 1.05,
@@ -120,7 +127,7 @@ export default function VariantManhattanPlot({
     ctx.fillStyle = '#8794a1'
     ctx.font = '11px system-ui'
     ctx.lineWidth = 1
-    for (let t = 0; t <= maxY; t += maxY > 40 ? 10 : 5) {
+    for (let t = 0; t <= maxY; t += yTickStep(maxY)) {
       const y = yScale(t)
       ctx.beginPath()
       ctx.moveTo(M.left, y)

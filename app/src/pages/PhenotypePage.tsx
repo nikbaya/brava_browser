@@ -18,8 +18,10 @@ import {
   phenoLookup,
   phenoRows,
   variantForest,
+  variantOverviewRows,
   type GridRow,
   type PhenoRow,
+  type VariantOverviewRow,
 } from '../lib/select'
 import {
   ANCESTRIES,
@@ -44,7 +46,6 @@ import {
 } from '../components/ancestryColumns'
 import { DirDot, SigDot } from '../components/indicators'
 import { effectInfo } from '../lib/effect'
-import { VARIANT_CHR_LABELS } from '../lib/genome'
 import FilterBar, { type FilterState } from '../components/FilterBar'
 import TableFilters, {
   FilterRow,
@@ -123,6 +124,12 @@ export default function PhenotypePage() {
   const [geneQuery, setGeneQuery] = useState('')
   const ancIdx = ANCESTRY_INDEX[ancestry]
 
+  // Filter state for the variant-overview table, lifted up (rather than kept
+  // local to VariantOverviewTable) so the linked Manhattan can drop down to
+  // the same subset once a filter is active — see `variantManhattanIdx`.
+  const [variantQuery, setVariantQuery] = useState('')
+  const [variantMinLp, setVariantMinLp] = useState(0)
+
   // Lazy-load every available ancestry file so the table can show a P + β
   // column per ancestry. The selected ancestry (already fetched above for the
   // Manhattan) fills immediately; the rest arrive in the background. getJSON
@@ -155,6 +162,38 @@ export default function PhenotypePage() {
     () => rows.filter((r) => r.lp != null && r.lp >= -Math.log10(SIG_GENE_CAUCHY)).length,
     [rows],
   )
+
+  // Same predicate as the gene table below (tableRows), applied directly to
+  // `rows` so the Manhattan always shows exactly what the table shows.
+  const manhattanRows = useMemo<PhenoRow[]>(() => {
+    const q = geneQuery.trim().toLowerCase()
+    return rows.filter((r) => {
+      if (!passesTableFilter(tableFilter, r.lp, r.beta)) return false
+      if (!q) return true
+      const symbol = geneIndex?.symbols[r.geneIdx] || geneIndex?.ids[r.geneIdx] || ''
+      return symbol.toLowerCase().includes(q)
+    })
+  }, [rows, tableFilter, geneQuery, geneIndex])
+
+  // Same predicate as VariantOverviewTable's own filteredRows, so its linked
+  // Manhattan can show exactly the matching subset once a filter is active —
+  // and fall back to the full pixel-decimated overview (including the null
+  // band) the rest of the time. Recomputing this over the ~20-50k overview
+  // rows on every keystroke is still sub-millisecond, same as the all-results
+  // and gene-level Manhattans.
+  const variantFilterActive = variantQuery.trim() !== '' || variantMinLp > 0
+  const variantManhattanIdx = useMemo(() => {
+    if (!overview || !geneIndex || !variantFilterActive) return null
+    const q = variantQuery.trim().toLowerCase()
+    const idx = new Set<number>()
+    for (const r of variantOverviewRows(overview, geneIndex)) {
+      if (variantMinLp > 0 && r.lp < variantMinLp) continue
+      if (q && !r.symbol.toLowerCase().includes(q) && !r.ensg.toLowerCase().includes(q)) continue
+      idx.add(r.idx)
+    }
+    return idx
+  }, [overview, geneIndex, variantFilterActive, variantQuery, variantMinLp])
+
   // The P/β threshold + slider domains apply to the selected ancestry column.
   const { maxLp, maxAbsBeta } = useMemo(() => {
     let lp = 0
@@ -290,7 +329,7 @@ export default function PhenotypePage() {
             </div>
             {manhattanMode === 'gene' ? (
               <ManhattanPlot
-                rows={rows}
+                rows={manhattanRows}
                 geneIndex={geneIndex!}
                 highlightGeneIdx={hoverGeneIdx}
                 onSelect={(gi) =>
@@ -309,6 +348,7 @@ export default function PhenotypePage() {
                 overview={overview}
                 geneIndex={geneIndex!}
                 traitType={pheno.type}
+                onlyIdx={variantManhattanIdx}
                 highlightIdx={hoverVariantIdx}
                 onSelect={(pick) =>
                   setVariantDrawer({
@@ -380,6 +420,10 @@ export default function PhenotypePage() {
                 overview={overview}
                 geneIndex={geneIndex!}
                 pheno={pheno}
+                query={variantQuery}
+                onQueryChange={setVariantQuery}
+                minLp={variantMinLp}
+                onMinLpChange={setVariantMinLp}
                 focusedVariant={variantDrawer}
                 onOpenForest={(pick) =>
                   setVariantDrawer({
@@ -835,17 +879,6 @@ function ResultsTable({
   )
 }
 
-interface VariantTableRow {
-  idx: number // index into the overview's parallel arrays
-  geneIdx: number
-  symbol: string
-  ensg: string
-  chr: string
-  pos: number
-  lp: number
-  dir: number
-}
-
 /**
  * Small quiet icon-link beside a variant's location, to that exact variant
  * pre-selected on the gene page's variant table (see GeneVariants'
@@ -907,6 +940,10 @@ function VariantOverviewTable({
   overview,
   geneIndex,
   pheno,
+  query,
+  onQueryChange,
+  minLp,
+  onMinLpChange,
   focusedVariant,
   onOpenForest,
   onHoverRow,
@@ -914,34 +951,20 @@ function VariantOverviewTable({
   overview: VariantOverview
   geneIndex: GeneIndex
   pheno: PhenotypeMeta
+  /** Lifted to the page so the linked Manhattan can show the same subset
+   *  once a filter narrows this table (see `variantManhattanIdx`). */
+  query: string
+  onQueryChange: (v: string) => void
+  minLp: number
+  onMinLpChange: (v: number) => void
   /** The variant currently shown in the forest drawer, if any. */
   focusedVariant: VariantPick | null
   onOpenForest: (pick: VariantPick) => void
   onHoverRow?: (idx: number | null) => void
 }) {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'lp', desc: true }])
-  const [geneQuery, setGeneQuery] = useState('')
-  const [minLp, setMinLp] = useState(0)
 
-  const rows = useMemo<VariantTableRow[]>(() => {
-    const out: VariantTableRow[] = []
-    for (let i = 0; i < overview.n; i++) {
-      if (overview.lp[i] < overview.keep_lp) continue
-      const geneIdx = overview.gene_idx[i]
-      if (geneIdx < 0) continue
-      out.push({
-        idx: i,
-        geneIdx,
-        symbol: geneIndex.symbols[geneIdx] || geneIndex.ids[geneIdx],
-        ensg: geneIndex.ids[geneIdx],
-        chr: VARIANT_CHR_LABELS[overview.chr[i]],
-        pos: overview.pos[i],
-        lp: overview.lp[i],
-        dir: overview.dir[i],
-      })
-    }
-    return out
-  }, [overview, geneIndex])
+  const rows = useMemo(() => variantOverviewRows(overview, geneIndex), [overview, geneIndex])
 
   // Slider domain: every row already clears `overview.keep_lp` by construction
   // (see `rows` above), so this is really the ceiling of an already-significant
@@ -952,15 +975,15 @@ function VariantOverviewTable({
   )
 
   const filteredRows = useMemo(() => {
-    const q = geneQuery.trim().toLowerCase()
+    const q = query.trim().toLowerCase()
     return rows.filter(
       (r) =>
         (!q || r.symbol.toLowerCase().includes(q) || r.ensg.toLowerCase().includes(q)) &&
         (minLp <= 0 || r.lp >= minLp),
     )
-  }, [rows, geneQuery, minLp])
+  }, [rows, query, minLp])
 
-  const columns = useMemo<ColumnDef<VariantTableRow, any>[]>(
+  const columns = useMemo<ColumnDef<VariantOverviewRow, any>[]>(
     () => [
       {
         accessorKey: 'symbol',
@@ -1037,7 +1060,7 @@ function VariantOverviewTable({
     [pheno.type, pheno.id],
   )
 
-  const exportSpec = useMemo<TableExport<VariantTableRow>>(
+  const exportSpec = useMemo<TableExport<VariantOverviewRow>>(
     () => ({
       noun: 'variants',
       filename: `brava_${slug(pheno.id)}_variants.tsv`,
@@ -1051,7 +1074,7 @@ function VariantOverviewTable({
         { header: 'P', value: (r) => exportP(r.lp) },
         { header: 'neglog10P', value: (r) => r.lp },
         { header: 'direction', value: (r) => (r.dir > 0 ? '+' : r.dir < 0 ? '-' : '') },
-      ] satisfies ExportColumn<VariantTableRow>[],
+      ] satisfies ExportColumn<VariantOverviewRow>[],
     }),
     [pheno],
   )
@@ -1062,12 +1085,12 @@ function VariantOverviewTable({
       cross-ancestry meta
     </span>
   )
-  const filterActive = geneQuery.trim() !== '' || minLp > 0
+  const filterActive = query.trim() !== '' || minLp > 0
 
   return (
     <>
       <div className="mb-1.5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-line bg-surface px-3 py-1.5">
-        <SearchInput label="Gene" value={geneQuery} onChange={setGeneQuery} />
+        <SearchInput label="Gene" value={query} onChange={onQueryChange} />
         <FilterRow
           label="P ≤"
           kind="p"
@@ -1075,14 +1098,14 @@ function VariantOverviewTable({
           max={maxLp}
           step={0.1}
           stored={minLp}
-          onChange={setMinLp}
+          onChange={onMinLpChange}
         />
         {filterActive && (
           <button
             type="button"
             onClick={() => {
-              setGeneQuery('')
-              setMinLp(0)
+              onQueryChange('')
+              onMinLpChange(0)
             }}
             className="text-xs text-ink-faint hover:text-ink hover:underline"
           >

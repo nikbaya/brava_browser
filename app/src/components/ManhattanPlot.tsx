@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { scaleLinear } from 'd3-scale'
 import type { GeneIndex } from '../data/types'
-import { chrColor, genomeLayout } from '../lib/genome'
+import { chrColor, genomeLayout, yTickStep } from '../lib/genome'
 import { fmtPLog3 } from '../lib/format'
 import { SIG_GENE_CAUCHY, SIG_GENE_MASK_BONFERRONI } from '../lib/constants'
 import type { PhenoRow } from '../lib/select'
@@ -100,7 +100,7 @@ export default function ManhattanPlot({
     ctx.fillStyle = '#8794a1'
     ctx.font = '11px system-ui'
     ctx.lineWidth = 1
-    for (let t = 0; t <= maxY; t += maxY > 40 ? 10 : 5) {
+    for (let t = 0; t <= maxY; t += yTickStep(maxY)) {
       const y = yScale(t)
       ctx.beginPath()
       ctx.moveTo(M.left, y)

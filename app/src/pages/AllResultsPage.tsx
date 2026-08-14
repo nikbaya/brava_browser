@@ -314,7 +314,7 @@ export default function AllResultsPage() {
                 Manhattan
               </div>
               <AllResultsManhattan
-                rows={rows}
+                rows={filteredRows}
                 geneIndex={geneIndex!}
                 phenotypes={phenotypes}
                 highlight={hover}

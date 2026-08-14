@@ -1,11 +1,14 @@
 import type {
   AllResultsData,
   GeneData,
+  GeneIndex,
   GeneVariantAncData,
   GeneVariantData,
   PhenotypeData,
+  VariantOverview,
 } from '../data/types'
 import { ANCESTRIES, TESTS, type Test } from './constants'
+import { VARIANT_CHR_LABELS } from './genome'
 
 /** Pick the -log10(p) array for a given test from a columnar payload. */
 export function lpArray(
@@ -394,6 +397,44 @@ export function geneRows(
       lp: lp[i] ?? null,
       beta: d.beta[i] ?? null,
       se: d.se[i] ?? null,
+    })
+  }
+  return out
+}
+
+/** One row of the phenotype page's genome-wide variant overview table (and,
+ *  when filtered, the linked Manhattan) — a gene-resolved variant clearing
+ *  `overview.keep_lp`. The pixel-decimated null band below that threshold is
+ *  excluded here; the Manhattan draws it separately for visual density. */
+export interface VariantOverviewRow {
+  idx: number // index into the overview's parallel arrays
+  geneIdx: number
+  symbol: string
+  ensg: string
+  chr: string
+  pos: number
+  lp: number
+  dir: number
+}
+
+export function variantOverviewRows(
+  overview: VariantOverview,
+  geneIndex: GeneIndex,
+): VariantOverviewRow[] {
+  const out: VariantOverviewRow[] = []
+  for (let i = 0; i < overview.n; i++) {
+    if (overview.lp[i] < overview.keep_lp) continue
+    const geneIdx = overview.gene_idx[i]
+    if (geneIdx < 0) continue
+    out.push({
+      idx: i,
+      geneIdx,
+      symbol: geneIndex.symbols[geneIdx] || geneIndex.ids[geneIdx],
+      ensg: geneIndex.ids[geneIdx],
+      chr: VARIANT_CHR_LABELS[overview.chr[i]],
+      pos: overview.pos[i],
+      lp: overview.lp[i],
+      dir: overview.dir[i],
     })
   }
   return out

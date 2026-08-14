@@ -169,7 +169,7 @@ export default function LocusZoom({
     ctx.fillStyle = '#8794a1'
     ctx.font = '11px system-ui'
     ctx.lineWidth = 1
-    const step = maxY > 40 ? 10 : maxY > 16 ? 5 : 2
+    const step = maxY > 500 ? 50 : maxY > 200 ? 20 : maxY > 40 ? 10 : maxY > 16 ? 5 : 2
     for (let t = 0; t <= maxY; t += step) {
       const y = yScale(t)
       ctx.beginPath()
