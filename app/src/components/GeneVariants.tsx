@@ -710,6 +710,7 @@ function VariantTable({
         : `${ANCESTRY_META[ANCESTRIES[ancIdx]].long} only`}{' '}
       · position-based (no functional annotation) · click a row for the ancestry
       forest
+      {!isMeta && ' · N (eff.) and I² are only available for All ancestries'}
     </span>
   )
 
