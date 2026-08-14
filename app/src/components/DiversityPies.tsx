@@ -101,19 +101,35 @@ export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
 
   return (
     <div>
-      {/* Meta pies are boxed rather than put in their own labelled column so
-          they can flow onto the strata's last row instead of always dropping
-          to a fresh line — the thing that made this section tall on mobile. */}
-      <div className="flex flex-wrap items-end gap-1 xl:items-start">
+      {/* Two layouts, swapped by CSS display — see the matching (and more
+          detailed) comment in AncestryPies.tsx. >=1120px: CSS grid with the
+          meta pies in a `subgrid` box, so the box's internal All↔non-EUR gap
+          inherits the same `justify-between`-distributed spacing as the rest
+          of the row. <1120px: flex-wrap with a tinted chip per meta pie,
+          since grid has no wrap and a box spanning columns has nothing
+          sensible to do once pies drop onto separate lines on a phone. */}
+      <div
+        className="hidden items-start justify-between gap-1 min-[1120px]:grid"
+        style={{ gridTemplateColumns: `repeat(${stratumPies.length + metaPies.length}, auto)` }}
+      >
         {stratumPies.map(render)}
         {metaPies.length > 0 && (
           <div
             title="Meta-analyses"
-            className="flex flex-wrap items-end gap-1 rounded-lg border border-line p-1 xl:items-start"
+            className="grid items-start gap-1 rounded-lg border border-line p-1"
+            style={{ gridColumn: `span ${metaPies.length}`, gridTemplateColumns: 'subgrid' }}
           >
             {metaPies.map(render)}
           </div>
         )}
+      </div>
+      <div className="flex flex-wrap items-start justify-between gap-1 min-[1120px]:hidden">
+        {stratumPies.map(render)}
+        {metaPies.map((p) => (
+          <div key={p.anc} title="Meta-analyses" className="rounded-lg border border-line p-1">
+            {render(p)}
+          </div>
+        ))}
       </div>
 
       <PieTip tip={tip} />

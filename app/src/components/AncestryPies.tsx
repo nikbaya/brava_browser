@@ -157,21 +157,58 @@ export default function AncestryPies({
         </span>
       </h2>
 
-      {/* From `xl` each pie gains a legend (see SliceLegend), sized so all
-          seven pies fit on one row. Meta pies are boxed rather than put in
-          their own labelled column so they can flow onto the strata's last
-          row instead of always dropping to a fresh line — the thing that made
-          this section tall on mobile. */}
-      <div className="flex flex-wrap items-end gap-1 xl:items-start">
+      {/* Two layouts, swapped by CSS display (not conditional render, so both
+          mount — cheap for 7 small pies, and it means every pie's hover/select
+          state stays wired up regardless of which is visible).
+          >=1120px: CSS grid with the meta pies in a `subgrid` box. A subgrid
+          item inherits its parent's *resolved* track sizes and gutters — so
+          when the outer grid's `justify-between` pads out the gaps between
+          columns, the box's internal All↔non-EUR gap (which subgrid maps onto
+          that same shared gutter) grows by the same amount, not just the gaps
+          around the box. That's the one thing plain flex couldn't do: a
+          flex-item box has no way to reach into a sibling's distributed
+          spacing. Column count is data-driven (a phenotype can be missing an
+          ancestry), hence the inline `gridTemplateColumns`/`gridColumn`
+          instead of a static Tailwind class.
+          <1120px: back to flex-wrap with a tinted chip per meta pie (see the
+          mobile-safe reasoning below) — grid has no equivalent of flex-wrap,
+          so a box spanning two grid columns has nothing sensible to do once
+          pies start dropping onto separate lines. */}
+      <div
+        className="hidden items-start justify-between gap-1 min-[1120px]:grid"
+        style={{ gridTemplateColumns: `repeat(${built.stratumPies.length + built.metaPies.length}, auto)` }}
+      >
         {built.stratumPies.map(render)}
         {built.metaPies.length > 0 && (
           <div
             title="Meta-analyses"
-            className="flex flex-wrap items-end gap-1 rounded-lg border border-line p-1 xl:items-start"
+            className="grid items-start gap-1 rounded-lg border border-line p-1"
+            style={{ gridColumn: `span ${built.metaPies.length}`, gridTemplateColumns: 'subgrid' }}
           >
             {built.metaPies.map(render)}
           </div>
         )}
+      </div>
+
+      {/* Each pie's legend fades in over two steps (see SliceLegend): swatches
+          + percentages from 1120px, names from `xl`.
+          Each meta pie gets its own outlined chip rather than a shared left
+          divider between them — a divider only reads as a boundary when "All"
+          lands mid-row; on a phone, flex-wrap puts every pie on its own line
+          (or two per line) and a stray vertical tick in front of a lone pie
+          looks like a rendering glitch, not a label. A per-pie chip carries its
+          own meaning regardless of where it wraps to. */}
+      <div className="flex flex-wrap items-start justify-between gap-1 min-[1120px]:hidden">
+        {built.stratumPies.map(render)}
+        {built.metaPies.map((p) => (
+          <div
+            key={p.anc}
+            title="Meta-analyses"
+            className="rounded-lg border border-line p-1"
+          >
+            {render(p)}
+          </div>
+        ))}
       </div>
 
       <PieTip tip={tip} />

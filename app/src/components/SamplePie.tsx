@@ -117,18 +117,29 @@ function SliceLegend({
   const rest = ranked.length - shown.length
 
   return (
-    // Only from `xl` up: below that the pies already fill their row, and a
-    // legend per pie would push them into extra rows to say what a hover
-    // already says. This is the one width test — a pie asked for a legend
-    // renders in row layout at every width, so hiding the list here collapses
-    // it back to exactly the legend-less pie.
+    // Two-step fade rather than one hard cutoff. From 1120px the swatch +
+    // percent column appears (composition is readable without a single name);
+    // from `xl` (1280) the names themselves appear alongside it. Losing the
+    // names first costs nothing — the row's onHover still reveals `s.title`
+    // (full name + N), so between the two breakpoints the info is a hover
+    // away, not gone. Below 1120px the whole column drops, collapsing back to
+    // the legend-less pie.
+    // 1120, not `lg` (1024): measured in the browser, seven pies with the
+    // percent column need ~1040px, so `lg` left a ~16px band where the row
+    // wrapped onto two lines while still trying to show percentages — the
+    // one thing this staged fade is supposed to prevent. 1120 leaves headroom
+    // for a real scrollbar and font-metric variance across browsers/OSes.
+    // Keep this value in sync with the `items-start` breakpoint on the pies
+    // row in AncestryPies.tsx / DiversityPies.tsx: that switch has to fire at
+    // the same width the legend appears, or the row's align-items flips while
+    // this column's height is changing, which visibly jumps the shorter pies.
     // No fixed width: each legend shrinks to its own widest row, so a pie whose
     // slices are all short labels doesn't reserve space for the longest label
     // anywhere on the row. `ml-auto` on the percentage still right-aligns it
     // *within* that width, keeping a clean column per legend without padding
     // the ul out. Together with the abbreviations this is what lets all seven
-    // pies share one line.
-    <ul className="hidden shrink-0 space-y-px text-left text-[11px] leading-tight whitespace-nowrap xl:block">
+    // pies share one line at `xl`.
+    <ul className="hidden shrink-0 space-y-px text-left text-[11px] leading-tight whitespace-nowrap min-[1120px]:block">
       {shown.map((s) => (
         <li
           key={s.key}
@@ -141,14 +152,14 @@ function SliceLegend({
             style={{ backgroundColor: s.fill }}
             aria-hidden="true"
           />
-          <span className="text-ink-soft">{s.label}</span>
+          <span className="hidden text-ink-soft xl:inline">{s.label}</span>
           <span className="tnum ml-auto pl-1.5 text-ink-faint">
             {Math.round((100 * s.n) / total)}%
           </span>
         </li>
       ))}
       {rest > 0 && (
-        <li className="pl-3 text-ink-faint">
+        <li className="hidden pl-3 text-ink-faint xl:block">
           +{rest} more
         </li>
       )}
