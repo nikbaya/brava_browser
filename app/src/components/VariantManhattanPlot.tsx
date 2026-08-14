@@ -4,6 +4,8 @@ import type { GeneIndex, PhenotypeMeta, VariantOverview } from '../data/types'
 import { chrColor, genomeLayout, VARIANT_CHR_LABELS, yTickStep } from '../lib/genome'
 import { fmtPLog3, fmtPos } from '../lib/format'
 import { effectInfo } from '../lib/effect'
+import { SIG_VARIANT } from '../lib/constants'
+import { THRESH_VARIANT } from './ui'
 
 interface Plotted {
   idx: number // index into the overview's parallel arrays
@@ -135,6 +137,19 @@ export default function VariantManhattanPlot({
       ctx.stroke()
       ctx.textAlign = 'right'
       ctx.fillText(String(t), M.left - 6, y + 3)
+    }
+
+    // variant-level significance line
+    const sigY = yScale(-Math.log10(SIG_VARIANT))
+    if (sigY > M.top && sigY < HEIGHT - M.bottom) {
+      ctx.save()
+      ctx.strokeStyle = THRESH_VARIANT.color
+      ctx.setLineDash(THRESH_VARIANT.dash.split(' ').map(Number))
+      ctx.beginPath()
+      ctx.moveTo(M.left, sigY)
+      ctx.lineTo(width - M.right, sigY)
+      ctx.stroke()
+      ctx.restore()
     }
 
     for (const p of points) {

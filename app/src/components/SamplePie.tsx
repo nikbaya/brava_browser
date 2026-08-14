@@ -155,17 +155,23 @@ function SliceLegend({
   const hidden = ranked.slice(LEGEND_MAX)
   const rest = hidden.length
   // Full names + exact percentages, same as every row's own tooltip — just
-  // one hidden cohort per line rather than the abbreviated label above.
-  const restText = hidden.map((s) => s.title).join('\n')
+  // one hidden cohort per line rather than the abbreviated label above. The
+  // percentage isn't in `s.title` itself (that's shared with each shown row's
+  // hover, which already has its own percent column beside it), so it's
+  // appended here, matching the rounding shown in that column.
+  const restText = hidden
+    .map((s) => `${s.title} (${Math.round((100 * s.n) / total)}%)`)
+    .join('\n')
 
   return (
     // Two-step fade rather than one hard cutoff. From 1120px the swatch +
-    // percent column appears (composition is readable without a single name);
-    // from `xl` (1280) the names themselves appear alongside it. Losing the
-    // names first costs nothing — the row's onHover still reveals `s.title`
-    // (full name + N), so between the two breakpoints the info is a hover
-    // away, not gone. Below 1120px the whole column drops, collapsing back to
-    // the legend-less pie.
+    // percent column appears (composition is readable without a single name),
+    // "+N more" included — it's a count, not a name, so it doesn't need the
+    // second step; from `xl` (1280) the names themselves appear alongside it.
+    // Losing the names first costs nothing — the row's onHover still reveals
+    // `s.title` (full name + N), so between the two breakpoints the info is a
+    // hover away, not gone. Below 1120px the whole column drops, collapsing
+    // back to the legend-less pie.
     // 1120, not `lg` (1024): measured in the browser, seven pies with the
     // percent column need ~1040px, so `lg` left a ~16px band where the row
     // wrapped onto two lines while still trying to show percentages — the
@@ -202,7 +208,7 @@ function SliceLegend({
       ))}
       {rest > 0 && (
         <li
-          className="hidden pl-3 text-ink-faint xl:block"
+          className="pl-3 text-ink-faint"
           onMouseMove={(e) => onHover(e, restText)}
           onMouseLeave={onLeave}
         >

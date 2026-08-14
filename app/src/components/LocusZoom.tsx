@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { scaleLinear } from 'd3-scale'
 import { fmtBeta3, fmtPLog3, fmtPos } from '../lib/format'
+import { SIG_VARIANT } from '../lib/constants'
 import type { VariantRow } from '../lib/select'
 import type { GeneModel } from '../data/types'
 import { collapsedRegions, regionScale, type Span } from '../lib/exonScale'
 import GeneTrack from './GeneTrack'
+import { THRESH_VARIANT, VariantThresholdLegend } from './ui'
 
 interface Plotted {
   row: VariantRow
@@ -180,6 +182,19 @@ export default function LocusZoom({
       ctx.fillText(String(t), M.left - 6, y + 3)
     }
 
+    // variant-level significance line
+    const sigY = yScale(-Math.log10(SIG_VARIANT))
+    if (sigY > M.top && sigY < HEIGHT - M.bottom) {
+      ctx.save()
+      ctx.strokeStyle = THRESH_VARIANT.color
+      ctx.setLineDash(THRESH_VARIANT.dash.split(' ').map(Number))
+      ctx.beginPath()
+      ctx.moveTo(M.left, sigY)
+      ctx.lineTo(width - M.right, sigY)
+      ctx.stroke()
+      ctx.restore()
+    }
+
     // points
     for (const p of points) {
       ctx.beginPath()
@@ -309,6 +324,7 @@ export default function LocusZoom({
             <span className="inline-block h-2 w-2 rounded-full" style={{ background: C_DOWN }} />
             {downLabel}
           </span>
+          <VariantThresholdLegend align="right" />
         </div>
       </div>
       <canvas

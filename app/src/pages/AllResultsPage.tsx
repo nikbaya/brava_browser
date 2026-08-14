@@ -290,8 +290,10 @@ export default function AllResultsPage() {
   return (
     <>
       <StickyTitle>
-        <div className="flex items-start justify-between gap-x-4">
-          <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          {/* shrink-[3]: outweighs FilterBar's default shrink (1) so this
+              column gives up width first — matches GenePage/PhenotypePage. */}
+          <div className="flex min-w-0 shrink-[3] flex-col gap-1">
             <h1 className="text-xl font-semibold text-ink">All results</h1>
             <p className="text-xs text-ink-faint">
               P &lt; {fmtP(SIG_SUGGEST)} (suggestive threshold) · {phenotypes.length} traits

@@ -36,7 +36,7 @@ import { fmtP, fmtPLog, fmtPos } from '../lib/format'
 import { exportP, slug, type ExportColumn, type TableExport } from '../lib/exportTable'
 import { geneLinkPath, parseFilterParams } from '../lib/filterLink'
 import type { GeneIndex, PhenotypeData, PhenotypeMeta, VariantOverview } from '../data/types'
-import { Notice, Spinner, ThresholdLegend } from '../components/ui'
+import { Notice, Spinner, ThresholdLegend, VariantThresholdLegend } from '../components/ui'
 import {
   ancestryExportColumns,
   ancestryGridColumns,
@@ -263,8 +263,11 @@ export default function PhenotypePage() {
   return (
     <>
       <StickyTitle>
-        <div className="flex items-start justify-between gap-x-4">
-          <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          {/* shrink-[3]: outweighs FilterBar's default shrink (1) so this
+              column (and its own wrapping subtitle line) gives up width
+              first — matches GenePage/AllResultsPage. */}
+          <div className="flex min-w-0 shrink-[3] flex-col gap-1">
             <h1 className="text-xl font-semibold text-ink">{pheno.name}</h1>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
               <span className="rounded bg-surface px-1.5 py-0.5 font-medium text-ink-soft">
@@ -372,10 +375,14 @@ export default function PhenotypePage() {
                   <span>· click a gene for its cross-ancestry forest</span>
                 </>
               ) : (
-                <span>
-                  Cross-ancestry meta only (not affected by the ancestry filter
-                  above) · click a variant for its cross-ancestry forest plot
-                </span>
+                <>
+                  <span>
+                    Cross-ancestry meta only (not affected by the ancestry
+                    filter above)
+                  </span>
+                  <VariantThresholdLegend />
+                  <span>· click a variant for its cross-ancestry forest plot</span>
+                </>
               )}
             </div>
           </section>
@@ -859,7 +866,7 @@ function ResultsTable({
           )
         </>
       )}{' '}
-      · <BetaLegend />
+      · <BetaLegend test={filters.test} />
     </span>
   )
 
@@ -1030,7 +1037,7 @@ function VariantOverviewTable({
         meta: { help: 'Association p-value from the cross-ancestry meta-analysis.' },
         cell: (c) => (
           <span className="tnum inline-flex items-center gap-1.5">
-            <SigDot lp={c.getValue<number>()} />
+            <SigDot lp={c.getValue<number>()} kind="variant" />
             {fmtPLog(c.getValue<number>())}
           </span>
         ),

@@ -2,19 +2,24 @@ import {
   SIG_GENE_CAUCHY,
   SIG_GENE_MASK_BONFERRONI,
   SIG_SUGGEST,
+  SIG_VARIANT,
 } from '../lib/constants'
 import { effectInfo } from '../lib/effect'
 import { fmtP } from '../lib/format'
 import type { PhenotypeMeta } from '../data/types'
 
 const LP_GENE = -Math.log10(SIG_GENE_CAUCHY) // ≈ 5.60
+const LP_VARIANT = -Math.log10(SIG_VARIANT) // ≈ 7.74
 const LP_SUGGEST = -Math.log10(SIG_SUGGEST) // = 4, p < 1e-4
 
 /**
- * Significance indicator dot, keyed off -log10(p):
+ * Significance indicator dot, keyed off -log10(p). Default (`kind="gene"`):
  *   green  = past gene-level significance (P < 2.5e-6)
  *   amber  = suggestive (P < 1e-4)
  *   hollow = not significant
+ * `kind="variant"` (single-variant p-values) uses the variant-level Bonferroni
+ * threshold (P < 1.82e-8) in place of the gene-level/gene-mask tiers, with the
+ * same amber suggestive tier.
  */
 // Same semantic hues, alpha-softened so they read lighter than the bold,
 // full-opacity ancestry colours used in the forest plot.
@@ -155,11 +160,27 @@ export function MagnitudeBar({
   )
 }
 
-export function SigDot({ lp }: { lp: number | null | undefined }) {
+export function SigDot({
+  lp,
+  kind = 'gene',
+}: {
+  lp: number | null | undefined
+  /** 'gene' (default): gene-level + gene-mask + suggestive tiers.
+   *  'variant': single variant-level Bonferroni tier + suggestive. */
+  kind?: 'gene' | 'variant'
+}) {
   let cls = 'border border-ink-faint/40'
   let title = 'Not significant'
   if (lp != null) {
-    if (lp >= LP_GENE) {
+    if (kind === 'variant') {
+      if (lp >= LP_VARIANT) {
+        cls = SIG_GENE_COLOR
+        title = `Variant-level significant (P < ${fmtP(SIG_VARIANT)})`
+      } else if (lp >= LP_SUGGEST) {
+        cls = SIG_SUGGEST_COLOR
+        title = `Suggestive (P < ${fmtP(SIG_SUGGEST)})`
+      }
+    } else if (lp >= LP_GENE) {
       cls = SIG_GENE_COLOR
       title = `Gene-level significant (P < ${fmtP(SIG_GENE_CAUCHY)})`
     } else if (lp >= -Math.log10(SIG_GENE_MASK_BONFERRONI)) {

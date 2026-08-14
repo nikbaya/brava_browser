@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import {
   SIG_GENE_CAUCHY,
   SIG_GENE_MASK_BONFERRONI,
+  SIG_VARIANT,
 } from '../lib/constants'
 import { PAPER_DOI, PAPER_TITLE, PAPER_URL } from '../data/paper'
 
@@ -129,21 +130,25 @@ export default function FaqPage() {
         </Faq>
 
         <Faq q="Which test should I look at?">
-          SKAT-O is the primary, most powerful gene-level test and drives the
+          SKAT-O is an omnibus test that adaptively combines Burden and SKAT,
+          and is the primary, most powerful gene-level test — it drives the
           default significance call. Burden additionally provides a directional
           effect size (β &gt; 0 increases risk / the trait value; β &lt; 0
-          decreases it). SKAT is most sensitive when a gene contains a mix of
-          risk-increasing and protective variants.
+          decreases it), and is most powerful when a gene's variants mostly
+          point the same direction. SKAT is most sensitive when a gene contains
+          a mix of risk-increasing and protective variants.
         </Faq>
 
         <Faq q="What significance thresholds are used?">
           Two Bonferroni thresholds from the flagship paper are drawn on the
-          plots. The gene-level threshold, P &lt;{' '}
+          gene-level plots. The gene-level threshold, P &lt;{' '}
           {SIG_GENE_CAUCHY.toExponential(1)}, is 0.05 corrected for ~20,000 genes
           (one combined test per gene). The stricter gene × mask threshold, P
           &lt; {SIG_GENE_MASK_BONFERRONI.toExponential(2)}, additionally corrects
           for the multiple masks tested within each gene, and applies to each
-          individual (gene × mask) test.
+          individual (gene × mask) test. For variant-level analyses, the
+          threshold is P &lt; {SIG_VARIANT.toExponential(2)}, 0.05 corrected for
+          2,746,957, the maximum number of variants tested for any single trait.
         </Faq>
 
         <Faq q="What do the forest plots show?">

@@ -1,10 +1,13 @@
 import type { ReactNode } from 'react'
-import { SIG_GENE_CAUCHY, SIG_GENE_MASK_BONFERRONI } from '../lib/constants'
+import { SIG_GENE_CAUCHY, SIG_GENE_MASK_BONFERRONI, SIG_VARIANT } from '../lib/constants'
 import { fmtP } from '../lib/format'
 
 // Shared significance-threshold styling, mirrored by the Manhattan/PheWAS lines.
 export const THRESH_GENE = { color: '#d55e00', dash: '7 4' }
 export const THRESH_GENE_MASK = { color: '#0072b2', dash: '2 4' }
+// Variant-level threshold (LocusZoom, VariantManhattanPlot) — same role as
+// THRESH_GENE in those views.
+export const THRESH_VARIANT = { color: '#d55e00', dash: '7 4' }
 
 /** Centered spinner with optional label. */
 export function Spinner({ label }: { label?: string }) {
@@ -142,6 +145,24 @@ export function ThresholdLegend() {
         </span>
       </Tooltip>
     </>
+  )
+}
+
+/** Legend key for the single variant-level significance threshold (LocusZoom,
+ *  VariantManhattanPlot) — same shape as `ThresholdLegend`'s keys, but for the
+ *  one variant-level Bonferroni line rather than the two gene-level ones. */
+export function VariantThresholdLegend({
+  align = 'left',
+}: {
+  align?: 'left' | 'center' | 'right'
+}) {
+  return (
+    <Tooltip align={align} label={`Variant-level Bonferroni · P < ${fmtP(SIG_VARIANT)}`}>
+      <span className="inline-flex cursor-help items-center gap-1">
+        <ThreshSwatch {...THRESH_VARIANT} />
+        variant-level
+      </span>
+    </Tooltip>
   )
 }
 

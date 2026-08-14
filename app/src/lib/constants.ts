@@ -143,6 +143,9 @@ export type Test = (typeof TESTS)[number]
 // Genome-wide significance thresholds from the BRaVa flagship paper.
 export const SIG_GENE_CAUCHY = 2.5e-6 // gene-level Cauchy
 export const SIG_GENE_MASK_BONFERRONI = 1.39e-7 // gene-mask Bonferroni
+// Variant-level: 0.05 / 2,746,957, the max number of variants tested for any
+// single trait — a fixed constant, not a per-phenotype value.
+export const SIG_VARIANT = 1.82e-8
 // Suggestive tier used by SigDot's amber dot, and (as of the all-results page)
 // as the inclusion cutoff for pipeline/build_all_results.py's bundled index —
 // loose enough to show everything past genome-wide significance plus the

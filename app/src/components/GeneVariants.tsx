@@ -410,7 +410,7 @@ function VariantTable({
         meta: { help: help.lp },
         cell: (c) => (
           <span className="tnum inline-flex items-center gap-1.5">
-            <SigDot lp={c.getValue<number | undefined>()} />
+            <SigDot lp={c.getValue<number | undefined>()} kind="variant" />
             {fmtPLog(c.getValue<number | undefined>())}
           </span>
         ),

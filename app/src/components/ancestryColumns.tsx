@@ -1,6 +1,6 @@
 import type { ColumnDef } from '@tanstack/react-table'
-import { ANCESTRIES, ANCESTRY_META, type Test } from '../lib/constants'
-import { fmtBeta3, fmtPCompact, fmtPLog3 } from '../lib/format'
+import { ANCESTRIES, ANCESTRY_META, SIG_GENE_CAUCHY, type Test } from '../lib/constants'
+import { fmtBeta3, fmtP, fmtPCompact, fmtPLog3 } from '../lib/format'
 import { exportP, type ExportColumn } from '../lib/exportTable'
 import { DIR_NEG, DIR_POS, EffectTriangle, isSig, sigTextClass } from './indicators'
 import Tip from './Tip'
@@ -15,7 +15,13 @@ const HET_LP = -Math.log10(0.05)
  * correct for both readings rather than picking one that's wrong for half the
  * rows.
  */
-export function BetaLegend() {
+export function BetaLegend({ test }: { test?: Test } = {}) {
+  // SKAT has no consistent effect direction (it's a variance-component test,
+  // not directional), so dimming the Burden triangle by SKAT's own
+  // significance would tie one test's vividness to a different test's
+  // p-value for no meaningful reason — see the matching `test === 'SKAT'`
+  // check in `ancestryGridColumns`'s bCols.
+  const vivid = test !== 'SKAT'
   return (
     <span className="whitespace-nowrap">
       β{' '}
@@ -25,7 +31,8 @@ export function BetaLegend() {
           "~" reads the same ("size scales with |effect|") without the
           fallback-font trap. */}
       <span style={{ color: DIR_NEG }}>▼</span> lower, size ~ |effect| — hover
-      for value
+      for value; <span className="font-semibold text-ink">bold</span> P
+      {vivid && <> &amp; vivid ▲/▼</>}: P &lt; {fmtP(SIG_GENE_CAUCHY)}
     </span>
   )
 }
@@ -136,8 +143,11 @@ export function ancestryGridColumns<T extends GridRowLike>(
         )
       // Tie the β to its p-value: β's whose association clears the gene-level
       // significance line stay vivid; the rest fade back so the eye lands on
-      // the significant hits (mirrors the p-value column's fade).
-      const sig = isSig(c.row.original.lp[a])
+      // the significant hits (mirrors the p-value column's fade). Skipped for
+      // SKAT: it's a variance-component test with no consistent effect
+      // direction, so its significance says nothing about whether *this*
+      // Burden β is trustworthy — dimming by it would be a non sequitur.
+      const sig = test === 'SKAT' || isSig(c.row.original.lp[a])
       return (
         <Tip
           label={b != null ? `β = ${fmtBeta3(b)}` : 'no data'}

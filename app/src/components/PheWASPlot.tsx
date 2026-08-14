@@ -4,6 +4,7 @@ import type { PhenotypeMeta } from '../data/types'
 import { fmtBeta3, fmtPLog3 } from '../lib/format'
 import { SIG_GENE_CAUCHY, SIG_GENE_MASK_BONFERRONI } from '../lib/constants'
 import { CATEGORY_PALETTE, categoryColors } from '../lib/categoryColor'
+import { bodyFont, textWidth } from '../lib/textWidth'
 import { THRESH_GENE, THRESH_GENE_MASK, ThresholdLegend } from './ui'
 
 export interface PheWASPoint {
@@ -12,8 +13,21 @@ export interface PheWASPoint {
   beta: number | null
 }
 
-const M = { top: 12, right: 16, bottom: 62, left: 46 }
-const HEIGHT = 248
+// Purely a display shortcut for the rotated x-axis tick labels below — never
+// touches `PhenotypeMeta.id` itself, which is load-bearing (data-file names,
+// routes, search index, TSV/figure export filenames).
+const SHORT_LABEL: Record<string, string> = {
+  NonRheuValv: 'NonRheu',
+  RheumHeaDis: 'RhemHeart',
+  ColonRectCanc: 'ColonRect',
+  BenCervUterNeo_F: 'BenCervUter_F',
+}
+const tickLabel = (id: string) => SHORT_LABEL[id] ?? id
+
+const M_TOP = 12
+const M_RIGHT = 16
+const M_LEFT = 46
+const PLOT_HEIGHT = 174 // vertical space for gridlines/points, independent of label length
 const MIN_WIDTH = 640
 
 /**
@@ -78,6 +92,27 @@ export default function PheWASPlot({
     }
     return out
   }, [ordered])
+
+  // Bottom margin sized to the longest rotated label, not guessed from a fixed
+  // constant: a <text> that overruns its reserved space is simply clipped at
+  // the SVG's bottom edge (default SVG overflow is hidden), and character
+  // counts don't reliably predict rendered width (see lib/textWidth.ts).
+  const bottomMargin = useMemo(() => {
+    const font = bodyFont(11)
+    const maxW = Math.max(
+      0,
+      ...ordered.map((p) => textWidth(tickLabel(p.meta.id), font)),
+    )
+    // rotate(45): the label runs down-right from its anchor, so its vertical
+    // drop is width·sin(45°); +12 for the anchor's own offset below the axis,
+    // +8 buffer for descenders (e.g. the "_" in BenCervUter_F).
+    return Math.max(62, Math.ceil(maxW * Math.SQRT1_2) + 12 + 8)
+  }, [ordered])
+  const M = useMemo(
+    () => ({ top: M_TOP, right: M_RIGHT, bottom: bottomMargin, left: M_LEFT }),
+    [bottomMargin],
+  )
+  const HEIGHT = PLOT_HEIGHT + M.top + M.bottom
 
   const width = Math.max(MIN_WIDTH, measured)
   const maxY = Math.max(8, ...ordered.map((p) => p.lp ?? 0)) * 1.08
@@ -200,7 +235,7 @@ export default function PheWASPlot({
                 onMouseLeave={() => setHover(null)}
                 onClick={() => onSelect(p.phenoIdx)}
               >
-                {p.meta.id}
+                {tickLabel(p.meta.id)}
               </text>
             </g>
           )

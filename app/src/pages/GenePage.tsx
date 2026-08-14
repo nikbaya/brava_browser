@@ -264,7 +264,13 @@ export default function GenePage() {
     <>
       <StickyTitle>
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-          <div className="flex flex-col gap-1">
+          {/* shrink-[3]: outweighs FilterBar's default shrink (1) so this
+              column (and its own wrapping subtitle line) gives up width
+              first — matches PhenotypePage/AllResultsPage. min-w-0 removes
+              the flex-item's default content floor so it can actually shrink
+              that far; the header's flex-wrap is the fallback once it can't
+              shrink any further and there's still no room. */}
+          <div className="flex min-w-0 shrink-[3] flex-col gap-1">
             <div className="flex flex-wrap items-baseline gap-x-2">
               <h1 className="text-xl font-semibold text-ink">{symbol}</h1>
               <span className="tnum text-xs text-ink-faint">
@@ -614,7 +620,7 @@ function GeneTable({
     <span>
       <span className="font-semibold text-ink-soft">{MASK_META[filters.maskIndex].label}</span> · MAF{' '}
       {MAF_META[filters.mafIndex].label} · {filters.test} · filter on{' '}
-      {ANCESTRY_META[filters.ancestry].label} · <BetaLegend />
+      {ANCESTRY_META[filters.ancestry].label} · <BetaLegend test={filters.test} />
     </span>
   )
 

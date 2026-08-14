@@ -143,6 +143,13 @@ export default function FilterBar({
   return (
     <div
       ref={rowRef}
+      // Default flex-shrink (1), same as the title block beside it in the
+      // page header — but the title carries a higher `shrink` weight (see
+      // GenePage/PhenotypePage/AllResultsPage) so it gives up width first.
+      // This row must stay shrinkable, not `shrink-0`: it's what lets its own
+      // internal wrap logic (tight vs. not) respond to whatever width it
+      // ends up with, and an unshrinkable row can overflow the viewport
+      // outright when the header can't make room any other way.
       className="flex flex-wrap items-end gap-2.5 rounded-lg border border-line bg-surface px-3 py-2"
     >
       {order}
