@@ -37,12 +37,20 @@ function ThresholdInput({
   stored,
   onCommit,
 }: {
-  kind: 'p' | 'beta' | 'n'
+  kind: 'p' | 'beta' | 'n' | 'i2'
   stored: number
   onCommit: (v: number) => void
 }) {
   const shown = (v: number) =>
-    v > 0 ? (kind === 'p' ? fmtPLog(v) : kind === 'beta' ? fmtBeta(v) : fmtCount(v)) : ''
+    v > 0
+      ? kind === 'p'
+        ? fmtPLog(v)
+        : kind === 'beta'
+          ? fmtBeta(v)
+          : kind === 'i2'
+            ? `${Math.round(v)}%`
+            : fmtCount(v)
+      : ''
   const [text, setText] = useState(shown(stored))
   const [editing, setEditing] = useState(false)
 
@@ -59,7 +67,7 @@ function ThresholdInput({
     if (kind === 'p') {
       // Field takes a p-value; store −log10(p). Out-of-range clears the filter.
       onCommit(num > 0 && num < 1 ? -Math.log10(num) : 0)
-    } else if (kind === 'n') {
+    } else if (kind === 'n' || kind === 'i2') {
       onCommit(Math.max(0, Math.round(num)))
     } else {
       onCommit(Math.max(0, Math.abs(num)))
@@ -72,7 +80,15 @@ function ThresholdInput({
       inputMode="decimal"
       value={text}
       placeholder="any"
-      aria-label={kind === 'p' ? 'P-value threshold' : kind === 'n' ? 'Minimum sample size' : 'Minimum |β|'}
+      aria-label={
+        kind === 'p'
+          ? 'P-value threshold'
+          : kind === 'n'
+            ? 'Minimum sample size'
+            : kind === 'i2'
+              ? 'Minimum I²'
+              : 'Minimum |β|'
+      }
       onFocus={() => setEditing(true)}
       onChange={(e) => setText(e.target.value)}
       onBlur={(e) => {
@@ -143,7 +159,7 @@ export function FilterRow({
   onChange,
 }: {
   label: ReactNode
-  kind: 'p' | 'beta' | 'n'
+  kind: 'p' | 'beta' | 'n' | 'i2'
   min: number
   max: number
   step: number
