@@ -157,28 +157,19 @@ export default function AncestryPies({
         </span>
       </h2>
 
-      {/* From `xl` each pie gains a legend (see SliceLegend). Both groups still
-          share one row at that width — the abbreviated labels and the
-          content-sized legends are sized so all seven pies fit — so the
-          side-by-side layout and its vertical rule are unchanged. */}
-      <div className="flex flex-wrap items-stretch gap-x-1 gap-y-2">
-        <div className="flex flex-col">
-          <span className="mb-0.5 pl-2 text-[11px] font-medium tracking-wide text-ink-faint uppercase">
-            Per-ancestry strata
-          </span>
-          <div className="flex flex-wrap items-end gap-1 xl:items-start">
-            {built.stratumPies.map(render)}
-          </div>
-        </div>
-
+      {/* From `xl` each pie gains a legend (see SliceLegend), sized so all
+          seven pies fit on one row. Meta pies are boxed rather than put in
+          their own labelled column so they can flow onto the strata's last
+          row instead of always dropping to a fresh line — the thing that made
+          this section tall on mobile. */}
+      <div className="flex flex-wrap items-end gap-1 xl:items-start">
+        {built.stratumPies.map(render)}
         {built.metaPies.length > 0 && (
-          <div className="flex flex-col border-l border-line pl-2">
-            <span className="mb-0.5 pl-2 text-[11px] font-medium tracking-wide text-ink-faint uppercase">
-              Meta-analyses
-            </span>
-            <div className="flex flex-wrap items-end gap-1 xl:items-start">
-              {built.metaPies.map(render)}
-            </div>
+          <div
+            title="Meta-analyses"
+            className="flex flex-wrap items-end gap-1 rounded-lg border border-line p-1 xl:items-start"
+          >
+            {built.metaPies.map(render)}
           </div>
         )}
       </div>

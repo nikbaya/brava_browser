@@ -101,24 +101,17 @@ export default function DiversityPies({ biobanks }: { biobanks: Biobank[] }) {
 
   return (
     <div>
-      <div className="flex flex-wrap items-stretch gap-x-1 gap-y-2">
-        <div className="flex flex-col">
-          <span className="mb-0.5 pl-2 text-[11px] font-medium tracking-wide text-ink-faint uppercase">
-            Per-ancestry strata
-          </span>
-          <div className="flex flex-wrap items-end gap-1 xl:items-start">
-            {stratumPies.map(render)}
-          </div>
-        </div>
-
+      {/* Meta pies are boxed rather than put in their own labelled column so
+          they can flow onto the strata's last row instead of always dropping
+          to a fresh line — the thing that made this section tall on mobile. */}
+      <div className="flex flex-wrap items-end gap-1 xl:items-start">
+        {stratumPies.map(render)}
         {metaPies.length > 0 && (
-          <div className="flex flex-col border-l border-line pl-2">
-            <span className="mb-0.5 pl-2 text-[11px] font-medium tracking-wide text-ink-faint uppercase">
-              Meta-analyses
-            </span>
-            <div className="flex flex-wrap items-end gap-1 xl:items-start">
-              {metaPies.map(render)}
-            </div>
+          <div
+            title="Meta-analyses"
+            className="flex flex-wrap items-end gap-1 rounded-lg border border-line p-1 xl:items-start"
+          >
+            {metaPies.map(render)}
           </div>
         )}
       </div>
