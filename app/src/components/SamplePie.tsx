@@ -1,4 +1,9 @@
-import { useState, type MouseEvent as ReactMouseEvent } from 'react'
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react'
 import { createPortal } from 'react-dom'
 import { ANCESTRY_META, type Ancestry } from '../lib/constants'
 
@@ -75,15 +80,46 @@ export function usePieTip() {
 }
 
 /** The one and only pie tooltip: sits to the right of the cursor, vertically
- *  centred on it, so it never covers the slice being pointed at. */
+ *  centred on it, so it never covers the slice being pointed at — except when
+ *  that would run it off the viewport (the "+N more" tail can be several
+ *  lines tall, and a rightmost/bottom pie's cursor is already near the edge),
+ *  in which case it flips to the cursor's left and/or clamps vertically so
+ *  the whole box stays on screen. The flip/clamp needs the box's own
+ *  rendered size, which only exists post-mount, so the first paint uses the
+ *  naive position and a `useLayoutEffect` corrects it before the browser
+ *  paints — no visible jump. */
 export function PieTip({ tip }: { tip: PieTipState | null }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+
+  useLayoutEffect(() => {
+    if (!tip || !ref.current) return
+    const { width, height } = ref.current.getBoundingClientRect()
+    const margin = 8
+    const left =
+      tip.x + 14 + width > window.innerWidth - margin
+        ? tip.x - 14 - width
+        : tip.x + 14
+    const halfHeight = height / 2
+    const top = Math.min(
+      Math.max(tip.y, halfHeight + margin),
+      window.innerHeight - halfHeight - margin,
+    )
+    setPos({ left, top })
+  }, [tip])
+
   if (!tip) return null
+  const lines = tip.text.split('\n')
+  const { left, top } = pos ?? { left: tip.x + 14, top: tip.y }
   return createPortal(
     <div
-      style={{ position: 'fixed', left: tip.x + 14, top: tip.y }}
+      ref={ref}
+      style={{ position: 'fixed', left, top }}
       className="pointer-events-none z-[100] -translate-y-1/2 rounded-md border border-line bg-surface px-2 py-1 text-xs whitespace-nowrap text-ink shadow-lg"
     >
-      {tip.text}
+      {lines.map((line, i) => (
+        <div key={i}>{line}</div>
+      ))}
     </div>,
     document.body,
   )
@@ -98,7 +134,9 @@ export function PieTip({ tip }: { tip: PieTipState | null }) {
  *
  * Capped at `LEGEND_MAX` with a "+N more" tail so a pie of eight biobanks can't
  * outgrow the pie beside it, and sorted by size independently of slice order
- * (which is drawing order, not necessarily rank).
+ * (which is drawing order, not necessarily rank). The tail itself is hoverable
+ * — it reuses the same tooltip as every row above it, listing the names and
+ * percentages of the cohorts it's summarising, so nothing is truly hidden.
  */
 function SliceLegend({
   slices,
@@ -114,7 +152,11 @@ function SliceLegend({
   const ranked = slices.filter((s) => s.label).sort((a, b) => b.n - a.n)
   if (ranked.length === 0) return null
   const shown = ranked.slice(0, LEGEND_MAX)
-  const rest = ranked.length - shown.length
+  const hidden = ranked.slice(LEGEND_MAX)
+  const rest = hidden.length
+  // Full names + exact percentages, same as every row's own tooltip — just
+  // one hidden cohort per line rather than the abbreviated label above.
+  const restText = hidden.map((s) => s.title).join('\n')
 
   return (
     // Two-step fade rather than one hard cutoff. From 1120px the swatch +
@@ -159,7 +201,11 @@ function SliceLegend({
         </li>
       ))}
       {rest > 0 && (
-        <li className="hidden pl-3 text-ink-faint xl:block">
+        <li
+          className="hidden pl-3 text-ink-faint xl:block"
+          onMouseMove={(e) => onHover(e, restText)}
+          onMouseLeave={onLeave}
+        >
           +{rest} more
         </li>
       )}
