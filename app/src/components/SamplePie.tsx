@@ -158,9 +158,13 @@ function SliceLegend({
   // one hidden cohort per line rather than the abbreviated label above. The
   // percentage isn't in `s.title` itself (that's shared with each shown row's
   // hover, which already has its own percent column beside it), so it's
-  // appended here, matching the rounding shown in that column.
+  // appended here. Uses `fmtPct` (adaptive decimal places), not the shown
+  // column's whole-percent rounding — a binary trait's title already carries
+  // a prevalence percentage, and two whole-percent figures side by side read
+  // as a duplicate; fmtPct's extra precision (and a small share not rounding
+  // away to "0%") makes clear it's a distinct number.
   const restText = hidden
-    .map((s) => `${s.title} (${Math.round((100 * s.n) / total)}%)`)
+    .map((s) => `${s.title} (${fmtPct(s.n / total)})`)
     .join('\n')
 
   return (
