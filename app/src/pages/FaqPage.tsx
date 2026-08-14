@@ -121,6 +121,16 @@ export default function FaqPage() {
           but only that powered subset is reported as individual variants.
         </Faq>
 
+        <Faq q="What is N (eff.) for a variant?">
+          The effective sample size contributing to that variant. For binary
+          (case-control) traits it's N<sub>eff</sub> = 4 / (1/N<sub>cases</sub>{' '}
+          + 1/N<sub>controls</sub>), summed across every stratum that
+          contributed to the variant — it tracks the rarer class, so it can be
+          far below the total sample size when cases are rare. For
+          quantitative traits it's simply the total sample size contributing
+          to the variant.
+        </Faq>
+
         <Faq q="What are the variant masks?">
           Genes are tested under annotation masks that pool qualifying variants:
           predicted loss-of-function (pLoF), damaging missense / protein-altering,
