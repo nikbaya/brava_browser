@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { ColumnDef, SortingState } from '@tanstack/react-table'
 import { useIndex } from '../data/IndexContext'
 import StickyTitle from '../components/StickyTitle'
@@ -27,7 +27,6 @@ import {
   ANCESTRIES,
   ANCESTRY_INDEX,
   ANCESTRY_META,
-  DEFAULTS,
   MAF_META,
   MASK_META,
   SIG_GENE_CAUCHY,
@@ -35,6 +34,7 @@ import {
 } from '../lib/constants'
 import { fmtP, fmtPLog, fmtPos } from '../lib/format'
 import { exportP, slug, type ExportColumn, type TableExport } from '../lib/exportTable'
+import { geneLinkPath, parseFilterParams } from '../lib/filterLink'
 import type { GeneIndex, PhenotypeData, PhenotypeMeta, VariantOverview } from '../data/types'
 import { Notice, Spinner, ThresholdLegend } from '../components/ui'
 import {
@@ -72,12 +72,11 @@ export default function PhenotypePage() {
   const pheno = phenoIdx >= 0 ? phenotypes[phenoIdx] : undefined
   const available = (pheno?.ancestries ?? ['All']) as Ancestry[]
 
-  const [filters, setFilters] = useState<FilterState>({
-    ancestry: DEFAULTS.ancestry,
-    maskIndex: DEFAULTS.maskIndex,
-    mafIndex: DEFAULTS.mafIndex,
-    test: DEFAULTS.test,
-  })
+  // Shared-link / cross-page filter carry-over (see filterLink.ts). Read once,
+  // at mount: they seed the view rather than driving it, so the user's later
+  // filter changes aren't fighting the URL — same pattern as the gene page.
+  const [search] = useSearchParams()
+  const [filters, setFilters] = useState<FilterState>(() => parseFilterParams(search))
   const ancestry = available.includes(filters.ancestry)
     ? filters.ancestry
     : available[0]
@@ -420,6 +419,7 @@ export default function PhenotypePage() {
                 overview={overview}
                 geneIndex={geneIndex!}
                 pheno={pheno}
+                filters={filters}
                 query={variantQuery}
                 onQueryChange={setVariantQuery}
                 minLp={variantMinLp}
@@ -448,7 +448,7 @@ export default function PhenotypePage() {
           maskIndex={filters.maskIndex}
           mafIndex={filters.mafIndex}
           onClose={() => setDrawer(null)}
-          onOpenGene={() => navigate(`/gene/${drawer.ensg}`)}
+          onOpenGene={() => navigate(geneLinkPath(drawer.ensg, pheno.id, filters))}
         />
       )}
 
@@ -462,7 +462,7 @@ export default function PhenotypePage() {
           phenoIdx={phenoIdx}
           trait={pheno}
           onClose={() => setVariantDrawer(null)}
-          onOpenGene={() => navigate(`/gene/${variantDrawer.ensg}`)}
+          onOpenGene={() => navigate(geneLinkPath(variantDrawer.ensg, pheno.id, filters))}
         />
       )}
       </div>
@@ -779,7 +779,7 @@ function ResultsTable({
         size: 120,
         cell: (c) => (
           <Link
-            to={`/gene/${c.row.original.ensg}`}
+            to={geneLinkPath(c.row.original.ensg, pheno.id, filters)}
             onClick={(e) => e.stopPropagation()}
             className="font-medium text-brand hover:underline"
           >
@@ -809,7 +809,7 @@ function ResultsTable({
       }),
       hetColumn<TableRow>({ pending: () => !loadedAnc.has(0) }),
     ],
-    [ancIdxs, selAncIdx, loadedAnc, betaGridMax, filters.test],
+    [ancIdxs, selAncIdx, loadedAnc, betaGridMax, filters, pheno.id],
   )
 
   // Mirrors the gene page's export: the qualifying constants (trait, mask, MAF,
@@ -940,6 +940,7 @@ function VariantOverviewTable({
   overview,
   geneIndex,
   pheno,
+  filters,
   query,
   onQueryChange,
   minLp,
@@ -951,6 +952,7 @@ function VariantOverviewTable({
   overview: VariantOverview
   geneIndex: GeneIndex
   pheno: PhenotypeMeta
+  filters: FilterState
   /** Lifted to the page so the linked Manhattan can show the same subset
    *  once a filter narrows this table (see `variantManhattanIdx`). */
   query: string
@@ -991,7 +993,7 @@ function VariantOverviewTable({
         size: 120,
         cell: (c) => (
           <Link
-            to={`/gene/${c.row.original.ensg}`}
+            to={geneLinkPath(c.row.original.ensg, pheno.id, filters)}
             onClick={(e) => e.stopPropagation()}
             className="font-medium text-brand hover:underline"
           >
@@ -1057,7 +1059,7 @@ function VariantOverviewTable({
         },
       },
     ],
-    [pheno.type, pheno.id],
+    [pheno.type, pheno.id, filters],
   )
 
   const exportSpec = useMemo<TableExport<VariantOverviewRow>>(

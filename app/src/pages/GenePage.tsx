@@ -18,6 +18,7 @@ import {
 import { fmtPos } from '../lib/format'
 import { pinToTop } from '../lib/scroll'
 import { slug, type ExportColumn, type TableExport } from '../lib/exportTable'
+import { parseFilterParams, phenotypeLinkPath } from '../lib/filterLink'
 import { Notice, Spinner } from '../components/ui'
 import FilterBar, { type FilterState } from '../components/FilterBar'
 import TableFilters, {
@@ -107,15 +108,7 @@ export default function GenePage() {
   // the view rather than driving it, so the user's later filter changes aren't
   // fighting the URL.
   const [search] = useSearchParams()
-  const [filters, setFilters] = useState<FilterState>(() => {
-    const anc = search.get('anc')
-    return {
-      ancestry: anc && anc in ANCESTRY_INDEX ? (anc as Ancestry) : DEFAULTS.ancestry,
-      maskIndex: DEFAULTS.maskIndex,
-      mafIndex: DEFAULTS.mafIndex,
-      test: DEFAULTS.test,
-    }
-  })
+  const [filters, setFilters] = useState<FilterState>(() => parseFilterParams(search))
   // Which phenotype the forest plot is focused on (null = auto = top hit).
   const [forestPheno, setForestPheno] = useState<number | null>(null)
 
@@ -374,7 +367,7 @@ export default function GenePage() {
                   />
                 </div>
                 <Link
-                  to={`/phenotype/${forestTrait.id}`}
+                  to={phenotypeLinkPath(forestTrait.id, filters)}
                   className="text-xs text-brand hover:underline"
                 >
                   open {forestTrait.name} →
@@ -569,7 +562,7 @@ function GeneTable({
         size: 200,
         cell: (c) => (
           <Link
-            to={`/phenotype/${c.row.original.phenoId}`}
+            to={phenotypeLinkPath(c.row.original.phenoId, filters)}
             onClick={(e) => e.stopPropagation()}
             className="font-medium text-brand hover:underline"
           >
@@ -590,7 +583,7 @@ function GeneTable({
       }),
       hetColumn<GTGridRow>(),
     ],
-    [ancIdxs, ancIdx, betaGridMax, filters.test],
+    [ancIdxs, ancIdx, betaGridMax, filters],
   )
 
   // Every constant that qualifies the numbers (gene, mask, MAF, test) is written
