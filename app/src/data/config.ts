@@ -3,11 +3,10 @@
 // The small search indexes (meta/*.json) are always bundled with the app so
 // search is instant and works with no external dependency. The large per-gene
 // and per-phenotype files are fetched from VITE_DATA_BASE_URL when set (the
-// public GCS prefix, requires CORS — see infra/cors.json), otherwise from the
-// bundled sample data in public/data.
+// Cloudflare R2 prefix, requires CORS — see infra/cors.json), otherwise from
+// the bundled sample data in public/data.
 //
-// Production example:
-//   VITE_DATA_BASE_URL=https://storage.googleapis.com/brava-meta-analysis-public/browser
+// Production value: see .github/workflows/deploy.yml.
 
 const bundled = `${import.meta.env.BASE_URL}data`.replace(/\/$/, '')
 const envBase = (import.meta.env.VITE_DATA_BASE_URL as string | undefined)?.replace(

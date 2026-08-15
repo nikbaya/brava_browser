@@ -10,13 +10,17 @@ from __future__ import annotations
 import gzip
 import io
 import math
+import os
 import subprocess
 import urllib.request
 from pathlib import Path
 
 import polars as pl
 
-BUCKET = "gs://brava-meta-analysis-public"
+# Raw-data bucket the ETL reads from. Defaults to the official Requester Pays
+# bucket; override with BRAVA_RAW_BUCKET for a local/private mirror — keep any
+# such override out of the committed repo (see docs/local-notes.md).
+BUCKET = os.environ.get("BRAVA_RAW_BUCKET", "gs://brava-meta-analysis")
 GENE_PREFIX = f"{BUCKET}/gene"
 
 # Flagship-paper supplementary tables (sample sizes, biobank metadata). Hosted

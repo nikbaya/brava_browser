@@ -17,22 +17,23 @@ variant mask, MAF cutoff, and test (Burden / SKAT / SKAT-O).
 
 ## Architecture
 
-The raw data (~8 GB of gzipped TSVs in `gs://brava-meta-analysis-public/gene/`)
-is too large to load in-browser, so the project is two halves:
+The raw data (~8 GB of gzipped TSVs, originally in GCS — see
+`docs/local-notes.md`, gitignored, for the bucket path) is too large to load
+in-browser, so the project is two halves:
 
 1. **`pipeline/`** — a Python (Polars) ETL that transforms the raw TSVs into
    compact, columnar JSON: one file per gene, one per (phenotype × ancestry),
-   plus small bundled metadata indexes. Output is published to a `browser/`
-   prefix in the public GCS bucket.
+   plus small bundled metadata indexes. Output is uploaded to a Cloudflare R2
+   bucket.
 2. **`app/`** — a React + Vite + TypeScript single-page app hosted on GitHub
    Pages. It bundles the small search indexes and fetches the per-gene /
-   per-phenotype files from GCS over HTTPS (CORS).
+   per-phenotype files from R2 over HTTPS.
 
 ```
 GitHub Pages (app + meta indexes)
-        │ fetch() + CORS
+        │ fetch()
         ▼
-gs://brava-meta-analysis-public/browser/{gene,phenotype,meta}/…
+Cloudflare R2 (brava-browser bucket): {gene,phenotype}/… , v2/variant/…
 ```
 
 ## Develop the app
@@ -44,30 +45,26 @@ npm run dev        # http://localhost:5173 (uses bundled sample data)
 ```
 
 By default the app reads sample data from `app/public/data` (a few traits +
-example genes, committed so the app runs offline). Point it at the full dataset
-on GCS with `VITE_DATA_BASE_URL`:
-
-```bash
-VITE_DATA_BASE_URL=https://storage.googleapis.com/brava-meta-analysis-public/browser \
-  npm run dev
-```
+example genes, committed so the app runs offline). Point it at the full
+dataset on R2 with `VITE_DATA_BASE_URL` / `VITE_VARIANT_BASE_URL` (see
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml) for the live
+values).
 
 ## Build / refresh the data (`pipeline/`)
 
 ```bash
 cd pipeline
 pip install -r requirements.txt   # polars; needs gsutil authenticated
+export BRAVA_RAW_BUCKET=gs://...  # the raw-data bucket (see docs/local-notes.md)
 
 make meta      # gene + phenotype metadata indexes -> ../app/public/data/meta
 make sample    # small local dataset for dev
 make full      # full dataset -> ./build  (~45 min, sharded to bound memory)
-make upload    # push ./build to gs://…/browser/ (gzip-transcoded; needs write access)
+make upload-genes  # push ./build/{gene,phenotype} to the live R2 bucket
 ```
 
-`make upload` requires `storage.objects.create` on the bucket; authenticate the
-right account first (`gcloud auth login`). It uploads with `gsutil cp -Z` so the
-JSON is gzip-transcoded (`Content-Encoding: gzip`) — object names stay `.json`
-and browsers decompress transparently.
+`make upload-genes` requires rclone configured with an R2 S3-compatible remote
+(`rclone config`; see the header comment in `pipeline/Makefile`).
 
 ## Deploy
 
@@ -77,7 +74,8 @@ and browsers decompress transparently.
    The object-scoped R2 API token cannot edit CORS, so this is dashboard-only.
 2. **Pages:** enable GitHub Pages → *Source: GitHub Actions*. Pushing to `main`
    runs [.github/workflows/deploy.yml](.github/workflows/deploy.yml), which
-   builds the app (with `VITE_DATA_BASE_URL` set to the GCS prefix) and deploys.
+   builds the app (with `VITE_DATA_BASE_URL` / `VITE_VARIANT_BASE_URL` set to
+   the R2 bucket) and deploys.
 
 ## Data notes
 

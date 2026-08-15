@@ -2,7 +2,7 @@ I would like to create a browser for Biobank Rare Variant Analysis (BRaVa) conso
 
 The browser should be professional and be very responsive (low lag). Prioritize usability and good U/I and U/X. Use gnomAD and Genebass as examples of good browsers.
 
-The raw data lives in gsutil ls -lr gs://brava-meta-analysis-public, which has subfolders gene/ and variant/, which correspond to gene and variant level results.
+The raw data lives in a GCS bucket (path in `docs/local-notes.md`, gitignored — not committed here), which has subfolders gene/ and variant/, which correspond to gene and variant level results.
 
 For the first version of this browser, focus only on the gene-level results.
 
@@ -33,16 +33,17 @@ GitHub Pages is static and the raw data is ~8 GB, so:
 
 1. **`pipeline/`** — Python + **Polars** ETL turning raw SAIGE-GENE+ TSVs into
    compact **columnar JSON** (parallel arrays + integer indices as the wire
-   contract). Output → `browser/` prefix in the public GCS bucket.
+   contract). Output → uploaded to a Cloudflare R2 bucket (see "Data hosting"
+   below).
 2. **`app/`** — React 19 + Vite 8 + TypeScript + Tailwind v4 SPA. Bundles small
    search indexes (instant search, works offline) and fetches bulky per-gene /
-   per-phenotype JSON from GCS over HTTPS+CORS.
+   per-phenotype JSON from R2 over HTTPS.
 
 ```
 GitHub Pages (app + bundled meta indexes)
-   │ fetch() + CORS
+   │ fetch()
    ▼
-gs://brava-meta-analysis-public/browser/{gene,phenotype,meta}/…
+Cloudflare R2 (brava-browser bucket): {gene,phenotype}/… , v2/variant/…
 ```
 
 ## Data model
@@ -280,8 +281,8 @@ Raw: `{PHENO}_ALL_gene_meta_analysis_100_cutoff.{ANCESTRY}.tsv.gz` (no suffix =
 ## Deploy / infra
 
 - [.github/workflows/deploy.yml](.github/workflows/deploy.yml): builds `app/`
-  with `VITE_DATA_BASE_URL=https://storage.googleapis.com/brava-meta-analysis-public/browser`,
-  deploys to Pages on push to `main`.
+  with `VITE_DATA_BASE_URL`/`VITE_VARIANT_BASE_URL` pointing at the Cloudflare
+  R2 bucket (see "Data hosting" below), deploys to Pages on push to `main`.
 - [infra/cors.json](infra/cors.json): GET/HEAD from nikbaya.github.io,
   brava-genetics.github.io, localhost:5173/4173.
 - Local dev: `cd app && npm run dev` → http://localhost:5173.

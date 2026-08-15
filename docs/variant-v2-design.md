@@ -16,7 +16,8 @@ below makes it lightning.
 
 ## What the raw data actually is (measured)
 
-`gs://brava-meta-analysis-public/variant/` — **273 objects, 5.95 GiB gzipped**,
+The raw variant data (bucket path in `docs/local-notes.md`, gitignored) —
+**273 objects, 5.95 GiB gzipped**,
 44 phenotypes × 7 ancestry tiers (`All` meta + EUR/AFR/AMR/EAS/SAS/non_EUR),
 named `{PHENO}_ALL_variant_meta_analysis_100_cutoff.{ANC}.vcf.gz` (no ANC = `All`
 cross-biobank meta). Phenotype set is **identical to v1's 44** (incl. `_F_`

@@ -34,13 +34,17 @@ import gzip
 import heapq
 import json
 import math
+import os
 import shutil
 import subprocess
 from pathlib import Path
 
 # --- constants (inlined; common.py imports polars which isn't on this path) ----
 
-BUCKET = "gs://brava-meta-analysis-public"
+# See common.py's BUCKET for the rationale — default to the official
+# Requester Pays bucket, override via BRAVA_RAW_BUCKET for a local/private
+# mirror (kept out of the committed repo; see docs/local-notes.md).
+BUCKET = os.environ.get("BRAVA_RAW_BUCKET", "gs://brava-meta-analysis")
 VARIANT_PREFIX = f"{BUCKET}/variant"
 
 # (name, file suffix). 'All' is the no-suffix cross-ancestry meta file. Index

@@ -17,7 +17,11 @@
 
 OUT_DEV  ?= ../app/public/data
 OUT_FULL ?= build
-BUCKET   ?= gs://brava-meta-analysis-public/browser
+# No real default -- the stale `upload` target below pushed to a private
+# mirror bucket; set BUCKET explicitly (see docs/local-notes.md) if you ever
+# need it. Deliberately not a valid gs:// URI, so an unset `make upload` fails
+# loudly instead of silently doing something with an empty destination.
+BUCKET   ?= CHANGEME-set-your-own-bucket
 
 # R2 target (rclone remote:bucket/prefix).
 R2_REMOTE ?= r2

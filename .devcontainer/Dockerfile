@@ -56,8 +56,9 @@ RUN ARCH=$(dpkg --print-architecture) && \
 
 # --- pipeline/ ETL stack ---------------------------------------------------
 # The Polars ETL (pipeline/) needs a Python environment and the Google Cloud
-# SDK to read the raw SAIGE-GENE+ TSVs from the gs://brava-meta-analysis-public
-# bucket. No Hail/Spark/Java here — the browser is pure columnar-JSON output.
+# SDK to read the raw SAIGE-GENE+ TSVs from GCS (see docs/local-notes.md,
+# gitignored, for the bucket path). No Hail/Spark/Java here — the browser is
+# pure columnar-JSON output.
 # Installed at build time so nothing needs PyPI at runtime; the runtime firewall
 # only has to allow GCS.
 RUN apt-get update && apt-get install -y --no-install-recommends \
