@@ -2,6 +2,19 @@
 
 Small polish items noted for later.
 
+## Changelog page — built, hidden from nav for now
+
+[ChangelogPage.tsx](../app/src/pages/ChangelogPage.tsx) renders a reverse-
+chronological list of commits (date, short SHA linked to GitHub, message),
+sourced from a build-time `git log` snapshot
+([generate-changelog.js](../app/scripts/generate-changelog.js), run via the
+`predev`/`prebuild` npm hooks — see [package.json](../app/package.json)).
+The route (`/changelog`) is still registered in
+[App.tsx](../app/src/App.tsx), but the nav link in
+[Header.tsx](../app/src/components/Header.tsx) was pulled at the user's
+request, so it's live but undiscoverable. Decide whether/how to surface it
+(raw commit log vs. a curated subset) before re-adding the nav link.
+
 ## Show the Burden β value in the table, not just the up/down triangle
 
 The per-ancestry grid renders β as an `EffectTriangle` with the number only in

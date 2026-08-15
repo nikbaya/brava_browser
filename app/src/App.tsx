@@ -14,6 +14,7 @@ const FaqPage = lazy(() => import('./pages/FaqPage'))
 const DownloadsPage = lazy(() => import('./pages/DownloadsPage'))
 const AllResultsPage = lazy(() => import('./pages/AllResultsPage'))
 const ContactPage = lazy(() => import('./pages/ContactPage'))
+const ChangelogPage = lazy(() => import('./pages/ChangelogPage'))
 
 export default function App() {
   const { pathname, hash } = useLocation()
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="/about" element={<AboutPage />} />
             <Route path="/faq" element={<FaqPage />} />
             <Route path="/downloads" element={<DownloadsPage />} />
+            <Route path="/changelog" element={<ChangelogPage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

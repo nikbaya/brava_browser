@@ -22,6 +22,9 @@ public/data/phenotype.sample
 public/data/variant
 public/data/variant.sample
 public/data/meta/*.parquet
+# Regenerated from `git log` on every dev/build (predev/prebuild) — committing
+# it would go stale the instant another commit lands. See generate-changelog.js.
+public/data/meta/changelog.json
 public/data/_tmp/
 
 # Editor directories and files

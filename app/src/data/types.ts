@@ -67,6 +67,20 @@ export interface BiobankN {
  */
 export type PhenoSizes = Record<string, Record<string, BiobankN[]>>
 
+/**
+ * meta/changelog.json — snapshot of `git log` on `main`, generated at
+ * dev/build time by scripts/generate-changelog.js (not committed — see
+ * .gitignore). `date` is the commit's author date, ISO 8601.
+ */
+export interface ChangelogEntry {
+  sha: string
+  date: string
+  message: string
+}
+export interface ChangelogData {
+  commits: ChangelogEntry[]
+}
+
 /** meta/biobanks.json — contributing biobanks (for the About / info page). */
 export interface Biobank {
   id: string

@@ -34,6 +34,10 @@ jobs:
       VITE_VARIANT_BASE_URL: https://pub-70f6a636186f47b2a7dbb9547de34be8.r2.dev/v2
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history, not the default shallow clone — the Changelog page
+          # is generated from `git log` at build time (scripts/generate-changelog.js).
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20

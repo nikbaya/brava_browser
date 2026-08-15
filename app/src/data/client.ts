@@ -2,6 +2,7 @@ import { dataUrl, metaUrl, variantUrl } from './config'
 import type {
   AllResultsData,
   BiobankIndex,
+  ChangelogData,
   ExonShard,
   GeneData,
   GeneIndex,
@@ -49,6 +50,8 @@ export const fetchBiobankIndex = () =>
   getJSON<BiobankIndex>(metaUrl('meta/biobanks.json'))
 export const fetchPhenoSizes = () =>
   getJSON<PhenoSizes>(metaUrl('meta/pheno_sizes.json'))
+export const fetchChangelog = () =>
+  getJSON<ChangelogData>(metaUrl('meta/changelog.json'))
 
 /**
  * All-results index for one ancestry stratum (bundled, sharded — see
