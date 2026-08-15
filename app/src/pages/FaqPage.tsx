@@ -113,6 +113,32 @@ export default function FaqPage() {
           </p>
         </Faq>
 
+        <Faq q="How were phenotypes selected?">
+          <p>
+            Phenotypes were nominated by consortium members and harmonised
+            across biobanks using shared ICD and SNOMED mappings, so that
+            phenotype definitions were consistent between contributing
+            cohorts. A subset of these nominated phenotypes was then chosen
+            for analysis based on representation across
+            biobank–ancestry (e.g. UKB-EUR, AoU-AFR) subcohorts: a disease trait was retained if it
+            had at least 100 cases in at least ten biobank–ancestry
+            subcohorts spanning at least five biobanks, or a case prevalence
+            above 1% across ancestries in UK Biobank.
+          </p>
+          <p className="mt-2">
+            See the{' '}
+            <a
+              href="https://www.medrxiv.org/content/medrxiv/early/2026/05/24/2026.05.21.26353759/DC2/embed/media-2.xlsx?download=true"
+              target="_blank"
+              rel="noreferrer"
+              className="text-brand hover:underline"
+            >
+              supplementary tables
+            </a>{' '}
+            for the full phenotype list and selection details.
+          </p>
+        </Faq>
+
         <Faq q="What are the variant masks?">
           Genes are tested under annotation masks that pool qualifying variants:
           predicted loss-of-function (pLoF), damaging missense / protein-altering,
