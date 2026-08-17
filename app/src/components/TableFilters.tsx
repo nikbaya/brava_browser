@@ -1,6 +1,14 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { fmtBeta, fmtCount, fmtP, fmtPLog } from '../lib/format'
-import { SIG_GENE_CAUCHY } from '../lib/constants'
+import {
+  ANCESTRIES,
+  ANCESTRY_META,
+  decodeAncMask,
+  SIG_GENE_CAUCHY,
+  SUPERPOP_IDXS,
+} from '../lib/constants'
+import { AncestryChip } from './indicators'
+import Tip from './Tip'
 
 /** Threshold filter applied to result-table rows (not the plots). */
 export interface TableFilter {
@@ -104,7 +112,7 @@ function ThresholdInput({
           e.currentTarget.blur()
         }
       }}
-      className="tnum w-[84px] rounded-md border border-line bg-surface px-1.5 py-0.5 text-right text-[12px] text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+      className="tnum w-[72px] rounded-md border border-line bg-surface px-1.5 py-0.5 text-right text-[12px] text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
     />
   )
 }
@@ -180,7 +188,7 @@ export function FilterRow({
         step={step}
         value={sliderVal}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="brava-range w-28"
+        className="brava-range w-[76px]"
         style={{
           background: `linear-gradient(to right, var(--color-brand) ${pct}%, var(--color-line) ${pct}%)`,
         }}
@@ -236,6 +244,19 @@ export default function TableFilters({
         stored={value.minLp}
         onChange={(minLp) => onChange({ ...value, minLp })}
       />
+      <button
+        type="button"
+        onClick={() => onChange({ ...value, minLp: sigOn ? 0 : SIG_LP })}
+        aria-pressed={sigOn}
+        title={`Gene-level significance · P < ${fmtP(SIG_GENE_CAUCHY)}`}
+        className={`rounded-md border px-2 py-0.5 text-xs font-medium transition ${
+          sigOn
+            ? 'border-brand bg-brand/10 text-brand'
+            : 'border-line text-ink-soft hover:border-brand hover:text-brand'
+        }`}
+      >
+        genome-wide
+      </button>
       <FilterRow
         // The label span is CSS `uppercase` (see FilterRow) so every other
         // caption in this strip can stay written in plain case. That
@@ -255,19 +276,6 @@ export default function TableFilters({
         stored={value.minAbsBeta}
         onChange={(minAbsBeta) => onChange({ ...value, minAbsBeta })}
       />
-      <button
-        type="button"
-        onClick={() => onChange({ ...value, minLp: sigOn ? 0 : SIG_LP })}
-        aria-pressed={sigOn}
-        title={`Gene-level significance · P < ${fmtP(SIG_GENE_CAUCHY)}`}
-        className={`rounded-md border px-2 py-0.5 text-xs font-medium transition ${
-          sigOn
-            ? 'border-brand bg-brand/10 text-brand'
-            : 'border-line text-ink-soft hover:border-brand hover:text-brand'
-        }`}
-      >
-        genome-wide
-      </button>
       {active && (
         <button
           type="button"
@@ -282,6 +290,218 @@ export default function TableFilters({
       )}
       {children && (
         <span className="ml-auto text-xs text-ink-faint">{children}</span>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Does a variant's `ancMask` pass the ancestry filter? Two modes:
+ *  - default (OR / matches-any): the variant touches at least one ticked
+ *    ancestry. Ticking more boxes only ever widens the result — the standard
+ *    checkbox-list behaviour (Gmail labels, spreadsheet filters, ...).
+ *  - `exclusive` (exact set): the variant's full ancestry composition is
+ *    *precisely* the ticked-and-available set, no more and no less —
+ *    "AMR + SAS ticked" matches only variants observed in both AMR and SAS
+ *    and nowhere else, not AMR-only, SAS-only, or AMR+SAS+EUR. With one
+ *    ancestry ticked this is "private to exactly that ancestry". Unlike the
+ *    default mode this is deliberately non-monotonic (ticking a second box
+ *    can *remove* matches the first box alone had) — expected for an
+ *    exact-combination query, and why it's an explicit opt-in rather than
+ *    how ticking a box behaves by default.
+ *
+ * `available` (the same set `AncestryFilterChips` greys checkboxes from)
+ * matters only for `exclusive`: the default "everything ticked" state
+ * includes superpops with zero data (shown unticked+disabled in the UI, but
+ * still members of `sel` — see its caller's default-state comment), and a
+ * real `tags` list can never contain one of those, so comparing sizes
+ * against raw `sel` would make exact-match impossible whenever an
+ * unavailable superpop is sitting in `sel`. Restricting the size comparison
+ * to `sel ∩ available` fixes that without needing `sel` itself to track
+ * availability.
+ *
+ * `ancMask === 0` ("composition unknown" — see Overview.mark_ancestry in
+ * build_variants.py) always passes either way: we can't confidently say it
+ * doesn't match.
+ */
+export function matchesAncFilter(
+  mask: number,
+  sel: Set<number>,
+  exclusive: boolean,
+  available: Set<number>,
+): boolean {
+  if (mask === 0) return true
+  const tags = decodeAncMask(mask)
+  if (!exclusive) return tags.some((a) => sel.has(a))
+  let n = 0
+  for (const a of sel) if (available.has(a)) n++
+  return tags.length === n && tags.every((a) => sel.has(a))
+}
+
+/**
+ * "Tick which ancestries to include" filter, as a dropdown of checkboxes (one
+ * per superpop) rather than always-visible chips — keeps the filter bar from
+ * growing by 5 buttons on every visit. Each row has an "only" shortcut (ticks
+ * just that ancestry, unticks the rest) — the standard "isolate one facet"
+ * action in faceted filters (Datadog/Honeycomb-style). An "exclusive" toggle
+ * at the bottom switches match semantics — see `matchesAncFilter`. Shared by
+ * the phenotype page's genome-wide variant table and the gene page's
+ * per-gene variant table — both filter on the same `ancMask` bitmask.
+ */
+export function AncestryFilterChips({
+  sel,
+  onChange,
+  available,
+  exclusive,
+  onExclusiveChange,
+}: {
+  sel: Set<number>
+  onChange: (next: Set<number>) => void
+  available: Set<number>
+  exclusive: boolean
+  onExclusiveChange: (next: boolean) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const boxRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const toggle = (a: number) => {
+    const next = new Set(sel)
+    if (next.has(a)) next.delete(a)
+    else next.add(a)
+    onChange(next)
+  }
+
+  // Scoped to *available* ancestries, not all 5: an unavailable one can sit in
+  // `sel` (e.g. the default "everything ticked" state, or non_EUR's 4-way
+  // tick including a superpop with zero data) without ever being visibly
+  // ticked (see the checkbox's `checked` below) or changing what matches
+  // (see matchesAncFilter) — so it shouldn't count in the numerator or
+  // denominator either, or "4/5" would read as narrowed when nothing a user
+  // could act on actually is.
+  const availableIdxs = SUPERPOP_IDXS.filter((a) => available.has(a))
+  const selectedAvailable = availableIdxs.filter((a) => sel.has(a)).length
+  const narrowed = selectedAvailable < availableIdxs.length
+  const summary =
+    selectedAvailable === 0 ? 'none' : narrowed ? `${selectedAvailable}/${availableIdxs.length}` : 'all'
+  const active = narrowed || exclusive
+  const allSelected = availableIdxs.length > 0 && availableIdxs.every((a) => sel.has(a))
+
+  return (
+    <div ref={boxRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium transition ${
+          open || active
+            ? 'border-brand bg-brand/10 text-brand'
+            : 'border-line text-ink-soft hover:border-brand hover:text-brand'
+        }`}
+      >
+        Ancestries{' '}
+        <span className={active ? '' : 'text-ink-faint'}>({summary})</span>
+        <span className="text-ink-faint">▾</span>
+      </button>
+
+      {open && (
+        <ul
+          role="menu"
+          className="absolute z-30 mt-1 min-w-full overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-xl"
+        >
+          <li
+            role="none"
+            className="mb-1 flex items-center gap-2 border-b border-line px-2.5 py-1 whitespace-nowrap"
+          >
+            <label className="flex flex-1 cursor-pointer items-center gap-2 text-[13px] font-medium text-ink">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={() => onChange(allSelected ? new Set() : new Set(availableIdxs))}
+              />
+              All ancestries
+            </label>
+          </li>
+          {SUPERPOP_IDXS.map((a) => {
+            const anc = ANCESTRIES[a]
+            const isAvailable = available.has(a)
+            const isOn = sel.has(a)
+            const label = (
+              <label
+                className={`flex flex-1 items-center gap-2 text-[13px] ${
+                  isAvailable ? 'cursor-pointer text-ink' : 'cursor-default text-ink-faint/50'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  // A disabled row is inert either way (its ancestry never
+                  // appears in any ancMask, so ticking/unticking it can't
+                  // change results) — but `sel` still carries it by default
+                  // (see the default-state comment on AncestryFilterChips'
+                  // caller), so show it as unticked rather than a
+                  // disabled-yet-checked box, which reads as a mistake.
+                  checked={isAvailable && isOn}
+                  disabled={!isAvailable}
+                  onChange={() => toggle(a)}
+                />
+                <AncestryChip anc={anc} dim={!isAvailable} />
+                {ANCESTRY_META[anc].long}
+              </label>
+            )
+            return (
+              <li
+                key={a}
+                role="none"
+                className="flex items-center gap-2 px-2.5 py-1 whitespace-nowrap"
+              >
+                {isAvailable ? (
+                  label
+                ) : (
+                  // Tip (not the native `title`) for a fast reveal — the
+                  // native tooltip's ~1s delay made this easy to miss.
+                  <Tip
+                    label={`No variant-level results for ${ANCESTRY_META[anc].long}`}
+                    className="flex flex-1 items-center gap-2"
+                  >
+                    {label}
+                  </Tip>
+                )}
+                <button
+                  type="button"
+                  disabled={!isAvailable}
+                  onClick={() => onChange(new Set([a]))}
+                  className="shrink-0 text-xs text-ink-faint hover:text-brand disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-ink-faint"
+                >
+                  only
+                </button>
+              </li>
+            )
+          })}
+          <li role="none" className="mt-1 border-t border-line px-2.5 pt-1.5">
+            <label className="flex cursor-pointer items-center gap-2 text-[12px] text-ink-soft">
+              <input
+                type="checkbox"
+                checked={exclusive}
+                onChange={(e) => onExclusiveChange(e.target.checked)}
+              />
+              Exclusive — only variants found in just the ticked ancestries
+            </label>
+          </li>
+        </ul>
       )}
     </div>
   )

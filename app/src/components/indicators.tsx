@@ -1,12 +1,18 @@
 import {
+  ANCESTRIES,
+  ANCESTRY_COLOR,
+  ANCESTRY_META,
+  decodeAncMask,
   SIG_GENE_CAUCHY,
   SIG_GENE_MASK_BONFERRONI,
   SIG_SUGGEST,
   SIG_VARIANT,
+  type Ancestry,
 } from '../lib/constants'
 import { effectInfo } from '../lib/effect'
 import { fmtP } from '../lib/format'
 import type { PhenotypeMeta } from '../data/types'
+import Tip from './Tip'
 
 const LP_GENE = -Math.log10(SIG_GENE_CAUCHY) // ≈ 5.60
 const LP_VARIANT = -Math.log10(SIG_VARIANT) // ≈ 7.74
@@ -227,6 +233,48 @@ export function DirDot({
       style={{ backgroundColor: fill }}
       className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
     />
+  )
+}
+
+/**
+ * A single outlined ancestry chip — 3-char superpop code, colored border +
+ * text, no fill — matching the forest plot's `ANCESTRY_COLOR` palette.
+ * `dim` (no color, just the outline in the muted default text color) is for
+ * a chip that's technically present but shouldn't draw the eye, e.g. an
+ * ancestry the containing row can't act on. Shared building block for
+ * `AncestryChips` below, the ancestry-filter dropdown (TableFilters.tsx),
+ * and the sample-size pies (SamplePie.tsx) — one visual convention for
+ * "this is ancestry X" everywhere in the app.
+ */
+export function AncestryChip({ anc, dim = false }: { anc: Ancestry; dim?: boolean }) {
+  return (
+    <span
+      className="inline-flex shrink-0 items-center rounded border px-1 text-[9px] font-medium leading-[14px]"
+      style={dim ? undefined : { borderColor: ANCESTRY_COLOR[anc], color: ANCESTRY_COLOR[anc] }}
+    >
+      {ANCESTRY_META[anc].label}
+    </span>
+  )
+}
+
+/**
+ * Ancestry-availability tags: one `AncestryChip` per population ancestry a
+ * variant was observed in. Takes a raw `anc_mask` bitmask (see
+ * `decodeAncMask`) — both the gene page's per-gene variant table and the
+ * phenotype page's genome-wide overview table use this, reading straight off
+ * their row's `ancMask` field (baked into the data at pipeline build time,
+ * so no extra fetch either way).
+ */
+export function AncestryChips({ mask }: { mask: number }) {
+  const ancIdxs = decodeAncMask(mask)
+  if (ancIdxs.length === 0) return null
+  const label = `Observed in: ${ancIdxs.map((i) => ANCESTRY_META[ANCESTRIES[i]].long).join(', ')}`
+  return (
+    <Tip label={label} className="inline-flex shrink-0 items-center gap-0.5">
+      {ancIdxs.map((i) => (
+        <AncestryChip key={i} anc={ANCESTRIES[i]} />
+      ))}
+    </Tip>
   )
 }
 
