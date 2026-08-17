@@ -30,6 +30,20 @@ body,
   height: 100%;
 }
 
+/*
+ * Bump the whole page ~10%, like a user zooming in. `zoom` (not `transform:
+ * scale`) is deliberate: a transform on an ancestor makes it the containing
+ * block for every `position: fixed` descendant, which would break the
+ * tooltip portal (Tip.tsx), the forest-plot/variant drawers, and any other
+ * fixed-position overlay throughout the app. `zoom` affects used values the
+ * same way native browser zoom does, so canvas/SVG pixel dimensions and rem-
+ * based Tailwind spacing scale together, and fixed positioning stays
+ * relative to the viewport.
+ */
+html {
+  zoom: 110%;
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);
