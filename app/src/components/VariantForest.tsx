@@ -18,11 +18,12 @@ const ROW_H = 24
 // instead of squeezing the CIs into nothing.
 const MIN_PLOT = 250
 
-/** " · N=228k · I²=0%" appended to the meta row's label; "" for a stratum row
- *  (`ne`/`i2` are meta-only, see `VariantForestRow`). Shared by the label-width
- *  measurement and the actual SVG text so the two can't drift apart. */
-function metaSuffix(r: VariantForestRow & { anc: Ancestry }): string {
-  if (r.anc !== 'All' || r.ne == null) return ''
+/** " · N=228k · I²=0%" appended to a row's label; "" when `ne` is missing
+ *  (e.g. a stratum with a single contributing biobank predates this field in
+ *  older data, or genuinely has none). Shared by the label-width measurement
+ *  and the actual SVG text so the two can't drift apart. */
+function neSuffix(r: VariantForestRow): string {
+  if (r.ne == null) return ''
   const i2 = r.i2 != null ? `  · I²=${Math.round(r.i2)}%` : ''
   return `  · N=${fmtCount(r.ne)}${i2}`
 }
@@ -33,10 +34,9 @@ function metaSuffix(r: VariantForestRow & { anc: Ancestry }): string {
  * (which shows Burden/SKAT-O); here there is one p-value per stratum.
  *
  * Hovering a row highlights it and opens a tooltip with the full-precision
- * numbers. The per-ancestry variant slices carry only beta/se/lp — no N or
- * I² — so unlike the gene-level forest there's no dedicated N column; the
- * meta ("All") row's own slice does carry both, though, so they're appended
- * to just that row's label instead (see `VariantForestRow.ne`/`.i2`).
+ * numbers. Every row's slice carries N (eff.) and I² (see
+ * `VariantForestRow.ne`/`.i2`), appended to that row's own label — there's no
+ * dedicated N column, unlike the gene-level forest.
  */
 export default function VariantForest({
   rows,
@@ -103,13 +103,14 @@ export default function VariantForest({
           r.se == null
             ? fmtBeta(r.beta)
             : `${fmtBeta(r.beta)}  [${fmtBeta(lo)}, ${fmtBeta(hi)}] · p=${fmtPLog(r.lp)}`
-        return r.anc === 'All' ? base + metaSuffix(r) : base
+        return base + neSuffix(r)
       }),
     [ordered],
   )
   const MR = useMemo(() => {
-    // 600 (font-semibold) matches the meta row, which is both the widest
-    // label (it alone carries the N/I² suffix) and the boldest.
+    // 600 (font-semibold) matches the meta row's bold weight — a conservative
+    // over-estimate for stratum rows (font-normal, so they'd actually fit in
+    // less), but simpler than tracking per-row weight just for this measurement.
     const font = bodyFont(12, 600)
     const widest = labels.reduce((m, l) => Math.max(m, textWidth(l, font)), 0)
     return Math.ceil(LABEL_GAP + widest + LABEL_PAD)
@@ -245,7 +246,7 @@ export default function VariantForest({
                     {'  '}[{fmtBeta(lo)}, {fmtBeta(hi)}] · p={fmtPLog(r.lp)}
                   </tspan>
                 )}
-                {isMeta && <tspan className="fill-ink-faint">{metaSuffix(r)}</tspan>}
+                <tspan className="fill-ink-faint">{neSuffix(r)}</tspan>
               </text>
             </g>
           )

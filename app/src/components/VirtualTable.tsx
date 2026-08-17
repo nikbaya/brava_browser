@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import {
   flexRender,
   getCoreRowModel,
@@ -63,6 +63,7 @@ export default function VirtualTable<T>({
   exportSpec,
   reservedRows,
   minWidth,
+  fixedRows,
 }: {
   data: T[]
   columns: ColumnDef<T, any>[]
@@ -107,8 +108,32 @@ export default function VirtualTable<T>({
    * the narrowest legible width for each column.
    */
   minWidth?: number
+  /**
+   * Pin the table to exactly this many data rows tall (plus its header),
+   * regardless of how many rows actually match — short of this it would
+   * otherwise shrink to fit (see `CAP` below), and past it it would otherwise
+   * keep growing. A table whose row count swings with an active filter (the
+   * gene/phenotype variant tables) would otherwise visibly resize under a
+   * filter bar the user is actively adjusting; a fixed height keeps that bar
+   * stationary and scrolls the rows instead.
+   */
+  fixedRows?: number
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLDivElement>(null)
+  const [headerHeight, setHeaderHeight] = useState(0)
+
+  // Measured rather than assumed: a grouped header (e.g. ancestry sub-columns
+  // under a spanning "P-value" label) is taller than a single-level one, and
+  // hard-coding a constant would under-reserve space for those tables.
+  useLayoutEffect(() => {
+    if (!fixedRows || !headerRef.current) return
+    const el = headerRef.current
+    const ro = new ResizeObserver(() => setHeaderHeight(el.offsetHeight))
+    ro.observe(el)
+    setHeaderHeight(el.offsetHeight)
+    return () => ro.disconnect()
+  }, [fixedRows])
 
   const table = useReactTable({
     data,
@@ -157,6 +182,7 @@ export default function VirtualTable<T>({
   const CAP = 600
   const reserve = Math.max(reservedRows ?? data.length, data.length)
   const fixedHeight = reserve * rowHeight >= CAP - 60 ? CAP : undefined
+  const pinnedHeight = fixedRows ? headerHeight + fixedRows * rowHeight : undefined
 
   return (
     // The caption bar sits OUTSIDE the scroll container, not inside it: within the
@@ -184,14 +210,18 @@ export default function VirtualTable<T>({
       <div
         ref={containerRef}
         onScroll={onScroll}
-        style={{ maxHeight: CAP, height: fixedHeight }}
+        style={
+          fixedRows
+            ? { maxHeight: pinnedHeight, height: pinnedHeight }
+            : { maxHeight: CAP, height: fixedHeight }
+        }
         className="overflow-auto"
       >
         <div style={{ minWidth: contentWidth }}>
           {/* Pinned column headers. Header groups render one flex row per level,
               so spanning group labels (e.g. "P-value" over the ancestry
               sub-columns) line up over their children. */}
-          <div className="sticky top-0 z-10">
+          <div ref={headerRef} className="sticky top-0 z-10">
             {table.getHeaderGroups().map((hg) => {
               return (
                 <div

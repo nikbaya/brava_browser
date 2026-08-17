@@ -4,7 +4,6 @@ import type { ColumnDef, SortingState } from '@tanstack/react-table'
 import { useIndex } from '../data/IndexContext'
 import StickyTitle from '../components/StickyTitle'
 import {
-  fetchGene,
   fetchGeneVariants,
   fetchGeneVariantsAnc,
   fetchPhenotype,
@@ -14,7 +13,6 @@ import {
 } from '../data/client'
 import { useAsync } from '../lib/useAsync'
 import {
-  forestSeries,
   phenoLookup,
   phenoRows,
   variantForest,
@@ -27,9 +25,11 @@ import {
   ANCESTRIES,
   ANCESTRY_INDEX,
   ANCESTRY_META,
+  decodeAncMask,
   MAF_META,
   MASK_META,
   SIG_GENE_CAUCHY,
+  SUPERPOP_IDXS,
   type Ancestry,
 } from '../lib/constants'
 import { fmtBeta, fmtP, fmtPLog, fmtPos } from '../lib/format'
@@ -44,10 +44,12 @@ import {
   hetColumn,
   hetExportColumn,
 } from '../components/ancestryColumns'
-import { DirDot, SigDot } from '../components/indicators'
+import { AncestryChips, DirDot, SigDot } from '../components/indicators'
 import FilterBar, { type FilterState } from '../components/FilterBar'
 import TableFilters, {
+  AncestryFilterChips,
   FilterRow,
+  matchesAncFilter,
   NO_TABLE_FILTER,
   passesTableFilter,
   SearchInput,
@@ -55,12 +57,16 @@ import TableFilters, {
 } from '../components/TableFilters'
 import ManhattanPlot from '../components/ManhattanPlot'
 import VariantManhattanPlot, { type VariantPick } from '../components/VariantManhattanPlot'
-import ForestPlot from '../components/ForestPlot'
+import ForestDrawer from '../components/ForestDrawer'
 import VariantForest from '../components/VariantForest'
 import VirtualTable from '../components/VirtualTable'
 import AncestryPies from '../components/AncestryPies'
 import Tip from '../components/Tip'
 import { variantSectionPath } from './GenePage'
+
+// Stable empty-set fallback for `ancAvailable` before the overview loads —
+// avoids handing VariantOverviewTable a fresh `new Set()` every render.
+const EMPTY_ANC_AVAILABLE: Set<number> = new Set()
 
 export default function PhenotypePage() {
   const { id } = useParams()
@@ -110,6 +116,33 @@ export default function PhenotypePage() {
     [id],
   )
 
+  // Which superpops have ANY variant in this phenotype's overview — the same
+  // resolved/gene-matched rows the linked table shows (recomputes what
+  // VariantOverviewTable computes internally; cheap, sub-millisecond, and
+  // keeps the two in agreement). Feeds three things: AncestryPies greys out
+  // a superpop with zero variant-level results while viewing variant mode
+  // (e.g. LDL cholesterol has none in EAS, despite having gene-level
+  // results); the exact-match ("exclusive") filter must not count a
+  // never-observed superpop toward the ticked-set size (see
+  // matchesAncFilter); and it's passed to VariantOverviewTable so both places
+  // share one computation.
+  const variantAncAvailable = useMemo(() => {
+    if (!overview || !geneIndex) return null
+    const avail = new Set<number>()
+    for (const r of variantOverviewRows(overview, geneIndex)) {
+      for (const a of decodeAncMask(r.ancMask)) avail.add(a)
+    }
+    return avail
+  }, [overview, geneIndex])
+
+  const variantAncAvailableNames = useMemo(
+    () =>
+      variantAncAvailable
+        ? new Set([...variantAncAvailable].map((a) => ANCESTRIES[a]))
+        : null,
+    [variantAncAvailable],
+  )
+
   const { data, loading, error } = useAsync(
     () =>
       id
@@ -128,6 +161,33 @@ export default function PhenotypePage() {
   const [variantQuery, setVariantQuery] = useState('')
   const [variantMinLp, setVariantMinLp] = useState(0)
   const [variantMinAbsBeta, setVariantMinAbsBeta] = useState(0)
+  // All 5 ticked by default (no filtering). Unavailable ancestries (no
+  // variants in this phenotype's overview) are greyed out in the UI, not
+  // removed from this set — see VariantOverviewTable's `ancAvailable`.
+  const [variantAncSel, setVariantAncSel] = useState<Set<number>>(
+    () => new Set(SUPERPOP_IDXS),
+  )
+  // See `matchesAncFilter` — OR (matches-any) by default, subset when true.
+  const [variantAncExclusive, setVariantAncExclusive] = useState(false)
+
+  // The page-level ancestry selector (top dropdown + clicking a pie) also
+  // narrows the variant view: picking a single superpop shows variants
+  // available in it, `non_EUR` shows variants available in any of the 4
+  // non-EUR superpops — the same "only"/multi-tick actions the detailed
+  // dropdown offers, just driven from the coarser page-wide control.
+  // One-directional (this drives the tick-list, not the reverse): most
+  // tick-list combinations don't correspond to any single top-level value.
+  useEffect(() => {
+    if (manhattanMode !== 'variant') return
+    if (ancestry === 'All') {
+      setVariantAncSel(new Set(SUPERPOP_IDXS))
+    } else if (ancestry === 'non_EUR') {
+      setVariantAncSel(new Set(SUPERPOP_IDXS.filter((a) => ANCESTRIES[a] !== 'EUR')))
+    } else {
+      setVariantAncSel(new Set([ANCESTRY_INDEX[ancestry]]))
+    }
+    setVariantAncExclusive(false)
+  }, [ancestry, manhattanMode])
 
   // Lazy-load every available ancestry file so the table can show a P + β
   // column per ancestry. The selected ancestry (already fetched above for the
@@ -181,20 +241,36 @@ export default function PhenotypePage() {
   // rows on every keystroke is still sub-millisecond, same as the all-results
   // and gene-level Manhattans.
   const variantFilterActive =
-    variantQuery.trim() !== '' || variantMinLp > 0 || variantMinAbsBeta > 0
+    variantQuery.trim() !== '' ||
+    variantMinLp > 0 ||
+    variantMinAbsBeta > 0 ||
+    variantAncSel.size < SUPERPOP_IDXS.length ||
+    variantAncExclusive
   const variantManhattanIdx = useMemo(() => {
     if (!overview || !geneIndex || !variantFilterActive) return null
     const q = variantQuery.trim().toLowerCase()
+    const avail = variantAncAvailable ?? new Set<number>()
     const idx = new Set<number>()
     for (const r of variantOverviewRows(overview, geneIndex)) {
       if (variantMinLp > 0 && r.lp < variantMinLp) continue
       if (variantMinAbsBeta > 0 && !(r.beta != null && Math.abs(r.beta) >= variantMinAbsBeta))
         continue
+      if (!matchesAncFilter(r.ancMask, variantAncSel, variantAncExclusive, avail)) continue
       if (q && !r.symbol.toLowerCase().includes(q) && !r.ensg.toLowerCase().includes(q)) continue
       idx.add(r.idx)
     }
     return idx
-  }, [overview, geneIndex, variantFilterActive, variantQuery, variantMinLp, variantMinAbsBeta])
+  }, [
+    overview,
+    geneIndex,
+    variantFilterActive,
+    variantQuery,
+    variantMinLp,
+    variantMinAbsBeta,
+    variantAncSel,
+    variantAncExclusive,
+    variantAncAvailable,
+  ])
 
   // The P/β threshold + slider domains apply to the selected ancestry column.
   const { maxLp, maxAbsBeta } = useMemo(() => {
@@ -296,6 +372,7 @@ export default function PhenotypePage() {
       <AncestryPies
         pheno={pheno}
         available={available}
+        variantAvailable={manhattanMode === 'variant' ? variantAncAvailableNames : null}
         selected={ancestry}
         onSelect={(a) => setFilters({ ...filters, ancestry: a })}
       />
@@ -380,8 +457,8 @@ export default function PhenotypePage() {
               ) : (
                 <>
                   <span>
-                    Cross-ancestry meta only (not affected by the ancestry
-                    filter above)
+                    Effect sizes are the cross-ancestry meta · filtering by ancestry
+                    narrows which variants are shown, not their values
                   </span>
                   <VariantThresholdLegend />
                   <span>· click a variant for its cross-ancestry forest plot</span>
@@ -436,6 +513,11 @@ export default function PhenotypePage() {
                 onMinLpChange={setVariantMinLp}
                 minAbsBeta={variantMinAbsBeta}
                 onMinAbsBetaChange={setVariantMinAbsBeta}
+                ancSel={variantAncSel}
+                onAncSelChange={setVariantAncSel}
+                ancExclusive={variantAncExclusive}
+                onAncExclusiveChange={setVariantAncExclusive}
+                ancAvailable={variantAncAvailable ?? EMPTY_ANC_AVAILABLE}
                 focusedVariant={variantDrawer}
                 onOpenForest={(pick) =>
                   setVariantDrawer({
@@ -479,76 +561,6 @@ export default function PhenotypePage() {
       )}
       </div>
     </>
-  )
-}
-
-function ForestDrawer({
-  ensg,
-  symbol,
-  phenoIdx,
-  trait,
-  maskIndex,
-  mafIndex,
-  onClose,
-  onOpenGene,
-}: {
-  ensg: string
-  symbol: string
-  phenoIdx: number
-  trait: PhenotypeMeta
-  maskIndex: number
-  mafIndex: number
-  onClose: () => void
-  onOpenGene: () => void
-}) {
-  const { data, loading, error } = useAsync(() => fetchGene(ensg), [ensg])
-  const series = useMemo(
-    () => (data ? forestSeries(data, { phenoIdx, maskIndex, mafIndex }) : null),
-    [data, phenoIdx, maskIndex, mafIndex],
-  )
-
-  return (
-    <div className="fixed inset-0 z-40 flex justify-end">
-      <div className="absolute inset-0 bg-ink/20" onClick={onClose} />
-      <aside className="relative z-10 flex h-full w-full max-w-xl flex-col overflow-y-auto bg-surface shadow-2xl">
-        <div className="flex items-center justify-between border-b border-line px-4 py-3">
-          <div>
-            <h2 className="text-base font-semibold text-ink">
-              {symbol} × {trait.name}
-            </h2>
-            <p className="text-xs text-ink-faint">Effect across ancestries</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onOpenGene}
-              className="text-[12px] text-brand hover:underline"
-            >
-              open gene page →
-            </button>
-            <button
-              onClick={onClose}
-              aria-label="Close"
-              className="rounded p-1 text-ink-faint hover:bg-surface-soft hover:text-ink"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-        <div className="p-4">
-          {loading && <Spinner label="Loading…" />}
-          {error && <Notice title="Could not load gene" />}
-          {series && (
-            <ForestPlot
-              series={series}
-              trait={trait}
-              symbol={symbol}
-              maskIndex={maskIndex}
-              mafIndex={mafIndex}
-            />
-          )}
-        </div>
-      </aside>
-    </div>
   )
 }
 
@@ -960,6 +972,11 @@ function VariantOverviewTable({
   onMinLpChange,
   minAbsBeta,
   onMinAbsBetaChange,
+  ancSel,
+  onAncSelChange,
+  ancExclusive,
+  onAncExclusiveChange,
+  ancAvailable,
   focusedVariant,
   onOpenForest,
   onHoverRow,
@@ -977,6 +994,17 @@ function VariantOverviewTable({
   /** Same |β| ≥ filter as the gene page's per-gene variant table. */
   minAbsBeta: number
   onMinAbsBetaChange: (v: number) => void
+  /** Ticked superpop ANCESTRY_INDEX values to include — see `AncestryFilterChips`. */
+  ancSel: Set<number>
+  onAncSelChange: (next: Set<number>) => void
+  /** See `matchesAncFilter` — OR (matches-any) by default, subset when true. */
+  ancExclusive: boolean
+  onAncExclusiveChange: (next: boolean) => void
+  /** Which superpops have any variant here at all — computed once at the page
+   *  level (shared with AncestryPies and the linked Manhattan) so this and
+   *  `variantManhattanIdx` can't disagree. Greys out a checkbox in the
+   *  dropdown and anchors `matchesAncFilter`'s exact-match size comparison. */
+  ancAvailable: Set<number>
   /** The variant currently shown in the forest drawer, if any. */
   focusedVariant: VariantPick | null
   onOpenForest: (pick: VariantPick) => void
@@ -986,7 +1014,7 @@ function VariantOverviewTable({
 
   const rows = useMemo(() => variantOverviewRows(overview, geneIndex), [overview, geneIndex])
 
-  // Slider domains: every row already clears `overview.keep_lp` by construction
+  // Slider domain: every row already clears `overview.keep_lp` by construction
   // (see `rows` above), so `maxLp` is really the ceiling of an already-
   // significant range, not 0..max — same idea as the gene table's `maxLp`.
   const { maxLp, maxAbsBeta } = useMemo(() => {
@@ -1005,9 +1033,10 @@ function VariantOverviewTable({
       (r) =>
         (!q || r.symbol.toLowerCase().includes(q) || r.ensg.toLowerCase().includes(q)) &&
         (minLp <= 0 || r.lp >= minLp) &&
-        (minAbsBeta <= 0 || (r.beta != null && Math.abs(r.beta) >= minAbsBeta)),
+        (minAbsBeta <= 0 || (r.beta != null && Math.abs(r.beta) >= minAbsBeta)) &&
+        matchesAncFilter(r.ancMask, ancSel, ancExclusive, ancAvailable),
     )
-  }, [rows, query, minLp, minAbsBeta])
+  }, [rows, query, minLp, minAbsBeta, ancSel, ancExclusive, ancAvailable])
 
   const columns = useMemo<ColumnDef<VariantOverviewRow, any>[]>(
     () => [
@@ -1037,6 +1066,26 @@ function VariantOverviewTable({
             </div>
           )
         },
+      },
+      {
+        id: 'ancestries',
+        header: 'Ancestries',
+        // Sorts by mask value, not "how many" — fine, since this column is
+        // mostly scanned/filtered, not sorted (no natural order on which set
+        // of ancestries "comes first").
+        accessorFn: (r) => r.ancMask,
+        size: 150,
+        // `fill` (own layout, no truncating wrapper) — a row of chips isn't a
+        // single truncatable string, same reasoning as the Variant column.
+        meta: {
+          fill: true,
+          help: 'Which populations (EUR/AFR/AMR/EAS/SAS) contributed to this variant’s meta-analysis.',
+        },
+        cell: (c) => (
+          <div className="flex w-full min-w-0 items-center px-2">
+            <AncestryChips mask={c.getValue<number>()} />
+          </div>
+        ),
       },
       {
         accessorKey: 'symbol',
@@ -1114,6 +1163,10 @@ function VariantOverviewTable({
         { header: 'P', value: (r) => exportP(r.lp) },
         { header: 'neglog10P', value: (r) => r.lp },
         { header: 'beta', value: (r) => r.beta },
+        {
+          header: 'ancestries',
+          value: (r) => decodeAncMask(r.ancMask).map((a) => ANCESTRIES[a]).join(','),
+        },
       ] satisfies ExportColumn<VariantOverviewRow>[],
     }),
     [pheno],
@@ -1125,7 +1178,12 @@ function VariantOverviewTable({
       cross-ancestry meta
     </span>
   )
-  const filterActive = query.trim() !== '' || minLp > 0 || minAbsBeta > 0
+  const filterActive =
+    query.trim() !== '' ||
+    minLp > 0 ||
+    minAbsBeta > 0 ||
+    ancSel.size < SUPERPOP_IDXS.length ||
+    ancExclusive
   const betaMax = maxAbsBeta > 0 ? Math.ceil(maxAbsBeta * 20) / 20 : 1
 
   return (
@@ -1157,6 +1215,13 @@ function VariantOverviewTable({
           stored={minAbsBeta}
           onChange={onMinAbsBetaChange}
         />
+        <AncestryFilterChips
+          sel={ancSel}
+          onChange={onAncSelChange}
+          available={ancAvailable}
+          exclusive={ancExclusive}
+          onExclusiveChange={onAncExclusiveChange}
+        />
         {filterActive && (
           <button
             type="button"
@@ -1164,6 +1229,8 @@ function VariantOverviewTable({
               onQueryChange('')
               onMinLpChange(0)
               onMinAbsBetaChange(0)
+              onAncSelChange(new Set(SUPERPOP_IDXS))
+              onAncExclusiveChange(false)
             }}
             className="text-xs text-ink-faint hover:text-ink hover:underline"
           >
@@ -1193,7 +1260,7 @@ function VariantOverviewTable({
         }
         caption={caption}
         exportSpec={exportSpec}
-        reservedRows={rows.length}
+        fixedRows={15}
       />
     </>
   )

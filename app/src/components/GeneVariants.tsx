@@ -14,7 +14,14 @@ import {
   variantRows,
   type VariantRow,
 } from '../lib/select'
-import { ANCESTRIES, ANCESTRY_META, SIG_VARIANT } from '../lib/constants'
+import {
+  ANCESTRIES,
+  ANCESTRY_INDEX,
+  ANCESTRY_META,
+  decodeAncMask,
+  SIG_VARIANT,
+  SUPERPOP_IDXS,
+} from '../lib/constants'
 import { fmtBeta, fmtCount, fmtP, fmtPLog, fmtPos } from '../lib/format'
 import {
   exportP,
@@ -23,8 +30,8 @@ import {
   type TableExport,
 } from '../lib/exportTable'
 import { Notice, Spinner } from './ui'
-import { DirDot, MagnitudeBar, SigDot } from './indicators'
-import { FilterRow } from './TableFilters'
+import { AncestryChip, AncestryChips, DirDot, MagnitudeBar, SigDot } from './indicators'
+import { AncestryFilterChips, FilterRow, matchesAncFilter } from './TableFilters'
 import Tip from './Tip'
 import VirtualTable from './VirtualTable'
 import LocusZoom from './LocusZoom'
@@ -32,23 +39,47 @@ import VariantForest from './VariantForest'
 
 /** Threshold filter for the gene-page variant section — shared by the locus
  *  plot and the table below it, so filtering one filters both. N (eff.) and
- *  I² only exist in the cross-ancestry meta (see the module doc comment
- *  below), so those two thresholds are inert in stratum mode. */
+ *  I² are populated for every ancestry (meta and each stratum alike).
+ *  `ancSel` (meta-mode only — see `ancMask`'s doc) starts with every superpop
+ *  ticked (no filtering); the same "reset" Set instance is safe to reuse since
+ *  AncestryFilterChips always replaces it with a new one rather than mutating
+ *  it in place. */
 interface VariantFilter {
   minLp: number
   minAbsBeta: number
   minNe: number
   minI2: number
+  ancSel: Set<number>
+  /** See `matchesAncFilter` — OR (matches-any) by default, subset when true. */
+  ancExclusive: boolean
 }
-const NO_VARIANT_FILTER: VariantFilter = { minLp: 0, minAbsBeta: 0, minNe: 0, minI2: 0 }
+const NO_VARIANT_FILTER: VariantFilter = {
+  minLp: 0,
+  minAbsBeta: 0,
+  minNe: 0,
+  minI2: 0,
+  ancSel: new Set(SUPERPOP_IDXS),
+  ancExclusive: false,
+}
 const SIG_LP_VARIANT = -Math.log10(SIG_VARIANT)
+// SUPERPOPS[0] === 'EUR' (see constants.ts) — the bit `_gene_anc_mask` sets
+// for EUR-ancestry rows. Cleared when resolving a variant's composition
+// specifically *within* the non_EUR stratum (see `rows` below): EUR isn't
+// one of the 4 populations non_EUR combines, so a variant that also happens
+// to be independently tested in EUR shouldn't show a EUR chip there.
+const EUR_BIT = 1
 
-function passesVariantFilter(f: VariantFilter, r: VariantRow): boolean {
+function passesVariantFilter(
+  f: VariantFilter,
+  r: VariantRow,
+  ancAvailable: Set<number>,
+): boolean {
   if (f.minLp > 0 && !(r.lp != null && r.lp >= f.minLp)) return false
   if (f.minAbsBeta > 0 && !(r.beta != null && Math.abs(r.beta) >= f.minAbsBeta))
     return false
   if (f.minNe > 0 && !(r.ne != null && r.ne >= f.minNe)) return false
   if (f.minI2 > 0 && !(r.i2 != null && r.i2 >= f.minI2)) return false
+  if (!matchesAncFilter(r.ancMask, f.ancSel, f.ancExclusive, ancAvailable)) return false
   return true
 }
 
@@ -60,14 +91,12 @@ function passesVariantFilter(f: VariantFilter, r: VariantRow): boolean {
  *
  * `ancIdx` follows the page's ancestry filter: 0 (`All`) reads the cross-ancestry
  * meta from the main file, any other stratum reads the per-ancestry file (also
- * used by the forest, so the two share one cached fetch). Per-ancestry slices
- * carry only beta/se/lp, so the N (eff.) and I² columns are dropped for strata.
+ * used by the forest, so the two share one cached fetch). Both carry the same
+ * beta/se/lp/nc/ne/i2/cq fields, so N (eff.) and I² work in every ancestry.
  *
- * In meta mode N (eff.) carries a `MagnitudeBar` normalised to the largest N in
- * the table, so uneven biobank contribution is scannable down the column. A
- * stratum has no per-variant N in the data at all — extending the meter to
- * strata, or to a per-ancestry breakdown, needs a variant ETL re-run; see
- * docs/ui-followups.md.
+ * N (eff.) carries a `MagnitudeBar` normalised to the largest N in the table
+ * (meta or stratum alike), so uneven biobank contribution is scannable down
+ * the column.
  */
 export default function GeneVariants({
   ensg,
@@ -127,8 +156,11 @@ export default function GeneVariants({
     seekedVariant.current = false
   }, [ensg, phenoIdx])
 
-  // Per-ancestry file: needed up front when a stratum is selected (it backs the
-  // table), otherwise lazily once a variant is clicked (it backs the forest).
+  // Per-ancestry file: needed up front when a stratum is selected (it backs
+  // the table), otherwise lazily once a variant is clicked (it backs the
+  // forest). Ancestry-availability tags no longer need this fetch — they're
+  // baked into the eagerly-fetched meta file's `ancMask` (see the columns
+  // below) — so there's no reason to fetch it any earlier than before.
   const needAnc = ancIdx !== 0 || selected != null
   const anc = useAsync(
     () =>
@@ -136,10 +168,37 @@ export default function GeneVariants({
     [ensg, phenoIdx, split, needAnc],
   )
 
+  // For the non_EUR stratum specifically (unlike every other single-ancestry
+  // stratum), "which population contributed" is itself a meaningful,
+  // answerable question — non_EUR combines 4 populations, so a reader
+  // reasonably wants to know which of them this particular variant came
+  // from. `variantAncRows` can't answer that (the non_EUR anc.json slice
+  // only has the combined estimate, not a per-population breakdown), but the
+  // already-loaded meta file's `anc_mask` can: it's the same (pos,ref,alt)
+  // universe, so resolve each non_EUR row's mask by position/allele lookup
+  // against the meta slice, with the EUR bit cleared (EUR isn't part of
+  // non_EUR — see EUR_BIT).
+  const metaAncMaskByKey = useMemo(() => {
+    if (!data) return null
+    const sl = data.by_pheno[String(phenoIdx)]
+    if (!sl) return null
+    const map = new Map<string, number>()
+    for (let i = 0; i < sl.idx.length; i++) {
+      const v = sl.idx[i]
+      map.set(`${data.pos[v]}\t${data.ref[v]}\t${data.alt[v]}`, sl.anc_mask[i] ?? 0)
+    }
+    return map
+  }, [data, phenoIdx])
+
   const rows = useMemo(() => {
     if (ancIdx === 0) return data ? variantRows(data, phenoIdx) : []
-    return anc.data ? variantAncRows(anc.data, ancIdx, phenoIdx) : []
-  }, [data, anc.data, ancIdx, phenoIdx])
+    const base = anc.data ? variantAncRows(anc.data, ancIdx, phenoIdx) : []
+    if (ancIdx !== ANCESTRY_INDEX.non_EUR || !metaAncMaskByKey) return base
+    return base.map((r) => ({
+      ...r,
+      ancMask: (metaAncMaskByKey.get(`${r.pos}\t${r.ref}\t${r.alt}`) ?? 0) & ~EUR_BIT,
+    }))
+  }, [data, anc.data, ancIdx, phenoIdx, metaAncMaskByKey])
 
   useEffect(() => {
     if (seekedVariant.current || !seekVariant || ancIdx !== 0 || rows.length === 0) return
@@ -181,23 +240,28 @@ export default function GeneVariants({
 
   // Slider domains, from the unfiltered rows so they don't shrink as the user
   // narrows the filter (a slider whose own max keeps dropping is disorienting).
-  const { maxLp, maxAbsBeta, maxNe } = useMemo(() => {
+  // `ancAvailable` greys out a superpop's filter chip when nothing in this
+  // gene × phenotype's meta rows has that bit set (always empty in stratum
+  // mode, where ancMask is 0 on every row — see variantAncRows).
+  const { maxLp, maxAbsBeta, maxNe, ancAvailable } = useMemo(() => {
     let lp = 0
     let b = 0
     let n = 0
+    const avail = new Set<number>()
     for (const r of rows) {
       if (r.lp != null) lp = Math.max(lp, r.lp)
       if (r.beta != null) b = Math.max(b, Math.abs(r.beta))
       if (r.ne != null) n = Math.max(n, r.ne)
+      for (const a of decodeAncMask(r.ancMask)) avail.add(a)
     }
-    return { maxLp: lp, maxAbsBeta: b, maxNe: n }
+    return { maxLp: lp, maxAbsBeta: b, maxNe: n, ancAvailable: avail }
   }, [rows])
 
   // Shared by the locus plot and the table below it, so filtering one filters
   // both — matches the phenotype page's Manhattan/table linkage.
   const filteredRows = useMemo(
-    () => rows.filter((r) => passesVariantFilter(filter, r)),
-    [rows, filter],
+    () => rows.filter((r) => passesVariantFilter(filter, r, ancAvailable)),
+    [rows, filter, ancAvailable],
   )
 
   // In stratum mode the table's rows come from the ancestry file, so wait on it
@@ -266,10 +330,11 @@ export default function GeneVariants({
       <VariantFilterBar
         filter={filter}
         onChange={setFilter}
-        isMeta={isMeta}
+        showAncFilter={isMeta || ancIdx === ANCESTRY_INDEX.non_EUR}
         maxLp={maxLp}
         maxAbsBeta={maxAbsBeta}
         maxNe={maxNe}
+        ancAvailable={ancAvailable}
       />
 
       <VariantTable
@@ -370,20 +435,30 @@ function neLabel(ne: number | undefined, max: number): string {
 function VariantFilterBar({
   filter,
   onChange,
-  isMeta,
+  showAncFilter,
   maxLp,
   maxAbsBeta,
   maxNe,
+  ancAvailable,
 }: {
   filter: VariantFilter
   onChange: (next: VariantFilter) => void
-  isMeta: boolean
+  /** Meta mode, or non_EUR (the one stratum whose composition is itself
+   *  resolvable and meaningful to filter on — see the `rows` comment in the
+   *  parent component). Every other single-ancestry stratum is atomic:
+   *  there's nothing narrower to filter to. */
+  showAncFilter: boolean
   maxLp: number
   maxAbsBeta: number
   maxNe: number
+  ancAvailable: Set<number>
 }) {
   const active =
-    filter.minLp > 0 || filter.minAbsBeta > 0 || filter.minNe > 0 || filter.minI2 > 0
+    filter.minLp > 0 ||
+    filter.minAbsBeta > 0 ||
+    filter.minNe > 0 ||
+    filter.minI2 > 0 ||
+    filter.ancSel.size < SUPERPOP_IDXS.length
   const betaMax = maxAbsBeta > 0 ? Math.ceil(maxAbsBeta * 20) / 20 : 1
   const lpMax = Math.max(Math.ceil(maxLp), Math.ceil(SIG_LP_VARIANT))
   const neMax = maxNe > 0 ? Math.ceil(maxNe / 100) * 100 : 100
@@ -400,6 +475,19 @@ function VariantFilterBar({
         stored={filter.minLp}
         onChange={(minLp) => onChange({ ...filter, minLp })}
       />
+      <button
+        type="button"
+        onClick={() => onChange({ ...filter, minLp: sigOn ? 0 : SIG_LP_VARIANT })}
+        aria-pressed={sigOn}
+        title={`Variant-level significance · P < ${fmtP(SIG_VARIANT)}`}
+        className={`rounded-md border px-2 py-0.5 text-xs font-medium transition ${
+          sigOn
+            ? 'border-brand bg-brand/10 text-brand'
+            : 'border-line text-ink-soft hover:border-brand hover:text-brand'
+        }`}
+      >
+        genome-wide
+      </button>
       <FilterRow
         // normal-case: see the matching comment on the gene table's own β row
         // in TableFilters.tsx — uppercase turns β (U+03B2) into a Greek
@@ -416,47 +504,39 @@ function VariantFilterBar({
         stored={filter.minAbsBeta}
         onChange={(minAbsBeta) => onChange({ ...filter, minAbsBeta })}
       />
-      {isMeta && (
-        <>
-          <FilterRow
-            // normal-case: matches the table's own "N (eff.)" column header —
-            // uppercase turned "(eff.)" into a shouty "(EFF.)".
-            label={
-              <>
-                N <span className="normal-case">(eff.)</span> ≥
-              </>
-            }
-            kind="n"
-            min={0}
-            max={neMax}
-            step={Math.max(1, Math.round(neMax / 100))}
-            stored={filter.minNe}
-            onChange={(minNe) => onChange({ ...filter, minNe })}
-          />
-          <FilterRow
-            label="I² ≥"
-            kind="i2"
-            min={0}
-            max={100}
-            step={1}
-            stored={filter.minI2}
-            onChange={(minI2) => onChange({ ...filter, minI2 })}
-          />
-        </>
+      <FilterRow
+        // normal-case: matches the table's own "N (eff.)" column header —
+        // uppercase turned "(eff.)" into a shouty "(EFF.)".
+        label={
+          <>
+            N <span className="normal-case">(eff.)</span> ≥
+          </>
+        }
+        kind="n"
+        min={0}
+        max={neMax}
+        step={Math.max(1, Math.round(neMax / 100))}
+        stored={filter.minNe}
+        onChange={(minNe) => onChange({ ...filter, minNe })}
+      />
+      <FilterRow
+        label="I² ≥"
+        kind="i2"
+        min={0}
+        max={100}
+        step={1}
+        stored={filter.minI2}
+        onChange={(minI2) => onChange({ ...filter, minI2 })}
+      />
+      {showAncFilter && (
+        <AncestryFilterChips
+          sel={filter.ancSel}
+          onChange={(ancSel) => onChange({ ...filter, ancSel })}
+          available={ancAvailable}
+          exclusive={filter.ancExclusive}
+          onExclusiveChange={(ancExclusive) => onChange({ ...filter, ancExclusive })}
+        />
       )}
-      <button
-        type="button"
-        onClick={() => onChange({ ...filter, minLp: sigOn ? 0 : SIG_LP_VARIANT })}
-        aria-pressed={sigOn}
-        title={`Variant-level significance · P < ${fmtP(SIG_VARIANT)}`}
-        className={`rounded-md border px-2 py-0.5 text-xs font-medium transition ${
-          sigOn
-            ? 'border-brand bg-brand/10 text-brand'
-            : 'border-line text-ink-soft hover:border-brand hover:text-brand'
-        }`}
-      >
-        genome-wide
-      </button>
       {active && (
         <button
           type="button"
@@ -566,6 +646,35 @@ function VariantTable({
           )
         },
       },
+      {
+        id: 'ancestries',
+        header: 'Ancestries',
+        // Meta and non_EUR modes show the real composition (mask-based
+        // AncestryChips — see the `rows` comment on why non_EUR's mask is
+        // resolvable at all). Every other stratum is atomic — every row here
+        // already IS that one population by construction — so there's
+        // nothing to break down; show a single fixed chip instead of
+        // leaving the column blank.
+        accessorFn: (r) => r.ancMask,
+        size: 150,
+        meta: {
+          fill: true,
+          help: isMeta
+            ? 'Which populations (EUR/AFR/AMR/EAS/SAS) contributed to this variant’s meta-analysis.'
+            : ancIdx === ANCESTRY_INDEX.non_EUR
+              ? 'Which of AFR/AMR/EAS/SAS contributed to this variant’s non-European meta-analysis.'
+              : `Every row here is from the ${ANCESTRY_META[ANCESTRIES[ancIdx]].long} stratum.`,
+        },
+        cell: (c) => (
+          <div className="flex w-full min-w-0 items-center px-2">
+            {isMeta || ancIdx === ANCESTRY_INDEX.non_EUR ? (
+              <AncestryChips mask={c.getValue<number>()} />
+            ) : (
+              <AncestryChip anc={ANCESTRIES[ancIdx]} />
+            )}
+          </div>
+        ),
+      },
       // Nullable numerics go through `?? undefined` + sortUndefined: TanStack
       // only special-cases `undefined`, and `null` falls through to its
       // compareBasic, where `null === 0`, `null > 0` and `0 > null` are all
@@ -607,77 +716,61 @@ function VariantTable({
           )
         },
       },
-      // N (eff.) and I² exist only in the cross-ancestry meta slices, so they're
-      // dropped for a single stratum rather than shown as a column of dashes.
-      ...(isMeta
-        ? [
-            {
-              id: 'ne',
-              header: 'N (eff.)',
-              accessorFn: (r: VariantRow) => r.ne ?? undefined,
-              sortUndefined: 'last' as const,
-              size: 134,
-              // `fill` (own layout, no truncating wrapper) so the meter keeps its
-              // pixels, and the count sits in a fixed-width span so every bar
-              // starts at the same x — bars only compare from a shared origin.
-              meta: { fill: true, help: help.ne },
-              cell: (c: CellContext<VariantRow, any>) => {
-                const v = c.getValue<number | undefined>()
-                return (
-                  // Tip (not a native title) for the same snappy reveal as the
-                  // gene table's grid, and it claims the whole cell — h-full
-                  // w-full, which meta.fill makes possible — because a 2px
-                  // sliver bar would otherwise be an awful hover target. Same
-                  // reasoning as CELL_HIT in [ancestryColumns.tsx].
-                  <Tip
-                    label={neLabel(v, maxNe)}
-                    className="flex h-full w-full min-w-0 items-center gap-2 px-2 whitespace-nowrap"
-                  >
-                    <span className="tnum w-[46px] shrink-0">{fmtCount(v)}</span>
-                    <MagnitudeBar value={v} max={maxNe} />
-                  </Tip>
-                )
-              },
-            },
-            {
-              id: 'i2',
-              header: 'I²',
-              accessorFn: (r: VariantRow) => r.i2 ?? undefined,
-              sortUndefined: 'last' as const,
-              size: 70,
-              meta: { help: help.i2 },
-              cell: (c: CellContext<VariantRow, any>) => {
-                // i2 is Cochran's I² already in percent (0–100); '—' when a single
-                // biobank contributes (heterogeneity undefined for one study), which
-                // sorts apart from a genuine 0% thanks to sortUndefined.
-                const v = c.getValue<number | undefined>()
-                return (
-                  <span className="tnum text-ink-soft">
-                    {v == null ? '—' : `${Math.round(v)}%`}
-                  </span>
-                )
-              },
-            },
-          ]
-        : []),
+      {
+        id: 'ne',
+        header: 'N (eff.)',
+        accessorFn: (r: VariantRow) => r.ne ?? undefined,
+        sortUndefined: 'last' as const,
+        size: 134,
+        // `fill` (own layout, no truncating wrapper) so the meter keeps its
+        // pixels, and the count sits in a fixed-width span so every bar
+        // starts at the same x — bars only compare from a shared origin.
+        meta: { fill: true, help: help.ne },
+        cell: (c: CellContext<VariantRow, any>) => {
+          const v = c.getValue<number | undefined>()
+          return (
+            // Tip (not a native title) for the same snappy reveal as the
+            // gene table's grid, and it claims the whole cell — h-full
+            // w-full, which meta.fill makes possible — because a 2px
+            // sliver bar would otherwise be an awful hover target. Same
+            // reasoning as CELL_HIT in [ancestryColumns.tsx].
+            <Tip
+              label={neLabel(v, maxNe)}
+              className="flex h-full w-full min-w-0 items-center gap-2 px-2 whitespace-nowrap"
+            >
+              <span className="tnum w-[46px] shrink-0">{fmtCount(v)}</span>
+              <MagnitudeBar value={v} max={maxNe} />
+            </Tip>
+          )
+        },
+      },
+      {
+        id: 'i2',
+        header: 'I²',
+        accessorFn: (r: VariantRow) => r.i2 ?? undefined,
+        sortUndefined: 'last' as const,
+        size: 70,
+        meta: { help: help.i2 },
+        cell: (c: CellContext<VariantRow, any>) => {
+          // i2 is Cochran's I² already in percent (0–100); '—' when a single
+          // biobank contributes (heterogeneity undefined for one study), which
+          // sorts apart from a genuine 0% thanks to sortUndefined.
+          const v = c.getValue<number | undefined>()
+          return (
+            <span className="tnum text-ink-soft">
+              {v == null ? '—' : `${Math.round(v)}%`}
+            </span>
+          )
+        },
+      },
     ]
   }, [chr, trait.type, maxAbsBeta, maxNe, isMeta, ancIdx])
 
-  // The meta-only fields (N, I², Cochran's Q) are exported only in meta mode —
-  // in a stratum the pipeline doesn't emit them, so the columns would be a wall
-  // of blanks, which is also why the table itself drops them (see the note on
-  // this component). `se` and `n_cases` aren't table columns but are already
+  // N/I²/Cochran's Q are populated for every ancestry now (meta and each
+  // stratum alike). `se` and `n_cases` aren't table columns but are already
   // loaded and are what a reader needs to recompute a CI, so they ship too.
   const exportSpec = useMemo<TableExport<VariantRow>>(() => {
     const anc = ANCESTRIES[ancIdx]
-    const metaOnly: ExportColumn<VariantRow>[] = isMeta
-      ? [
-          { header: 'n_cases', value: (r) => r.nc },
-          { header: 'n_eff', value: (r) => r.ne },
-          { header: 'i2', value: (r) => r.i2 },
-          { header: 'cochran_q', value: (r) => r.cq },
-        ]
-      : []
     return {
       noun: 'variants',
       filename: `brava_${slug(symbol)}_${slug(trait.id)}_${slug(anc)}_variants.tsv`,
@@ -695,10 +788,13 @@ function VariantTable({
         { header: 'neglog10P', value: (r) => r.lp },
         { header: 'beta', value: (r) => r.beta },
         { header: 'se', value: (r) => r.se },
-        ...metaOnly,
-      ],
+        { header: 'n_cases', value: (r) => r.nc },
+        { header: 'n_eff', value: (r) => r.ne },
+        { header: 'i2', value: (r) => r.i2 },
+        { header: 'cochran_q', value: (r) => r.cq },
+      ] satisfies ExportColumn<VariantRow>[],
     }
-  }, [symbol, ensg, trait.id, trait.name, chr, ancIdx, isMeta])
+  }, [symbol, ensg, trait.id, trait.name, chr, ancIdx])
 
   const caption = (
     <span>
@@ -710,7 +806,6 @@ function VariantTable({
         : `${ANCESTRY_META[ANCESTRIES[ancIdx]].long} only`}{' '}
       · position-based (no functional annotation) · click a row for the ancestry
       forest
-      {!isMeta && ' · N (eff.) and I² are only available for All ancestries'}
     </span>
   )
 
@@ -729,6 +824,7 @@ function VariantTable({
       }
       caption={caption}
       exportSpec={exportSpec}
+      fixedRows={15}
     />
   )
 }
