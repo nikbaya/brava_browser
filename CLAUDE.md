@@ -312,6 +312,42 @@ compressed; never duplicate the dataset across buckets; if storage approaches
 10 GB, prune or re-evaluate the host **before** uploading. Current usage is
 measured in the next section.
 
+**Bot / scraper exposure — deferred, current posture is monitoring-only.**
+`meta/genes.json` ships every Ensembl gene ID bundled with the app, so object
+paths like `gene/{ENSG}.json` are fully enumerable — a script can `curl` the
+whole dataset directly from the r2.dev URL, bypassing CORS entirely (CORS only
+constrains browser-issued cross-origin fetches, not direct HTTP). Investigated
+2026-08-17:
+- `r2.dev` has a default rate limit (~hundreds of req/s → 429s), but it's an
+  anti-CDN-abuse valve, not real protection — a scraper pacing itself under
+  that stays invisible while still burning the Class A/B budget. WAF, Bot Fight
+  Mode, and caching are **not available on `r2.dev` at all** — only once the
+  bucket sits behind a custom domain (Cloudflare zone).
+- Free-plan Rate Limiting Rules on a custom domain: 1 free rule, matchable only
+  on Path/Verified Bot (not IP/UA — that needs Business+), fixed 10s window.
+- No hard quota/cap exists — only account-wide dollar-threshold budget alerts
+  (notify-only). A real enforced cap means a custom Worker + Durable Objects
+  counter in front of a custom domain — a genuine infra project, not a toggle.
+- [app/public/robots.txt](app/public/robots.txt) disallows known AI-training
+  bots (GPTBot, CCBot, ClaudeBot, etc.), but the site is a GitHub Pages
+  **project** page (`nikbaya.github.io/brava_browser/`), and robots.txt is only
+  honored by compliant crawlers at the **origin root** — a different repo. It's
+  inert until/unless the site moves to a custom domain or an org root page.
+- **GoatCounter can't fill this gap either.** It only sees traffic that loads
+  and executes the SPA (irrelevant to direct `curl`-style R2 scraping), and it
+  server-side-drops any hit whose real HTTP User-Agent self-identifies as a
+  bot/crawler — unconditionally, before looking at path or event name. A
+  client-side "detect a bot and fire a custom event" trick doesn't route around
+  this: the request to GoatCounter's endpoint still carries the bot's real,
+  self-identifying UA, so it'd be silently dropped anyway — recording nothing
+  while looking like it works. Not implemented for that reason.
+
+Given the effort (DNS delegation + Worker) versus a low-traffic research
+browser, current posture is: `robots.txt` as a courtesy for compliant
+crawlers, plus periodic `rclone size` checks (below) as the actual signal.
+Revisit the custom-domain + Worker route only if usage climbs toward the
+ceiling.
+
 ### Actual R2 usage — 3.749 GiB / 10 GB (measured 2026-07-29)
 
 Both v1 and v2 data are uploaded. Measured stored bytes (gzipped, as served):
