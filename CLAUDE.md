@@ -348,7 +348,7 @@ crawlers, plus periodic `rclone size` checks (below) as the actual signal.
 Revisit the custom-domain + Worker route only if usage climbs toward the
 ceiling.
 
-### Actual R2 usage — 4.279 GiB / 10 GB (measured 2026-08-17, after the full variant rebuild below)
+### Actual R2 usage — 4.285 GiB / 10 GB (measured 2026-08-17, after the non-EUR-bit rebuild below)
 
 Both v1 and v2 data are uploaded. Measured stored bytes (gzipped, as served):
 
@@ -356,8 +356,8 @@ Both v1 and v2 data are uploaded. Measured stored bytes (gzipped, as served):
 |---|---|---|
 | `gene/` (v1) | 19,541 | 647.5 MiB |
 | `phenotype/` (v1) | 280 | 574.3 MiB |
-| `v2/variant/` | 176,037 | 3.086 GiB |
-| **Bucket total** | **195,858** | **4.279 GiB (4.59 GB)** |
+| `v2/variant/` | 176,037 | 3.091 GiB |
+| **Bucket total** | **195,858** | **4.285 GiB (4.60 GB)** |
 
 (`v2/variant/overview/*.json` was regenerated twice earlier on 2026-08-17 —
 first to add `ref`/`alt`, then `beta` — see the "variant-level (v2)" section
@@ -365,9 +365,15 @@ below. Later the same day, a **full** `make full-variants` rebuild added the
 `anc_mask` presence bitmask to gene/overview payloads and real per-ancestry
 `nc`/`ne`/`i2`/`cq` to `.anc.json` slices, then `make upload-variants`
 re-uploaded all 170,493 variant objects — the jump from 175,911 to 176,037
-objects and +0.6 GiB is that rebuild landing, not drift.)
+objects and +0.6 GiB is that rebuild landing, not drift. A same-day follow-up
+rebuild added a 6th bitmask bit (`NON_EUR_BIT`, display-only — see the
+Frontend conventions ancestry-chip bullets) so a variant reaching only the
+pooled non-EUR meta's threshold gets a chip instead of reading as "no
+ancestry data"; `make upload-variants` re-ran with `--checksum`, transferring
+only the 172,213 objects whose bytes actually changed (object count and size
+barely moved, +6 MiB, since most genes' output was byte-identical).
 
-**~46% of the 10 GB storage ceiling — comfortable headroom.**
+**~43% of the 10 GB storage ceiling — comfortable headroom.**
 
 **Re-measure after any upload that adds or replaces data**, and update the table
 above (with the date) so the headroom figure never goes stale:
