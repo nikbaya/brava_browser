@@ -277,11 +277,18 @@ export function AncestryChip({ anc, dim = false }: { anc: Ancestry; dim?: boolea
  */
 export function AncestryChips({ mask }: { mask: number }) {
   const ancIdxs = decodeAncMask(mask)
-  if (ancIdxs.length === 0 && hasNonEurMask(mask)) ancIdxs.push(ANCESTRY_INDEX.non_EUR)
+  const nonEurFallback = ancIdxs.length === 0 && hasNonEurMask(mask)
+  if (nonEurFallback) ancIdxs.push(ANCESTRY_INDEX.non_EUR)
   if (ancIdxs.length === 0) return null
-  const label = `Observed in: ${ancIdxs.map((i) => ANCESTRY_META[ANCESTRIES[i]].long).join(', ')}`
+  // The fallback case reads as a plain "Observed in: Non-European
+  // (meta-analysis)" otherwise, which states the fact but not the reason a
+  // reader would actually want: this variant didn't clear any single
+  // population's own reporting threshold, only the pooled non-EUR one.
+  const label = nonEurFallback
+    ? 'Seen only in the pooled non-EUR meta, not any single ancestry alone'
+    : `Observed in: ${ancIdxs.map((i) => ANCESTRY_META[ANCESTRIES[i]].long).join(', ')}`
   return (
-    <Tip label={label} className="inline-flex shrink-0 items-center gap-0.5">
+    <Tip label={label} wide className="inline-flex shrink-0 items-center gap-0.5">
       {ancIdxs.map((i) => (
         <AncestryChip key={i} anc={ANCESTRIES[i]} />
       ))}
