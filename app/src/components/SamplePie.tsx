@@ -6,6 +6,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { ANCESTRY_META, type Ancestry } from '../lib/constants'
+import Tip from './Tip'
 
 // Shared sample-size pie used by the phenotype page (interactive ancestry
 // selector) and the About page (static diversity view), so both look identical.
@@ -236,6 +237,7 @@ export default function SamplePie({
   interactive = true,
   selected = false,
   disabled = false,
+  disabledReason,
   legend = false,
   onSelect,
   onHover,
@@ -250,6 +252,10 @@ export default function SamplePie({
   /** Stratum has sample size but no association results — shown faded and not
    *  clickable. */
   disabled?: boolean
+  /** Override the generic "no association results" tooltip when `disabled`
+   *  is true for a more specific reason (e.g. gene-level results exist but
+   *  variant-level ones don't). */
+  disabledReason?: string
   /** Name the biggest slices beside the pie (needs `label` on the slices). */
   legend?: boolean
   onSelect?: () => void
@@ -311,16 +317,21 @@ export default function SamplePie({
     return <div className={`${layout} px-1.5 py-1`}>{body}</div>
 
   // Sample size exists but no association results for this stratum: keep it
-  // visible (it still conveys N) but faded and clearly not clickable.
+  // visible (it still conveys N) but faded and clearly not clickable. `Tip`
+  // (not the native `title`) for a fast reveal — the native tooltip's ~1s
+  // delay made the reason easy to miss. `cursor-default`, not
+  // `cursor-not-allowed`: the circle-slash icon reads as "you did something
+  // wrong" for what's actually just an informational, expected gap.
   if (disabled)
     return (
-      <div
-        aria-disabled
-        title={`No association results for ${ANCESTRY_META[anc].long}`}
-        className={`${layout} cursor-not-allowed rounded-lg px-1.5 py-1 opacity-40 grayscale`}
-      >
-        {body}
-      </div>
+      <Tip label={disabledReason ?? `No association results for ${ANCESTRY_META[anc].long}`}>
+        <div
+          aria-disabled
+          className={`${layout} cursor-default rounded-lg px-1.5 py-1 opacity-40 grayscale`}
+        >
+          {body}
+        </div>
+      </Tip>
     )
 
   return (

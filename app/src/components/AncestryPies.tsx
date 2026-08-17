@@ -24,14 +24,28 @@ import SamplePie, {
  * ancestry selector; the active stratum is
  * subtly highlighted. Biobank / ancestry names + N appear on hover.
  */
+const SUPERPOP_SET = new Set<string>(SUPERPOPS)
+
 export default function AncestryPies({
   pheno,
   available,
+  variantAvailable,
   selected,
   onSelect,
 }: {
   pheno: PhenotypeMeta
   available: Ancestry[]
+  /**
+   * When viewing variant-level results, some ancestries with gene-level
+   * sample size still have zero variants in the overview (e.g. LDL
+   * cholesterol has none in EAS) — pass the set of superpops that DO have
+   * variant data so those pies grey out too, same "faded and non-clickable"
+   * treatment as `available`. `null`/omitted (gene-level view) applies no
+   * extra restriction. Only ever checked against the 5 superpop pies — `All`
+   * and `non_EUR` aren't in a variant `anc_mask` (see `decodeAncMask`), so
+   * they're exempt.
+   */
+  variantAvailable?: Set<Ancestry> | null
   selected: Ancestry
   onSelect: (a: Ancestry) => void
 }) {
@@ -140,7 +154,25 @@ export default function AncestryPies({
       legend
       // A stratum can have sample size but no association results — those are
       // shown faded and non-clickable rather than leading to an empty table.
-      disabled={!available.includes(p.anc)}
+      // Same treatment when viewing variant-level results and this superpop
+      // has zero variants in the overview (variantAvailable), even though it
+      // has gene-level results — but that's a materially different reason,
+      // so it gets its own tooltip rather than the generic one.
+      disabled={
+        !available.includes(p.anc) ||
+        (variantAvailable != null &&
+          SUPERPOP_SET.has(p.anc) &&
+          !variantAvailable.has(p.anc))
+      }
+      disabledReason={
+        !available.includes(p.anc)
+          ? undefined // generic "no association results" default
+          : variantAvailable != null &&
+              SUPERPOP_SET.has(p.anc) &&
+              !variantAvailable.has(p.anc)
+            ? `No variant-level results for ${ANCESTRY_META[p.anc].long}`
+            : undefined
+      }
       onSelect={() => onSelect(p.anc)}
       onHover={show}
       onLeave={hide}
