@@ -410,9 +410,16 @@ so it costs no Class B reads and needed no re-run of the heavy gene ETL — rebu
 with `make meta` (or just `python build_exons.py --out ../app/public/data`) and
 commit the shards.
 
+Phenotype-page variant Manhattan is **done**: a Gene/Variant toggle on the
+phenotype page's Manhattan section switches between the existing gene-level
+`ManhattanPlot` and the new `VariantManhattanPlot`
+([PhenotypePage.tsx](app/src/pages/PhenotypePage.tsx), `manhattanMode` state),
+fed by `fetchVariantOverview`. Variant mode forces the ancestry filter to
+`All` (variant-level data is cross-ancestry meta only); clicking a point opens
+a per-variant forest-plot drawer, and a linked `VariantOverviewTable` stays in
+sync with the same filtered subset.
+
 **Not yet built (deferred to v2.1):**
-- Phenotype-page variant Manhattan (uses `fetchVariantOverview`; overview
-  JSON files are emitted by the pipeline but no UI component consumes them yet).
 - ClinVar track / "in ClinVar" badge — see [docs/ui-followups.md](docs/ui-followups.md).
 - Idle/hover prefetch of `.anc.json` files.
 - rsID / coordinate search (VCFs have no rsIDs; dbSNP map not available).
