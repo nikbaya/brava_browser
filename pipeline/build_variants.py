@@ -9,10 +9,15 @@ the results are emitted as compact columnar JSON.
 Outputs (see docs/variant-v2-design.md):
   variant/gene/{ENSG}.json       All-meta, all phenotypes. First paint.
                                  shared coord table + sparse per-phenotype slices
-                                 (beta/se/lp/nc/ne/i2/cq/ed).
-  variant/gene/{ENSG}.anc.json   All 6 non-meta ancestries (beta/se/lp). Lazy,
-                                 powers the per-variant forest plot.
-  variant/overview/{PHENO}.json  Pixel-decimated genome-wide Manhattan.
+                                 (beta/se/lp/nc/ne/i2/cq/ed/anc_mask). anc_mask is
+                                 a 5-bit superpop-presence bitmask (EUR/AFR/AMR/
+                                 EAS/SAS), per phenotype — see SUPERPOP_BIT.
+  variant/gene/{ENSG}.anc.json   All 6 non-meta ancestries (beta/se/lp/nc/ne/i2/
+                                 cq). Lazy, powers the per-variant forest plot.
+  variant/overview/{PHENO}.json  Pixel-decimated genome-wide Manhattan, plus the
+                                 same 5-bit anc_mask (genome-wide, not per-pheno
+                                 since the overview is already one file per
+                                 phenotype).
 
 Memory is bounded by hash-sharding the gene pass: pass 1 streams every VCF and
 appends gene-assigned records to `--gene-shards` temp files keyed by hash(ensg);
@@ -37,6 +42,7 @@ import math
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 # --- constants (inlined; common.py imports polars which isn't on this path) ----
@@ -60,6 +66,14 @@ ANCESTRIES: list[tuple[str, str]] = [
 ]
 ANCESTRY_INDEX = {a: i for i, (a, _) in enumerate(ANCESTRIES)}
 NON_META = [a for a, _ in ANCESTRIES if a != "All"]
+
+# The 5 real population ancestries, for the presence bitmask (bit i = this
+# list's i-th entry). Excludes All (meta) and non_EUR (itself a meta-analysis
+# of the other 4 non-EUR pops — tagging with it alongside e.g. AFR would double
+# up on the same underlying samples). Order matches the frontend's SUPERPOPS
+# constant (app/src/lib/constants.ts) — keep the two in sync.
+SUPERPOPS = ["EUR", "AFR", "AMR", "EAS", "SAS"]
+SUPERPOP_BIT = {ANCESTRY_INDEX[a]: i for i, a in enumerate(SUPERPOPS)}
 
 CHROM_ORDER = {str(c): i for i, c in enumerate(list(range(1, 23)) + ["X", "Y"])}
 
@@ -188,21 +202,48 @@ def _iter_local(path: Path):
                 yield line
 
 
+GSUTIL_RETRIES = 4
+GSUTIL_RETRY_BACKOFF = 5  # seconds; multiplied by attempt number
+
+
 def _iter_gsutil(url: str):
-    # `gsutil cat | gunzip` streamed; skip if the object doesn't exist.
+    """Stream one gs:// object, retrying the whole transfer on transient
+    failures (e.g. a mid-file `Connection reset by peer`) instead of silently
+    handing `_stream_file` a truncated read. A naive streaming generator that
+    just stops on error is indistinguishable from a real near-empty ancestry
+    file downstream — no exception, no non-zero exit, just quietly wrong
+    output. Buffers one file's lines in memory so a failed attempt can be
+    discarded wholesale rather than partially processed twice. `stat` itself
+    isn't retried: a real 404 won't become a 200 on retry."""
     check = subprocess.run(["gsutil", "-q", "stat", url])
     if check.returncode != 0:
         return
-    cat = subprocess.Popen(["gsutil", "cat", url], stdout=subprocess.PIPE)
-    gz = subprocess.Popen(
-        ["gzip", "-dc"], stdin=cat.stdout, stdout=subprocess.PIPE, text=True
-    )
-    cat.stdout.close()
-    for line in gz.stdout:
-        if line[0] != "#":
-            yield line
-    gz.wait()
-    cat.wait()
+    last_err = ""
+    for attempt in range(1, GSUTIL_RETRIES + 1):
+        cat = subprocess.Popen(
+            ["gsutil", "cat", url], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        gz = subprocess.Popen(
+            ["gzip", "-dc"], stdin=cat.stdout, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True,
+        )
+        cat.stdout.close()
+        lines = [line for line in gz.stdout if line[0] != "#"]
+        gz_err = gz.stderr.read()
+        cat_err = cat.stderr.read().decode(errors="replace")
+        gz.stdout.close()
+        gz.stderr.close()
+        cat.stderr.close()
+        cat_rc = cat.wait()
+        gz_rc = gz.wait()
+        if cat_rc == 0 and gz_rc == 0:
+            yield from lines
+            return
+        last_err = f"gsutil rc={cat_rc} ({cat_err.strip()}), gzip rc={gz_rc} ({gz_err.strip()})"
+        print(f"  ! {url}: attempt {attempt}/{GSUTIL_RETRIES} failed: {last_err}")
+        if attempt < GSUTIL_RETRIES:
+            time.sleep(GSUTIL_RETRY_BACKOFF * attempt)
+    raise RuntimeError(f"{url}: failed after {GSUTIL_RETRIES} attempts: {last_err}")
 
 
 # --- overview accumulation ----------------------------------------------------
@@ -220,7 +261,9 @@ class Overview:
         self.beta: list[float | None] = []
         self.dr: list[int] = []  # sign(beta): 1 / -1 / 0
         self.gene: list[int] = []  # gene_idx or -1
+        self.anc_mask: list[int] = []  # bitmask over SUPERPOPS, via mark_ancestry
         self._seen: set[tuple[int, int, int]] = set()
+        self._key_to_idx: dict[tuple[int, int, str, str], int] = {}
 
     def add(self, chrom_i, pos, ref, alt, lp, beta, gene_idx):
         if lp is None:
@@ -231,6 +274,7 @@ class Overview:
                 return
             self._seen.add(key)
         d = 0 if beta is None or beta == 0 else (1 if beta > 0 else -1)
+        idx = len(self.pos)
         self.chrom.append(chrom_i)
         self.pos.append(pos)
         self.ref.append(ref)
@@ -239,6 +283,18 @@ class Overview:
         self.beta.append(beta)
         self.dr.append(d)
         self.gene.append(gene_idx if gene_idx is not None else -1)
+        self.anc_mask.append(0)
+        self._key_to_idx[(chrom_i, pos, ref, alt)] = idx
+
+    def mark_ancestry(self, chrom_i, pos, ref, alt, bit):
+        """Set one ancestry's presence bit for a variant already kept by `add`
+        ("All" is always streamed first per phenotype — see `pass1` — so by the
+        time a non-meta ancestry is processed every kept point's index is
+        final). A miss just means this exact (pos, ref, alt) wasn't one of the
+        meta's kept/decimated points, so there's nothing to tag."""
+        idx = self._key_to_idx.get((chrom_i, pos, ref, alt))
+        if idx is not None:
+            self.anc_mask[idx] |= 1 << bit
 
     def payload(self, pheno: str) -> dict:
         return {
@@ -253,6 +309,7 @@ class Overview:
             "beta": self.beta,
             "dir": self.dr,
             "gene_idx": self.gene,
+            "anc_mask": self.anc_mask,
         }
 
 
@@ -278,36 +335,48 @@ def pass1(
     allow_gidx = (
         None if gene_allow is None else {gidx.idx_of[g] for g in gene_allow if g in gidx.idx_of}
     )
-    # Overview data only ever comes from the "All" (meta) file, so an
+    # Overview rows only ever come from the "All" (meta) file, so an
     # overview-only run can skip streaming the 6 ancestry-stratified VCFs
-    # entirely (~7x less VCF volume) since they'd only feed the gene shards.
+    # entirely (~7x less VCF volume) since they'd only feed the gene shards and
+    # the ancestry-presence mask below (both skipped in this mode — anc_mask
+    # stays all-zero, an accepted limitation of this fast path).
     ancestries = [("All", "")] if overview_only else ANCESTRIES
     n_assign = 0
     for pheno in phenos:
         pidx = pheno_idx[pheno]
+        # Persists across this phenotype's ancestry loop (not reset per anc) so
+        # the non-meta passes below can mark presence on the SAME Overview
+        # object "All" already populated. "All" is always first in ANCESTRIES,
+        # so by the time a non-meta file is streamed every kept point exists.
+        ov: Overview | None = None
         for anc, suffix in ancestries:
             aidx = ANCESTRY_INDEX[anc]
             is_meta = anc == "All"
-            ov = Overview() if is_meta else None
+            if is_meta:
+                ov = Overview()
             it = vcf_lines(pheno, suffix, local_dir)
             if it is None:
                 continue
+            anc_bit = None if is_meta else SUPERPOP_BIT.get(aidx)
             n = _stream_file(
                 it, pidx, aidx, gidx, allow_gidx, shard_files, shards, ov,
-                overview_only,
+                is_meta, anc_bit, overview_only,
             )
-            if ov is not None:
-                (ov_dir / f"{pheno}.json").write_text(
-                    json.dumps(ov.payload(pheno), separators=(",", ":"))
-                )
             n_assign += n
             print(f"  {pheno}.{anc}: {n} gene-assignments")
+        if ov is not None:
+            (ov_dir / f"{pheno}.json").write_text(
+                json.dumps(ov.payload(pheno), separators=(",", ":"))
+            )
     for f in shard_files:
         f.close()
     return n_assign
 
 
-def _stream_file(it, pidx, aidx, gidx, allow_gidx, shard_files, shards, ov, overview_only=False):
+def _stream_file(
+    it, pidx, aidx, gidx, allow_gidx, shard_files, shards, ov, is_meta,
+    anc_bit, overview_only=False,
+):
     """Stream one VCF (position-sorted), sweep-join per chromosome, stash rows."""
     n = 0
     cur_chrom: str | None = None
@@ -331,8 +400,11 @@ def _stream_file(it, pidx, aidx, gidx, allow_gidx, shard_files, shards, ov, over
             beta = sig3(val(t, fp, "ES")); se = sig3(val(t, fp, "SE"))
             lp = lp2(val(t, fp, "LP"))
             if ov is not None:
-                g0 = genes[0] if genes else None
-                ov.add(CHROM_ORDER[chrom], pos, ref, alt, lp, beta, g0)
+                if is_meta:
+                    g0 = genes[0] if genes else None
+                    ov.add(CHROM_ORDER[chrom], pos, ref, alt, lp, beta, g0)
+                elif anc_bit is not None:
+                    ov.mark_ancestry(CHROM_ORDER[chrom], pos, ref, alt, anc_bit)
             if overview_only or not genes:
                 continue
             nc = as_int(val(t, fp, "NC")); ne = as_int(val(t, fp, "NE"))
@@ -377,6 +449,14 @@ def _num(s: str):
     return None if s == "" else float(s)
 
 
+def _int(s: str):
+    """nc/ne are already truncated to ints at stash time (`as_int` in pass 1),
+    so the shard string is always a clean integer literal — parsing back
+    through `int()` instead of `_num`'s `float()` avoids emitting a wasteful
+    trailing `.0` on every value in the JSON output."""
+    return None if s == "" else int(s)
+
+
 def pass2(tmp, shards, gidx, out, threshold):
     gdir = out / "variant" / "gene"
     gdir.mkdir(parents=True, exist_ok=True)
@@ -410,7 +490,24 @@ def _union_table(rows):
     )
 
 
-def _meta_payload(ensg, chrom, meta_rows) -> dict:
+def _gene_anc_mask(other_rows) -> dict[tuple[str, int, str, str], int]:
+    """(pheno_idx_str, pos, ref, alt) -> bitmask of superpop ancestries that
+    observed this variant for that phenotype. Presence is phenotype-specific
+    (MAC/QC cutoffs vary by sample size), so this is keyed by phenotype, not
+    shared genome-wide like the overview's mask. non_EUR is excluded (not in
+    SUPERPOP_BIT) — it's a meta-analysis of the other 4 non-EUR pops, so
+    tagging with it alongside e.g. AFR would double up on the same samples."""
+    masks: dict[tuple[str, int, str, str], int] = {}
+    for r in other_rows:
+        bit = SUPERPOP_BIT.get(int(r[2]))
+        if bit is None:
+            continue
+        key = (r[1], int(r[3]), r[4], r[5])
+        masks[key] = masks.get(key, 0) | (1 << bit)
+    return masks
+
+
+def _meta_payload(ensg, chrom, meta_rows, anc_mask) -> dict:
     """All-meta payload: shared coord table + sparse per-phenotype slices."""
     pos, ref, alt, idxmap = _union_table(meta_rows)
     by_pheno: dict[str, dict] = {}
@@ -418,29 +515,36 @@ def _meta_payload(ensg, chrom, meta_rows) -> dict:
         vi = idxmap[(int(r[3]), r[4], r[5])]
         sl = by_pheno.setdefault(
             r[1], {"idx": [], "beta": [], "se": [], "lp": [],
-                   "nc": [], "ne": [], "i2": [], "cq": [], "ed": []}
+                   "nc": [], "ne": [], "i2": [], "cq": [], "ed": [],
+                   "anc_mask": []}
         )
         sl["idx"].append(vi)
         sl["beta"].append(_num(r[6])); sl["se"].append(_num(r[7]))
-        sl["lp"].append(_num(r[8])); sl["nc"].append(_num(r[9]))
-        sl["ne"].append(_num(r[10])); sl["i2"].append(_num(r[11]))
+        sl["lp"].append(_num(r[8])); sl["nc"].append(_int(r[9]))
+        sl["ne"].append(_int(r[10])); sl["i2"].append(_num(r[11]))
         sl["cq"].append(_num(r[12])); sl["ed"].append(r[13] or None)
+        sl["anc_mask"].append(anc_mask.get((r[1], int(r[3]), r[4], r[5]), 0))
     return {"id": ensg, "chr": chrom, "nv": len(pos),
             "pos": pos, "ref": ref, "alt": alt, "by_pheno": by_pheno}
 
 
 def _anc_payload(ensg, other_rows) -> dict:
-    """Non-meta ancestry payload (beta/se/lp), grouped by ancestry then pheno."""
+    """Non-meta ancestry payload (beta/se/lp/nc/ne/i2/cq), grouped by ancestry
+    then pheno — same fields as the meta slice (minus `ed`, unused in the UI)
+    now that pass 1 stashes them identically regardless of ancestry."""
     posA, refA, altA, idxA = _union_table(other_rows)
     by_anc: dict[str, dict] = {}
     for r in other_rows:
         vi = idxA[(int(r[3]), r[4], r[5])]
         sl = by_anc.setdefault(r[2], {}).setdefault(
-            r[1], {"idx": [], "beta": [], "se": [], "lp": []}
+            r[1], {"idx": [], "beta": [], "se": [], "lp": [],
+                   "nc": [], "ne": [], "i2": [], "cq": []}
         )
         sl["idx"].append(vi)
         sl["beta"].append(_num(r[6])); sl["se"].append(_num(r[7]))
-        sl["lp"].append(_num(r[8]))
+        sl["lp"].append(_num(r[8])); sl["nc"].append(_int(r[9]))
+        sl["ne"].append(_int(r[10])); sl["i2"].append(_num(r[11]))
+        sl["cq"].append(_num(r[12]))
     return {"id": ensg, "nv": len(posA),
             "pos": posA, "ref": refA, "alt": altA, "by_anc": by_anc}
 
@@ -461,8 +565,9 @@ def _emit_gene(ensg, rows, gidx, gdir, split_set, threshold):
     other = [r for r in rows if r[2] != "0"]
     gi = gidx.idx_of.get(ensg)
     chrom = gidx.chr[gi] if gi is not None else None
+    anc_mask = _gene_anc_mask(other)
 
-    full = _dump(_meta_payload(ensg, chrom, meta)) if meta else None
+    full = _dump(_meta_payload(ensg, chrom, meta, anc_mask)) if meta else None
     if full is not None and len(full) <= threshold:
         (gdir / f"{ensg}.json").write_text(full)
         if other:
@@ -475,7 +580,7 @@ def _emit_gene(ensg, rows, gidx, gdir, split_set, threshold):
     for r in meta:
         meta_by_p.setdefault(r[1], []).append(r)
     for p, rs in meta_by_p.items():
-        (gdir / f"{ensg}.{p}.json").write_text(_dump(_meta_payload(ensg, chrom, rs)))
+        (gdir / f"{ensg}.{p}.json").write_text(_dump(_meta_payload(ensg, chrom, rs, anc_mask)))
     other_by_p: dict[str, list] = {}
     for r in other:
         other_by_p.setdefault(r[1], []).append(r)

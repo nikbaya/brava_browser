@@ -51,6 +51,24 @@ export const ANCESTRY_GROUP_LABEL: Record<string, string> = {
 // Super-populations shown as sample-size pies (matches the pipeline's _SUPER).
 export const SUPERPOPS = ['EUR', 'AFR', 'AMR', 'EAS', 'SAS'] as const
 
+/**
+ * Decode a variant `anc_mask` bit (bit i = SUPERPOPS[i]) into canonical
+ * ANCESTRY_INDEX values, in SUPERPOPS order. Mirrors `SUPERPOP_BIT` in
+ * pipeline/build_variants.py — keep the two in sync.
+ */
+export function decodeAncMask(mask: number): number[] {
+  const out: number[] = []
+  for (let i = 0; i < SUPERPOPS.length; i++) {
+    if (mask & (1 << i)) out.push(ANCESTRY_INDEX[SUPERPOPS[i]])
+  }
+  return out
+}
+
+/** Canonical ANCESTRY_INDEX values for the 5 superpops an `anc_mask` bitmask
+ *  can tag — the "tick which ancestries to include" filter offers exactly
+ *  these (see AncestryFilterChips in TableFilters.tsx). */
+export const SUPERPOP_IDXS = SUPERPOPS.map((a) => ANCESTRY_INDEX[a])
+
 // Display labels + the file suffix used in the raw bucket
 // ({PHENO}_..._cutoff{SUFFIX}.tsv.gz). 'All' is the no-suffix cross-ancestry meta.
 export const ANCESTRY_META: Record<

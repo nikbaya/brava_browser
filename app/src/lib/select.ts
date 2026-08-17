@@ -132,7 +132,7 @@ export function forestSeries(
 
 // --- variant-level (v2) -------------------------------------------------------
 
-/** One variant's meta association for a phenotype (a table row / Manhattan pt). */
+/** One variant's association for a phenotype (a table row / Manhattan pt). */
 export interface VariantRow {
   pos: number
   ref: string
@@ -145,6 +145,9 @@ export interface VariantRow {
   i2: number | null
   cq: number | null
   ed: string | null
+  /** Superpop presence bitmask (decodeAncMask) — meta-only; 0 on stratum rows,
+   *  since a stratum's own rows are trivially "present in that one ancestry". */
+  ancMask: number
 }
 
 /** Reconstruct the All-meta variants for one phenotype from a gene variant file. */
@@ -166,6 +169,7 @@ export function variantRows(d: GeneVariantData, phenoIdx: number): VariantRow[] 
       i2: sl.i2[i] ?? null,
       cq: sl.cq[i] ?? null,
       ed: sl.ed[i] ?? null,
+      ancMask: sl.anc_mask[i] ?? 0,
     }
   }
   return out
@@ -173,10 +177,10 @@ export function variantRows(d: GeneVariantData, phenoIdx: number): VariantRow[] 
 
 /**
  * Variants for one phenotype in ONE ancestry stratum, from the lazy `.anc.json`.
- * Same row shape as `variantRows` so the table / locuszoom are agnostic, but the
- * per-ancestry slices only carry beta/se/lp — nc/ne/i2/cq/ed are null because the
- * pipeline emits them for the meta only (callers hide those columns for strata).
- * `ancIdx` is a canonical ANCESTRIES index; 0 (`All`) is not in this file.
+ * Same row shape as `variantRows` so the table / locuszoom are agnostic. `ed`
+ * is meta-only (unused in the UI) and stays null here; `ancMask` is meaningless
+ * for a single stratum's own rows and stays 0. `ancIdx` is a canonical
+ * ANCESTRIES index; 0 (`All`) is not in this file.
  */
 export function variantAncRows(
   d: GeneVariantAncData,
@@ -195,22 +199,18 @@ export function variantAncRows(
       beta: sl.beta[i] ?? null,
       se: sl.se[i] ?? null,
       lp: sl.lp[i] ?? null,
-      nc: null,
-      ne: null,
-      i2: null,
-      cq: null,
+      nc: sl.nc[i] ?? null,
+      ne: sl.ne[i] ?? null,
+      i2: sl.i2[i] ?? null,
+      cq: sl.cq[i] ?? null,
       ed: null,
+      ancMask: 0,
     }
   }
   return out
 }
 
-/**
- * Effect estimate for one variant in one ancestry, for the forest plot.
- * `ne`/`i2` are meta-only (undefined on every non-meta row): the per-ancestry
- * `.anc.json` slices carry just beta/se/lp, so there's nothing to put there —
- * same reasoning as the variant table dropping those columns for a stratum.
- */
+/** Effect estimate for one variant in one ancestry, for the forest plot. */
 export interface VariantForestRow {
   ancIdx: number
   beta: number | null
@@ -266,6 +266,8 @@ export function variantForest(
             beta: sl.beta[i] ?? null,
             se: sl.se[i] ?? null,
             lp: sl.lp[i] ?? null,
+            ne: sl.ne[i] ?? null,
+            i2: sl.i2[i] ?? null,
           })
           break
         }
@@ -417,6 +419,9 @@ export interface VariantOverviewRow {
   alt: string
   lp: number
   beta: number | null
+  /** Superpop presence bitmask (decodeAncMask), genome-wide (not per-pheno —
+   *  see build_variants.py's Overview.mark_ancestry). */
+  ancMask: number
 }
 
 export function variantOverviewRows(
@@ -439,6 +444,7 @@ export function variantOverviewRows(
       alt: overview.alt[i],
       lp: overview.lp[i],
       beta: overview.beta[i] ?? null,
+      ancMask: overview.anc_mask[i] ?? 0,
     })
   }
   return out

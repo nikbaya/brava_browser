@@ -161,6 +161,7 @@ export interface VariantMetaSlice {
   i2: (number | null)[] // Cochran's I^2 (heterogeneity)
   cq: (number | null)[] // Cochran's Q, -log10 p
   ed: (string | null)[] // per-biobank effect-direction string (+/-/?)
+  anc_mask: number[] // 5-bit superpop presence bitmask — see decodeAncMask
 }
 
 /**
@@ -178,12 +179,16 @@ export interface GeneVariantData {
   by_pheno: Record<string, VariantMetaSlice> // key = pheno_idx (stringified)
 }
 
-/** Per-ancestry slice (beta/se/lp only) for the forest plot. */
+/** Per-ancestry slice for the forest plot and stratum-filtered variant table. */
 export interface VariantAncSlice {
   idx: number[]
   beta: (number | null)[]
   se: (number | null)[]
   lp: (number | null)[]
+  nc: (number | null)[]
+  ne: (number | null)[]
+  i2: (number | null)[]
+  cq: (number | null)[]
 }
 
 /**
@@ -215,6 +220,7 @@ export interface VariantOverview {
   lp: number[]
   beta: (number | null)[] // cross-ancestry meta β for the alternate allele
   dir: number[] // sign(beta): 1 (risk↑) / -1 (protective) / 0
+  anc_mask: number[] // 5-bit superpop presence bitmask — see decodeAncMask
   gene_idx: number[] // gene for click-through, -1 if none
 }
 

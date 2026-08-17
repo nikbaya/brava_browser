@@ -143,10 +143,28 @@ const VANC: GeneVariantAncData = {
   alt: ['T', 'G', 'A'],
   by_anc: {
     '1': {
-      '0': { idx: [2, 0], beta: [0.4, null], se: [0.1, null], lp: [6.2, 0.3] },
+      '0': {
+        idx: [2, 0],
+        beta: [0.4, null],
+        se: [0.1, null],
+        lp: [6.2, 0.3],
+        nc: [50, null],
+        ne: [1000, null],
+        i2: [12, null],
+        cq: [0.5, null],
+      },
     },
     '2': {
-      '1': { idx: [1], beta: [-0.2], se: [0.05], lp: [1.1] },
+      '1': {
+        idx: [1],
+        beta: [-0.2],
+        se: [0.05],
+        lp: [1.1],
+        nc: [null],
+        ne: [200],
+        i2: [null],
+        cq: [null],
+      },
     },
   },
 }
@@ -155,12 +173,21 @@ describe('variantAncRows', () => {
   it('resolves the coord table for one ancestry × phenotype, in slice order', () => {
     const rows = variantAncRows(VANC, 1, 0)
     expect(rows.map((r) => `${r.pos}${r.ref}>${r.alt}`)).toEqual(['300G>A', '100A>T'])
-    expect(rows[0]).toMatchObject({ beta: 0.4, se: 0.1, lp: 6.2 })
+    expect(rows[0]).toMatchObject({
+      beta: 0.4,
+      se: 0.1,
+      lp: 6.2,
+      nc: 50,
+      ne: 1000,
+      i2: 12,
+      cq: 0.5,
+    })
   })
 
-  it('nulls the meta-only fields (per-ancestry slices carry beta/se/lp only)', () => {
+  it('nulls ed and ancMask — meta-only fields the per-ancestry slices never carry', () => {
     const [r] = variantAncRows(VANC, 1, 0)
-    expect([r.nc, r.ne, r.i2, r.cq, r.ed]).toEqual([null, null, null, null, null])
+    expect(r.ed).toBeNull()
+    expect(r.ancMask).toBe(0)
   })
 
   it('returns [] for an ancestry or phenotype with no slice', () => {
