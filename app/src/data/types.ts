@@ -210,7 +210,10 @@ export interface VariantOverview {
   keep_lp: number
   chr: number[] // chromosome index 0..23
   pos: number[]
+  ref: string[]
+  alt: string[]
   lp: number[]
+  beta: (number | null)[] // cross-ancestry meta β for the alternate allele
   dir: number[] // sign(beta): 1 (risk↑) / -1 (protective) / 0
   gene_idx: number[] // gene for click-through, -1 if none
 }

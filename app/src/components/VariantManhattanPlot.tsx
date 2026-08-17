@@ -13,6 +13,8 @@ interface Plotted {
   y: number // -log10 p
   chr: string
   bp: number
+  ref: string
+  alt: string
   dir: number
   geneIdx: number // -1 if no overlapping gene
 }
@@ -85,6 +87,8 @@ export default function VariantManhattanPlot({
         y: overview.lp[i],
         chr,
         bp,
+        ref: overview.ref[i],
+        alt: overview.alt[i],
         dir: overview.dir[i],
         geneIdx: overview.gene_idx[i],
       })
@@ -234,8 +238,12 @@ export default function VariantManhattanPlot({
               : 'No overlapping gene'}
           </div>
           <div className="tnum text-ink-soft">
-            chr{hover.row.chr}:{fmtPos(hover.row.bp)} · p = {fmtPLog3(hover.row.y)}
+            chr{hover.row.chr}:{fmtPos(hover.row.bp)}{' '}
+            <span className="text-ink-faint">
+              {hover.row.ref}›{hover.row.alt}
+            </span>
           </div>
+          <div className="tnum text-ink-soft">p = {fmtPLog3(hover.row.y)}</div>
           {hoverEffect && <div className="text-ink-faint">{hoverEffect.label}</div>}
         </div>
       )}

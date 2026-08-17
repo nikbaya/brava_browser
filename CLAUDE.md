@@ -348,7 +348,7 @@ crawlers, plus periodic `rclone size` checks (below) as the actual signal.
 Revisit the custom-domain + Worker route only if usage climbs toward the
 ceiling.
 
-### Actual R2 usage — 3.749 GiB / 10 GB (measured 2026-07-29)
+### Actual R2 usage — 3.717 GiB / 10 GB (measured 2026-08-17)
 
 Both v1 and v2 data are uploaded. Measured stored bytes (gzipped, as served):
 
@@ -356,8 +356,14 @@ Both v1 and v2 data are uploaded. Measured stored bytes (gzipped, as served):
 |---|---|---|
 | `gene/` (v1) | 19,541 | 663.1 MiB |
 | `phenotype/` (v1) | 280 | 596.9 MiB |
-| `v2/` (variant) | 175,911 | 2.519 GiB |
-| **Bucket total** | **195,732** | **3.749 GiB (4.03 GB)** |
+| `v2/` (variant) | 175,911 | 2.487 GiB |
+| **Bucket total** | **195,732** | **3.717 GiB (3.99 GB)** |
+
+(`v2/variant/overview/*.json` was regenerated twice on 2026-08-17 — first to
+add `ref`/`alt` — 44 objects, 13.7 MiB gzipped — then again minutes later to
+add `beta` too — 44 objects, 17.2 MiB gzipped — both times replacing the prior
+overview files in place; bucket total is still slightly below 2026-07-29
+despite the new fields.)
 
 **~40% of the 10 GB storage ceiling — comfortable headroom.** The v2 estimate
 below (~2.7 GB) proved accurate; gene-level came in under its ~1.5 GB estimate
@@ -454,6 +460,46 @@ fed by `fetchVariantOverview`. Variant mode forces the ancestry filter to
 `All` (variant-level data is cross-ancestry meta only); clicking a point opens
 a per-variant forest-plot drawer, and a linked `VariantOverviewTable` stays in
 sync with the same filtered subset.
+
+`variant/overview/{PHENO}.json` carries **`ref`/`alt`** alongside
+chr/pos/lp/dir/gene_idx (added 2026-08-17) — the Manhattan tooltip shows
+`chr{chr}:{pos} ref›alt` above the p-value line, and the linked
+`VariantOverviewTable`'s Location column became a combined **Variant** column
+(`chr{chr}:{pos} ref›alt` + the "view on gene page" icon), mirroring
+`GeneVariants.tsx`'s per-gene Variant column. `Overview.add()`/`.payload()` in
+[build_variants.py](pipeline/build_variants.py) unpack ref/alt right where
+they're already parsed for the gene pass, so no extra I/O — but the wire
+format changed, so the old deployed `variant/overview/*.json` needed
+regenerating and re-uploading, not just a frontend change. `build_variants.py`
+gained **`--overview-only`**: since overview data only ever comes from the
+"All"-meta VCF (`ov = Overview() if is_meta else None`), it streams just that
+one file per phenotype and skips the 6 ancestry-stratified VCFs + the entire
+gene pass (~1/7 the VCF volume of a full run) — use this instead of
+`full-variants` when only the overview schema changes. `variantSectionPath`'s
+deep-link still resolves by pos+nearest-lp (not exact ref/alt): it's shared
+with other seek-variant callers and wasn't part of this change.
+
+`variant/overview/{PHENO}.json` also carries the real **`beta`** (added
+2026-08-17, same day) — `Overview.add()` received `beta` all along (it needed
+the sign for `dir`) but discarded the magnitude; now `self.beta.append(beta)`
+keeps the already-`sig3`-rounded value from `flush()`. The
+`VariantOverviewTable`'s Beta column swapped its direction-only `DirDot` cell
+for `DirDot` + `fmtBeta(beta)`, matching `GeneVariants.tsx`'s Beta column
+exactly (same `intensity` prop, same nullable-sort `?? undefined` pattern), and
+gained the same **|β| ≥** `FilterRow` the gene page's variant table has,
+lifted to page state so it also narrows the linked Manhattan (mirrors how
+`minLp` already did). `VariantOverviewRow.dir` was removed as dead weight —
+`beta`'s sign already encodes direction, and no code read `.dir` off this row
+type once the cell stopped using it (the wire field `VariantOverview.dir` and
+`Plotted.dir` in `VariantManhattanPlot.tsx` are untouched — those still exist
+for the Manhattan tooltip's effect-direction label and canvas point color).
+**Limitation to keep in mind:** this is still the *cross-ancestry meta* β
+only — no per-ancestry β, and no SE, so no CI can be drawn from it (matching
+the per-gene overview's own SE-less meta slice). The null band below
+`keep_lp` is decimated by lp/position, not by β, so a thinned point's β is
+still whatever real value it had — there's no separate "β is approximate
+here" caveat, just the pre-existing "this point was thinned for density"
+one.
 
 **Not yet built (deferred to v2.1):**
 - ClinVar track / "in ClinVar" badge — see [docs/ui-followups.md](docs/ui-followups.md).

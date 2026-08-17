@@ -32,7 +32,7 @@ import {
   SIG_GENE_CAUCHY,
   type Ancestry,
 } from '../lib/constants'
-import { fmtP, fmtPLog, fmtPos } from '../lib/format'
+import { fmtBeta, fmtP, fmtPLog, fmtPos } from '../lib/format'
 import { exportP, slug, type ExportColumn, type TableExport } from '../lib/exportTable'
 import { geneLinkPath, parseFilterParams } from '../lib/filterLink'
 import type { GeneIndex, PhenotypeData, PhenotypeMeta, VariantOverview } from '../data/types'
@@ -45,7 +45,6 @@ import {
   hetExportColumn,
 } from '../components/ancestryColumns'
 import { DirDot, SigDot } from '../components/indicators'
-import { effectInfo } from '../lib/effect'
 import FilterBar, { type FilterState } from '../components/FilterBar'
 import TableFilters, {
   FilterRow,
@@ -128,6 +127,7 @@ export default function PhenotypePage() {
   // the same subset once a filter is active — see `variantManhattanIdx`.
   const [variantQuery, setVariantQuery] = useState('')
   const [variantMinLp, setVariantMinLp] = useState(0)
+  const [variantMinAbsBeta, setVariantMinAbsBeta] = useState(0)
 
   // Lazy-load every available ancestry file so the table can show a P + β
   // column per ancestry. The selected ancestry (already fetched above for the
@@ -180,18 +180,21 @@ export default function PhenotypePage() {
   // band) the rest of the time. Recomputing this over the ~20-50k overview
   // rows on every keystroke is still sub-millisecond, same as the all-results
   // and gene-level Manhattans.
-  const variantFilterActive = variantQuery.trim() !== '' || variantMinLp > 0
+  const variantFilterActive =
+    variantQuery.trim() !== '' || variantMinLp > 0 || variantMinAbsBeta > 0
   const variantManhattanIdx = useMemo(() => {
     if (!overview || !geneIndex || !variantFilterActive) return null
     const q = variantQuery.trim().toLowerCase()
     const idx = new Set<number>()
     for (const r of variantOverviewRows(overview, geneIndex)) {
       if (variantMinLp > 0 && r.lp < variantMinLp) continue
+      if (variantMinAbsBeta > 0 && !(r.beta != null && Math.abs(r.beta) >= variantMinAbsBeta))
+        continue
       if (q && !r.symbol.toLowerCase().includes(q) && !r.ensg.toLowerCase().includes(q)) continue
       idx.add(r.idx)
     }
     return idx
-  }, [overview, geneIndex, variantFilterActive, variantQuery, variantMinLp])
+  }, [overview, geneIndex, variantFilterActive, variantQuery, variantMinLp, variantMinAbsBeta])
 
   // The P/β threshold + slider domains apply to the selected ancestry column.
   const { maxLp, maxAbsBeta } = useMemo(() => {
@@ -431,6 +434,8 @@ export default function PhenotypePage() {
                 onQueryChange={setVariantQuery}
                 minLp={variantMinLp}
                 onMinLpChange={setVariantMinLp}
+                minAbsBeta={variantMinAbsBeta}
+                onMinAbsBetaChange={setVariantMinAbsBeta}
                 focusedVariant={variantDrawer}
                 onOpenForest={(pick) =>
                   setVariantDrawer({
@@ -889,12 +894,13 @@ function ResultsTable({
 /**
  * Small quiet icon-link beside a variant's location, to that exact variant
  * pre-selected on the gene page's variant table (see GeneVariants'
- * `seekVariant` + GenePage's `variantSectionPath`). Position + this row's
- * (decimated) lp is all the overview carries — no ref/alt — so the gene page
- * resolves the precise variant by matching position and, for a multi-allelic
- * site, nearest lp. Styled like GeneVariants' own `GnomadLink`: faint until
- * hover, since it's a secondary affordance beside the primary cell text.
- * Click is stopped from bubbling so it doesn't also open the row's forest.
+ * `seekVariant` + GenePage's `variantSectionPath`). `variantSectionPath` only
+ * takes pos + this row's (decimated) lp — not ref/alt, even though the
+ * overview carries them too now — so the gene page still resolves the precise
+ * variant by matching position and, for a multi-allelic site, nearest lp.
+ * Styled like GeneVariants' own `GnomadLink`: faint until hover, since it's a
+ * secondary affordance beside the primary cell text. Click is stopped from
+ * bubbling so it doesn't also open the row's forest.
  */
 function OnGenePageLink({
   ensg,
@@ -952,6 +958,8 @@ function VariantOverviewTable({
   onQueryChange,
   minLp,
   onMinLpChange,
+  minAbsBeta,
+  onMinAbsBetaChange,
   focusedVariant,
   onOpenForest,
   onHoverRow,
@@ -966,6 +974,9 @@ function VariantOverviewTable({
   onQueryChange: (v: string) => void
   minLp: number
   onMinLpChange: (v: number) => void
+  /** Same |β| ≥ filter as the gene page's per-gene variant table. */
+  minAbsBeta: number
+  onMinAbsBetaChange: (v: number) => void
   /** The variant currently shown in the forest drawer, if any. */
   focusedVariant: VariantPick | null
   onOpenForest: (pick: VariantPick) => void
@@ -975,25 +986,58 @@ function VariantOverviewTable({
 
   const rows = useMemo(() => variantOverviewRows(overview, geneIndex), [overview, geneIndex])
 
-  // Slider domain: every row already clears `overview.keep_lp` by construction
-  // (see `rows` above), so this is really the ceiling of an already-significant
-  // range, not 0..max — same idea as the gene table's `maxLp`.
-  const maxLp = useMemo(
-    () => rows.reduce((m, r) => Math.max(m, r.lp), overview.keep_lp),
-    [rows, overview.keep_lp],
-  )
+  // Slider domains: every row already clears `overview.keep_lp` by construction
+  // (see `rows` above), so `maxLp` is really the ceiling of an already-
+  // significant range, not 0..max — same idea as the gene table's `maxLp`.
+  const { maxLp, maxAbsBeta } = useMemo(() => {
+    let lp = overview.keep_lp
+    let b = 0
+    for (const r of rows) {
+      lp = Math.max(lp, r.lp)
+      if (r.beta != null) b = Math.max(b, Math.abs(r.beta))
+    }
+    return { maxLp: lp, maxAbsBeta: b }
+  }, [rows, overview.keep_lp])
 
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase()
     return rows.filter(
       (r) =>
         (!q || r.symbol.toLowerCase().includes(q) || r.ensg.toLowerCase().includes(q)) &&
-        (minLp <= 0 || r.lp >= minLp),
+        (minLp <= 0 || r.lp >= minLp) &&
+        (minAbsBeta <= 0 || (r.beta != null && Math.abs(r.beta) >= minAbsBeta)),
     )
-  }, [rows, query, minLp])
+  }, [rows, query, minLp, minAbsBeta])
 
   const columns = useMemo<ColumnDef<VariantOverviewRow, any>[]>(
     () => [
+      {
+        id: 'variant',
+        header: 'Variant',
+        // Mirrors the gene page's per-gene variant table's Variant column
+        // (GeneVariants.tsx): position + ref›alt in one cell, leading the row
+        // the same way it does there.
+        accessorFn: (r) => locusKey(r.chr, r.pos),
+        invertSorting: true,
+        size: 195,
+        // `fill` (own layout, no truncating wrapper) so the link icon keeps
+        // its pixels — same reasoning as GeneVariants' Variant column.
+        meta: { fill: true, help: 'GRCh38 position and alleles (reference›alternate).' },
+        cell: (c) => {
+          const r = c.row.original
+          return (
+            <div className="flex w-full min-w-0 items-center gap-1 px-2 whitespace-nowrap">
+              <span className="tnum truncate text-ink">
+                chr{r.chr}:{fmtPos(r.pos)}{' '}
+                <span className="text-ink-soft">
+                  {r.ref}›{r.alt}
+                </span>
+              </span>
+              <OnGenePageLink ensg={r.ensg} phenoId={pheno.id} pos={r.pos} lp={r.lp} />
+            </div>
+          )
+        },
+      },
       {
         accessorKey: 'symbol',
         header: 'Gene',
@@ -1009,27 +1053,6 @@ function VariantOverviewTable({
         ),
       },
       {
-        id: 'loc',
-        header: 'Location',
-        accessorFn: (r) => locusKey(r.chr, r.pos),
-        invertSorting: true,
-        size: 150,
-        // `fill` (own layout, no truncating wrapper) so the link icon keeps
-        // its pixels — same reasoning as GeneVariants' Variant column.
-        meta: { fill: true },
-        cell: (c) => {
-          const r = c.row.original
-          return (
-            <div className="flex w-full min-w-0 items-center gap-1 px-2 whitespace-nowrap">
-              <span className="tnum truncate text-ink-soft">
-                chr{r.chr}:{fmtPos(r.pos)}
-              </span>
-              <OnGenePageLink ensg={r.ensg} phenoId={pheno.id} pos={r.pos} lp={r.lp} />
-            </div>
-          )
-        },
-      },
-      {
         id: 'lp',
         header: 'P-value',
         accessorFn: (r) => r.lp,
@@ -1043,30 +1066,36 @@ function VariantOverviewTable({
         ),
       },
       {
-        id: 'dir',
+        id: 'beta',
         header: 'Beta',
-        accessorFn: (r) => r.dir,
+        // Matches the gene page's variant table's Beta column exactly (same
+        // DirDot + fmtBeta) — the overview carries the real cross-ancestry
+        // meta β, not just its sign; see `sortUndefined` note on other
+        // nullable columns in this file.
+        accessorFn: (r) => r.beta ?? undefined,
+        sortUndefined: 'last',
         size: 110,
-        // Matches the gene page's variant table's Beta column (same DirDot),
-        // but the overview only carries sign(β), not magnitude — so there's
-        // no number here, just the direction; open the gene page for the
-        // exact effect size.
         meta: {
-          help: "Effect direction for the alternate allele (this decimated view has no β magnitude — open the gene page for the exact effect size).",
+          help: `Effect size for the alternate allele, in ${
+            pheno.type === 'binary' ? 'log-odds units (log OR)' : 'trait SD units'
+          }.`,
         },
         cell: (c) => {
-          const dir = c.getValue<number>()
-          const e = effectInfo(dir, pheno.type)
+          const b = c.getValue<number | undefined>()
           return (
-            <span className="inline-flex items-center gap-1.5">
-              <DirDot beta={dir} type={pheno.type} />
-              <span className="text-ink-soft">{e?.label ?? '—'}</span>
+            <span className="tnum inline-flex items-center gap-1.5">
+              <DirDot
+                beta={b}
+                type={pheno.type}
+                intensity={b != null && maxAbsBeta > 0 ? Math.abs(b) / maxAbsBeta : undefined}
+              />
+              {fmtBeta(b)}
             </span>
           )
         },
       },
     ],
-    [pheno.type, pheno.id, filters],
+    [pheno.type, pheno.id, filters, maxAbsBeta],
   )
 
   const exportSpec = useMemo<TableExport<VariantOverviewRow>>(
@@ -1080,9 +1109,11 @@ function VariantOverviewTable({
         { header: 'ensembl_gene_id', value: (r) => r.ensg },
         { header: 'chrom', value: (r) => r.chr },
         { header: 'pos', value: (r) => r.pos },
+        { header: 'ref', value: (r) => r.ref },
+        { header: 'alt', value: (r) => r.alt },
         { header: 'P', value: (r) => exportP(r.lp) },
         { header: 'neglog10P', value: (r) => r.lp },
-        { header: 'direction', value: (r) => (r.dir > 0 ? '+' : r.dir < 0 ? '-' : '') },
+        { header: 'beta', value: (r) => r.beta },
       ] satisfies ExportColumn<VariantOverviewRow>[],
     }),
     [pheno],
@@ -1094,7 +1125,8 @@ function VariantOverviewTable({
       cross-ancestry meta
     </span>
   )
-  const filterActive = query.trim() !== '' || minLp > 0
+  const filterActive = query.trim() !== '' || minLp > 0 || minAbsBeta > 0
+  const betaMax = maxAbsBeta > 0 ? Math.ceil(maxAbsBeta * 20) / 20 : 1
 
   return (
     <>
@@ -1109,12 +1141,29 @@ function VariantOverviewTable({
           stored={minLp}
           onChange={onMinLpChange}
         />
+        <FilterRow
+          // normal-case: see the matching comment on the gene page's own β
+          // filter row — uppercase turns β (U+03B2) into a Greek capital Β,
+          // a dead ringer for Latin "B".
+          label={
+            <>
+              |<span className="normal-case">β</span>| ≥
+            </>
+          }
+          kind="beta"
+          min={0}
+          max={betaMax}
+          step={betaMax / 100}
+          stored={minAbsBeta}
+          onChange={onMinAbsBetaChange}
+        />
         {filterActive && (
           <button
             type="button"
             onClick={() => {
               onQueryChange('')
               onMinLpChange(0)
+              onMinAbsBetaChange(0)
             }}
             className="text-xs text-ink-faint hover:text-ink hover:underline"
           >

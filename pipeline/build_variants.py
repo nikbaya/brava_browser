@@ -214,12 +214,15 @@ class Overview:
     def __init__(self):
         self.chrom: list[int] = []
         self.pos: list[int] = []
+        self.ref: list[str] = []
+        self.alt: list[str] = []
         self.lp: list[float] = []
+        self.beta: list[float | None] = []
         self.dr: list[int] = []  # sign(beta): 1 / -1 / 0
         self.gene: list[int] = []  # gene_idx or -1
         self._seen: set[tuple[int, int, int]] = set()
 
-    def add(self, chrom_i, pos, lp, beta, gene_idx):
+    def add(self, chrom_i, pos, ref, alt, lp, beta, gene_idx):
         if lp is None:
             return
         if lp < OVERVIEW_KEEP_LP:
@@ -230,7 +233,10 @@ class Overview:
         d = 0 if beta is None or beta == 0 else (1 if beta > 0 else -1)
         self.chrom.append(chrom_i)
         self.pos.append(pos)
+        self.ref.append(ref)
+        self.alt.append(alt)
         self.lp.append(lp)
+        self.beta.append(beta)
         self.dr.append(d)
         self.gene.append(gene_idx if gene_idx is not None else -1)
 
@@ -241,7 +247,10 @@ class Overview:
             "keep_lp": OVERVIEW_KEEP_LP,
             "chr": self.chrom,
             "pos": self.pos,
+            "ref": self.ref,
+            "alt": self.alt,
             "lp": self.lp,
+            "beta": self.beta,
             "dir": self.dr,
             "gene_idx": self.gene,
         }
@@ -258,18 +267,25 @@ def _fmt(v) -> str:
 
 
 def pass1(
-    phenos, pheno_idx, gidx, gene_allow, local_dir, tmp, shards, out
+    phenos, pheno_idx, gidx, gene_allow, local_dir, tmp, shards, out,
+    overview_only=False,
 ):
-    shard_files = [open(tmp / f"s{h}.tsv", "w") for h in range(shards)]
+    shard_files = (
+        [] if overview_only else [open(tmp / f"s{h}.tsv", "w") for h in range(shards)]
+    )
     ov_dir = out / "variant" / "overview"
     ov_dir.mkdir(parents=True, exist_ok=True)
     allow_gidx = (
         None if gene_allow is None else {gidx.idx_of[g] for g in gene_allow if g in gidx.idx_of}
     )
+    # Overview data only ever comes from the "All" (meta) file, so an
+    # overview-only run can skip streaming the 6 ancestry-stratified VCFs
+    # entirely (~7x less VCF volume) since they'd only feed the gene shards.
+    ancestries = [("All", "")] if overview_only else ANCESTRIES
     n_assign = 0
     for pheno in phenos:
         pidx = pheno_idx[pheno]
-        for anc, suffix in ANCESTRIES:
+        for anc, suffix in ancestries:
             aidx = ANCESTRY_INDEX[anc]
             is_meta = anc == "All"
             ov = Overview() if is_meta else None
@@ -277,7 +293,8 @@ def pass1(
             if it is None:
                 continue
             n = _stream_file(
-                it, pidx, aidx, gidx, allow_gidx, shard_files, shards, ov
+                it, pidx, aidx, gidx, allow_gidx, shard_files, shards, ov,
+                overview_only,
             )
             if ov is not None:
                 (ov_dir / f"{pheno}.json").write_text(
@@ -290,7 +307,7 @@ def pass1(
     return n_assign
 
 
-def _stream_file(it, pidx, aidx, gidx, allow_gidx, shard_files, shards, ov):
+def _stream_file(it, pidx, aidx, gidx, allow_gidx, shard_files, shards, ov, overview_only=False):
     """Stream one VCF (position-sorted), sweep-join per chromosome, stash rows."""
     n = 0
     cur_chrom: str | None = None
@@ -315,8 +332,8 @@ def _stream_file(it, pidx, aidx, gidx, allow_gidx, shard_files, shards, ov):
             lp = lp2(val(t, fp, "LP"))
             if ov is not None:
                 g0 = genes[0] if genes else None
-                ov.add(CHROM_ORDER[chrom], pos, lp, beta, g0)
-            if not genes:
+                ov.add(CHROM_ORDER[chrom], pos, ref, alt, lp, beta, g0)
+            if overview_only or not genes:
                 continue
             nc = as_int(val(t, fp, "NC")); ne = as_int(val(t, fp, "NE"))
             i2 = sig3(val(t, fp, "I2")); cq = lp2(val(t, fp, "CQ"))
@@ -483,6 +500,11 @@ def main() -> None:
                     help="genes whose all-pheno meta JSON exceeds this many "
                          "bytes are split into per-phenotype files")
     ap.add_argument("--tmp", type=Path, default=None)
+    ap.add_argument("--overview-only", action="store_true",
+                    help="regenerate only variant/overview/{PHENO}.json (streams "
+                         "just the 'All'-meta VCF per phenotype, skips the gene "
+                         "pass entirely) — for adding/changing overview fields "
+                         "without a full re-run over every ancestry VCF")
     args = ap.parse_args()
 
     meta_dir = args.meta_dir or (args.out / "meta")
@@ -501,26 +523,30 @@ def main() -> None:
         shutil.rmtree(tmp)
     tmp.mkdir(parents=True)
 
-    print(f"Pass 1: streaming {len(phenos)} phenotype(s) x {len(ANCESTRIES)} anc")
+    n_anc = 1 if args.overview_only else len(ANCESTRIES)
+    print(f"Pass 1: streaming {len(phenos)} phenotype(s) x {n_anc} anc")
     n_assign = pass1(
         phenos, pheno_idx, gidx, gene_allow, args.local_dir,
-        tmp, args.gene_shards, args.out,
+        tmp, args.gene_shards, args.out, args.overview_only,
     )
     print(f"  {n_assign} gene-assignments stashed")
 
-    print("Pass 2: grouping by gene")
-    n_genes, split_set = pass2(
-        tmp, args.gene_shards, gidx, args.out, args.split_threshold
-    )
-    print(f"Wrote {n_genes} gene files ({len(split_set)} split by phenotype)")
+    if args.overview_only:
+        print("Pass 2: skipped (--overview-only)")
+    else:
+        print("Pass 2: grouping by gene")
+        n_genes, split_set = pass2(
+            tmp, args.gene_shards, gidx, args.out, args.split_threshold
+        )
+        print(f"Wrote {n_genes} gene files ({len(split_set)} split by phenotype)")
 
-    # Manifest of split genes -> bundled with the app so the frontend picks the
-    # per-phenotype fetch form for these (few) oversized genes.
-    manifest = args.out / "meta"
-    manifest.mkdir(parents=True, exist_ok=True)
-    (manifest / "variant_split.json").write_text(
-        _dump({"split": sorted(split_set)})
-    )
+        # Manifest of split genes -> bundled with the app so the frontend picks
+        # the per-phenotype fetch form for these (few) oversized genes.
+        manifest = args.out / "meta"
+        manifest.mkdir(parents=True, exist_ok=True)
+        (manifest / "variant_split.json").write_text(
+            _dump({"split": sorted(split_set)})
+        )
 
     shutil.rmtree(tmp, ignore_errors=True)
 

@@ -413,8 +413,10 @@ export interface VariantOverviewRow {
   ensg: string
   chr: string
   pos: number
+  ref: string
+  alt: string
   lp: number
-  dir: number
+  beta: number | null
 }
 
 export function variantOverviewRows(
@@ -433,8 +435,10 @@ export function variantOverviewRows(
       ensg: geneIndex.ids[geneIdx],
       chr: VARIANT_CHR_LABELS[overview.chr[i]],
       pos: overview.pos[i],
+      ref: overview.ref[i],
+      alt: overview.alt[i],
       lp: overview.lp[i],
-      dir: overview.dir[i],
+      beta: overview.beta[i] ?? null,
     })
   }
   return out
