@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { fmtBeta, fmtCount, fmtP, fmtPLog } from '../lib/format'
+import { fmtBeta3, fmtCount, fmtP, fmtPLog } from '../lib/format'
 import {
   ANCESTRIES,
   ANCESTRY_META,
@@ -54,7 +54,11 @@ function ThresholdInput({
       ? kind === 'p'
         ? fmtPLog(v)
         : kind === 'beta'
-          ? fmtBeta(v)
+          ? // fmtBeta3, not the table's fixed-2dp fmtBeta: the slider's step is
+            // fine-grained (betaMax/100), and 2dp rounds a whole run of
+            // distinct positions to the same string (e.g. 0.016-0.024 all
+            // read "0.02"), making the slider look stuck.
+            fmtBeta3(v)
           : kind === 'i2'
             ? `${Math.round(v)}%`
             : fmtCount(v)
