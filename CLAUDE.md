@@ -348,36 +348,36 @@ crawlers, plus periodic `rclone size` checks (below) as the actual signal.
 Revisit the custom-domain + Worker route only if usage climbs toward the
 ceiling.
 
-### Actual R2 usage — 3.717 GiB / 10 GB (measured 2026-08-17)
+### Actual R2 usage — 4.279 GiB / 10 GB (measured 2026-08-17, after the full variant rebuild below)
 
 Both v1 and v2 data are uploaded. Measured stored bytes (gzipped, as served):
 
 | Prefix | Objects | Stored (gzip) |
 |---|---|---|
-| `gene/` (v1) | 19,541 | 663.1 MiB |
-| `phenotype/` (v1) | 280 | 596.9 MiB |
-| `v2/` (variant) | 175,911 | 2.487 GiB |
-| **Bucket total** | **195,732** | **3.717 GiB (3.99 GB)** |
+| `gene/` (v1) | 19,541 | 647.5 MiB |
+| `phenotype/` (v1) | 280 | 574.3 MiB |
+| `v2/variant/` | 176,037 | 3.086 GiB |
+| **Bucket total** | **195,858** | **4.279 GiB (4.59 GB)** |
 
-(`v2/variant/overview/*.json` was regenerated twice on 2026-08-17 — first to
-add `ref`/`alt` — 44 objects, 13.7 MiB gzipped — then again minutes later to
-add `beta` too — 44 objects, 17.2 MiB gzipped — both times replacing the prior
-overview files in place; bucket total is still slightly below 2026-07-29
-despite the new fields.)
+(`v2/variant/overview/*.json` was regenerated twice earlier on 2026-08-17 —
+first to add `ref`/`alt`, then `beta` — see the "variant-level (v2)" section
+below. Later the same day, a **full** `make full-variants` rebuild added the
+`anc_mask` presence bitmask to gene/overview payloads and real per-ancestry
+`nc`/`ne`/`i2`/`cq` to `.anc.json` slices, then `make upload-variants`
+re-uploaded all 170,493 variant objects — the jump from 175,911 to 176,037
+objects and +0.6 GiB is that rebuild landing, not drift.)
 
-**~40% of the 10 GB storage ceiling — comfortable headroom.** The v2 estimate
-below (~2.7 GB) proved accurate; gene-level came in under its ~1.5 GB estimate
-at 1.23 GiB.
+**~46% of the 10 GB storage ceiling — comfortable headroom.**
 
 **Re-measure after any upload that adds or replaces data**, and update the table
 above (with the date) so the headroom figure never goes stale:
 
 ```bash
 rclone size r2:brava-browser                 # whole bucket (~1 min, lists 196k objects)
-rclone size r2:brava-browser/v2              # or any single prefix
+rclone size r2:brava-browser/v2/variant      # or any single prefix
 ```
 
-Note on **Class A ops**: the bucket is now 195,732 objects, so a *full* blind
+Note on **Class A ops**: the bucket is now 195,858 objects, so a *full* blind
 re-upload costs ~196k Class A ops — five of those in one month would approach
 the 1M ceiling. Always upload incrementally (`rclone copy --checksum`, which
 skips unchanged objects) rather than re-copying everything.
@@ -417,20 +417,20 @@ Frontend code, data build, and R2 upload are all **done** (commits `d43f82e`,
   `ancIdx`: 0 (`All`) reads the cross-ancestry meta out of the main file, any
   other stratum reads `{ENSG}[.{pheno}].anc.json` via `variantAncRows` — the same
   file the per-variant forest lazily fetches, so the two share one cached fetch.
-  **Per-ancestry slices carry only `idx`/`beta`/`se`/`lp`** (no `nc`/`ne`/`i2`/
-  `cq`/`ed`), so the table drops its **N (eff.)** and **I²** columns for a single
-  stratum instead of showing a column of dashes; adding them back means re-running
-  the variant ETL and re-uploading ~176k objects. Strata are much sparser than the
-  meta (PCSK9 × colorectal: All 225, EUR 154, non-EUR 104, AMR 50, AFR 38, SAS 24,
-  EAS 0), so the "no variants in this stratum" empty state is a normal path.
+  **Per-ancestry slices now carry real `nc`/`ne`/`i2`/`cq`** (added in the
+  2026-08-17 full rebuild above, replacing the earlier meta-only fields), so
+  **N (eff.)** and **I²** are populated for every ancestry, not just the meta —
+  the table no longer drops those columns in single-stratum mode. Strata are
+  much sparser than the meta (PCSK9 × colorectal: All 225, EUR 154, non-EUR
+  104, AMR 50, AFR 38, SAS 24, EAS 0), so the "no variants in this stratum"
+  empty state is a normal path.
   Selecting a variant clears on ancestry change (it may not exist in the new
   stratum). The All meta is a superset of the strata, so the forest's `All`
   diamond still resolves for a variant picked in stratum mode.
 - `VariantForest` mirrors the gene-level `ForestPlot`: ResizeObserver width,
   full-row hover highlight + tooltip (β ± SE, 95% CI, p at 3 sig figs). Its right
   gutter is 250px because the inline `β [lo, hi] · p=…` label runs ~36 chars —
-  at the old 150px the p-value was cut off. No N column: per-stratum N isn't in
-  the data (see above).
+  at the old 150px the p-value was cut off.
 - `pipeline/build_variants.py`: streaming two-pass VCF→JSON ETL. Resolves SAMPLE
   subfield positions from each file's own FORMAT column (fixed indices misalign —
   quantitative traits omit `NC`, and some files omit `NS`/`NE`).
@@ -439,7 +439,7 @@ Frontend code, data build, and R2 upload are all **done** (commits `d43f82e`,
   (rclone has no `gsutil -Z` equivalent), matching v1.
 - `app/public/data/meta/variant_split.json` ships the real manifest: **1,586
   genes** are split per-phenotype (the rest are one file for all phenotypes).
-- Data on R2 under `v2/variant/`: 175,911 objects, 2.519 GiB — see the usage
+- Data on R2 under `v2/variant/`: 176,037 objects, 3.086 GiB — see the usage
   table above.
 
 To rebuild/re-upload variant data: `make full-variants` (~1–2 h, needs GCS access
