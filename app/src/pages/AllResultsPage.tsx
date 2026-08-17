@@ -11,6 +11,7 @@ import {
   DEFAULTS,
   MAF_META,
   MASK_META,
+  SIG_GENE_CAUCHY,
   SIG_SUGGEST,
   SUPERPOPS,
 } from '../lib/constants'
@@ -25,6 +26,7 @@ import AncestryHealthBar from '../components/AncestryHealthBar'
 import VirtualTable from '../components/VirtualTable'
 import FilterBar, { type FilterState } from '../components/FilterBar'
 import { FilterRow, SearchInput } from '../components/TableFilters'
+import ForestDrawer from '../components/ForestDrawer'
 import type { AncestryN } from '../data/types'
 
 /** Karyotype order: 1..22, X, Y, M, then anything else. */
@@ -38,6 +40,7 @@ function chromRank(chr: string): number {
   return 99
 }
 const locusKey = (chr: string, start: number) => chromRank(chr) * 1e9 + start
+const SIG_LP_GENE = -Math.log10(SIG_GENE_CAUCHY)
 
 interface TableRow extends AllResultsRow {
   symbol: string
@@ -75,6 +78,15 @@ export default function AllResultsPage() {
   const [minN, setMinN] = useState(0)
   const [hover, setHover] = useState<{ geneIdx: number; phenoIdx: number } | null>(null)
   const [sorting, setSorting] = useState<SortingState>([{ id: 'lp', desc: true }])
+  // Row click opens this gene × phenotype's forest instead of navigating away
+  // — phenoIdx varies per row here (unlike the phenotype page's own drawer,
+  // which is scoped to one fixed phenotype), so it has to travel with the
+  // rest of the drawer's identity rather than living in page state.
+  const [drawer, setDrawer] = useState<{
+    ensg: string
+    symbol: string
+    phenoIdx: number
+  } | null>(null)
 
   const { data, loading, error } = useAsync(
     () => fetchAllResults(ANCESTRY_META[filters.ancestry].suffix),
@@ -150,6 +162,7 @@ export default function AllResultsPage() {
   }, [tableRows, query, minLp, minN])
 
   const openGene = (ensg: string) => navigate(`/gene/${ensg}`)
+  const sigOn = minLp >= SIG_LP_GENE - 1e-9
 
   const columns = useMemo<ColumnDef<TableRow, any>[]>(
     () => [
@@ -246,7 +259,7 @@ export default function AllResultsPage() {
         sortUndefined: 'last',
         size: 190,
         meta: {
-          help: "This phenotype's sample size for the selected ancestry (or the full cross-ancestry composition when filtered to All). Hover for the exact breakdown.",
+          help: "This phenotype's sample size for the selected ancestry. Hover for the exact breakdown.",
         },
         cell: (c) => (
           <AncestryHealthBar
@@ -296,7 +309,7 @@ export default function AllResultsPage() {
           <div className="flex min-w-0 shrink-[3] flex-col gap-1">
             <h1 className="text-xl font-semibold text-ink">All results</h1>
             <p className="text-xs text-ink-faint">
-              P &lt; {fmtP(SIG_SUGGEST)} (suggestive threshold) · {phenotypes.length} traits
+              Gene-level results  · P &lt; {fmtP(SIG_SUGGEST)} (suggestive threshold) · {phenotypes.length} traits
             </p>
           </div>
           <FilterBar value={filters} onChange={setFilters} />
@@ -348,6 +361,19 @@ export default function AllResultsPage() {
                 stored={minLp}
                 onChange={setMinLp}
               />
+              <button
+                type="button"
+                onClick={() => setMinLp(sigOn ? 0 : SIG_LP_GENE)}
+                aria-pressed={sigOn}
+                title={`Gene-level significance · P < ${fmtP(SIG_GENE_CAUCHY)}`}
+                className={`rounded-md border px-2 py-0.5 text-xs font-medium transition ${
+                  sigOn
+                    ? 'border-brand bg-brand/10 text-brand'
+                    : 'border-line text-ink-soft hover:border-brand hover:text-brand'
+                }`}
+              >
+                genome-wide
+              </button>
               <FilterRow
                 label="N ≥"
                 kind="n"
@@ -375,6 +401,8 @@ export default function AllResultsPage() {
                 {filteredRows.length !== tableRows.length &&
                   ` of ${tableRows.length.toLocaleString()}`}{' '}
                 results
+                {minLp === 0 && ` (P < ${fmtP(SIG_SUGGEST)})`} · click a
+                row for its forest
               </span>
             </div>
 
@@ -383,7 +411,9 @@ export default function AllResultsPage() {
               columns={columns}
               sorting={sorting}
               onSortingChange={setSorting}
-              onRowClick={(r) => openGene(r.ensg)}
+              onRowClick={(r) =>
+                setDrawer({ ensg: r.ensg, symbol: r.symbol, phenoIdx: r.phenoIdx })
+              }
               onRowHover={(r) =>
                 setHover(r ? { geneIdx: r.geneIdx, phenoIdx: r.phenoIdx } : null)
               }
@@ -393,6 +423,19 @@ export default function AllResultsPage() {
           </>
         )}
       </div>
+
+      {drawer && (
+        <ForestDrawer
+          ensg={drawer.ensg}
+          symbol={drawer.symbol}
+          phenoIdx={drawer.phenoIdx}
+          trait={phenotypes[drawer.phenoIdx]}
+          maskIndex={filters.maskIndex}
+          mafIndex={filters.mafIndex}
+          onClose={() => setDrawer(null)}
+          onOpenGene={() => openGene(drawer.ensg)}
+        />
+      )}
     </>
   )
 }
