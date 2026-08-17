@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import Tip from './Tip'
 
 /** Row of small colored circles representing the annotations in a mask. */
 export function MaskIcon({ colors }: { colors: string[] }) {
@@ -33,6 +34,8 @@ export default function Dropdown<T extends string | number>({
   onChange,
   options,
   width,
+  disabled,
+  disabledReason,
 }: {
   label: string
   value: T
@@ -42,6 +45,11 @@ export default function Dropdown<T extends string | number>({
    *  and shift the toolbar — when the selected label changes. The popup menu
    *  stays `min-w-full`, so long labels remain fully readable there. */
   width?: string
+  /** Grey the control out and block opening it — e.g. a filter that has no
+   *  effect in the view currently on screen. */
+  disabled?: boolean
+  /** Tooltip shown while disabled, explaining why. */
+  disabledReason?: string
 }) {
   const [open, setOpen] = useState(false)
   const boxRef = useRef<HTMLDivElement>(null)
@@ -56,10 +64,33 @@ export default function Dropdown<T extends string | number>({
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
+  // A mode switch elsewhere on the page (e.g. Gene/Variant toggle) can disable
+  // this control while its menu happens to be open.
+  useEffect(() => {
+    if (disabled) setOpen(false)
+  }, [disabled])
+
   const pick = (v: T) => {
     onChange(v)
     setOpen(false)
   }
+
+  const button = (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => setOpen((o) => !o)}
+      className={`flex w-full items-center gap-1.5 rounded-md border px-2 py-1 text-left text-[13px] font-normal tracking-normal normal-case outline-none ${
+        disabled
+          ? 'cursor-default border-line bg-surface-soft text-ink-faint'
+          : 'border-line bg-surface text-ink hover:border-brand focus:border-brand focus:ring-2 focus:ring-brand/20'
+      }`}
+    >
+      {selected?.icon}
+      <span className="truncate">{selected?.label}</span>
+      <span className="ml-auto pl-1 text-ink-faint">▾</span>
+    </button>
+  )
 
   return (
     <div
@@ -67,15 +98,13 @@ export default function Dropdown<T extends string | number>({
     >
       {label && <span>{label}</span>}
       <div ref={boxRef} className="relative">
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          className="flex w-full items-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1 text-left text-[13px] font-normal tracking-normal normal-case text-ink outline-none hover:border-brand focus:border-brand focus:ring-2 focus:ring-brand/20"
-        >
-          {selected?.icon}
-          <span className="truncate">{selected?.label}</span>
-          <span className="ml-auto pl-1 text-ink-faint">▾</span>
-        </button>
+        {disabled && disabledReason ? (
+          <Tip label={disabledReason} className="block w-full">
+            {button}
+          </Tip>
+        ) : (
+          button
+        )}
 
         {open && (
           <ul className="absolute z-30 mt-1 min-w-full overflow-auto rounded-lg border border-line bg-surface py-1 text-left shadow-xl">

@@ -23,6 +23,11 @@ interface Props {
   ancestries?: Ancestry[]
   /** Hide the ancestry control (gene page handles ancestry separately). */
   hideAncestry?: boolean
+  /** Grey out Variant mask / Max MAF / Test — none of the three apply to a
+   *  single-variant view (no annotation mask, no per-mask MAF cutoff, no
+   *  gene-level test). Ancestry is left active, since it still narrows which
+   *  variants are shown. */
+  disableMaskMafTest?: boolean
 }
 
 // Control widths in px, mirroring the Tailwind classes used below, so the wrap
@@ -62,11 +67,14 @@ const PAIR_MIN = W_MASK + GAP + W_NARROW // 330
  * max-content widths are both order-independent (widest single item, and the sum
  * of all items, respectively), so the row's width is the same either way.
  */
+const DISABLED_REASON = 'Not used for single-variant results'
+
 export default function FilterBar({
   value,
   onChange,
   ancestries,
   hideAncestry,
+  disableMaskMafTest,
 }: Props) {
   const set = (patch: Partial<FilterState>) => onChange({ ...value, ...patch })
   const ancOptions = (ancestries ?? (Object.keys(ANCESTRY_META) as Ancestry[])).map(
@@ -113,6 +121,8 @@ export default function FilterBar({
         label: m.label,
         icon: <MaskIcon colors={m.colors} />,
       }))}
+      disabled={disableMaskMafTest}
+      disabledReason={DISABLED_REASON}
     />
   )
   const maf = (
@@ -123,6 +133,8 @@ export default function FilterBar({
       value={value.mafIndex}
       onChange={(mafIndex) => set({ mafIndex })}
       options={MAF_META.map((m, i) => ({ value: i, label: m.label }))}
+      disabled={disableMaskMafTest}
+      disabledReason={DISABLED_REASON}
     />
   )
   const test = (
@@ -133,6 +145,8 @@ export default function FilterBar({
       value={value.test}
       onChange={(t) => set({ test: t as Test })}
       options={TESTS.map((t) => ({ value: t, label: t }))}
+      disabled={disableMaskMafTest}
+      disabledReason={DISABLED_REASON}
     />
   )
 

@@ -363,6 +363,7 @@ export default function PhenotypePage() {
             value={{ ...filters, ancestry }}
             onChange={setFilters}
             ancestries={available}
+            disableMaskMafTest={manhattanMode === 'variant'}
           />
         </div>
       </StickyTitle>
