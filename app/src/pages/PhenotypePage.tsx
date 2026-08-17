@@ -26,6 +26,7 @@ import {
   ANCESTRY_INDEX,
   ANCESTRY_META,
   decodeAncMask,
+  hasNonEurMask,
   MAF_META,
   MASK_META,
   SIG_GENE_CAUCHY,
@@ -1166,7 +1167,14 @@ function VariantOverviewTable({
         { header: 'beta', value: (r) => r.beta },
         {
           header: 'ancestries',
-          value: (r) => decodeAncMask(r.ancMask).map((a) => ANCESTRIES[a]).join(','),
+          // Mirrors AncestryChips' display list, including the non-EUR-only
+          // case (see hasNonEurMask) — the export should never show blank
+          // for a row whose on-screen chip isn't.
+          value: (r) => {
+            const idxs = decodeAncMask(r.ancMask)
+            if (hasNonEurMask(r.ancMask)) idxs.push(ANCESTRY_INDEX.non_EUR)
+            return idxs.map((a) => ANCESTRIES[a]).join(',')
+          },
         },
       ] satisfies ExportColumn<VariantOverviewRow>[],
     }),

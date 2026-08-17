@@ -320,9 +320,13 @@ export default function TableFilters({
  * to `sel ∩ available` fixes that without needing `sel` itself to track
  * availability.
  *
- * `ancMask === 0` ("composition unknown" — see Overview.mark_ancestry in
+ * No superpop bits set ("composition unknown" — see Overview.mark_ancestry in
  * build_variants.py) always passes either way: we can't confidently say it
- * doesn't match.
+ * doesn't match. This is checked via `decodeAncMask`, not `mask === 0` — a
+ * variant that only reached the pooled non-EUR meta's threshold has the
+ * separate non_EUR display bit set (see `hasNonEurMask`) but no superpop
+ * bits, and must still always-pass here exactly like a truly all-zero mask;
+ * that bit is display-only and never enters this filter.
  */
 export function matchesAncFilter(
   mask: number,
@@ -330,8 +334,8 @@ export function matchesAncFilter(
   exclusive: boolean,
   available: Set<number>,
 ): boolean {
-  if (mask === 0) return true
   const tags = decodeAncMask(mask)
+  if (tags.length === 0) return true
   if (!exclusive) return tags.some((a) => sel.has(a))
   let n = 0
   for (const a of sel) if (available.has(a)) n++

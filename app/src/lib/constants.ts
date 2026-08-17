@@ -52,9 +52,13 @@ export const ANCESTRY_GROUP_LABEL: Record<string, string> = {
 export const SUPERPOPS = ['EUR', 'AFR', 'AMR', 'EAS', 'SAS'] as const
 
 /**
- * Decode a variant `anc_mask` bit (bit i = SUPERPOPS[i]) into canonical
- * ANCESTRY_INDEX values, in SUPERPOPS order. Mirrors `SUPERPOP_BIT` in
- * pipeline/build_variants.py — keep the two in sync.
+ * Decode a variant `anc_mask`'s superpop bits (bit i = SUPERPOPS[i]) into
+ * canonical ANCESTRY_INDEX values, in SUPERPOPS order. Mirrors `SUPERPOP_BIT`
+ * in pipeline/build_variants.py — keep the two in sync. Deliberately ignores
+ * the separate non_EUR bit (see `hasNonEurMask`) — this is what the ancestry
+ * *filter* matches against, and non_EUR isn't a selectable option there (its
+ * samples overlap the individual populations, so an exact-match query
+ * including it would be ambiguous).
  */
 export function decodeAncMask(mask: number): number[] {
   const out: number[] = []
@@ -62,6 +66,16 @@ export function decodeAncMask(mask: number): number[] {
     if (mask & (1 << i)) out.push(ANCESTRY_INDEX[SUPERPOPS[i]])
   }
   return out
+}
+
+/** One bit past the 5 superpop ones (see pipeline's NON_EUR_BIT): flags "also
+ *  observed in the non_EUR pooled meta", for *display* only. A variant that
+ *  only reaches the pooled non-EUR meta's reporting threshold (not any single
+ *  population's own) has none of the SUPERPOPS bits set — without this it
+ *  reads identically to "no ancestry data", when it's really "non-EUR only".
+ *  Never fed into the ancestry filter (see `decodeAncMask`). */
+export function hasNonEurMask(mask: number): boolean {
+  return (mask & (1 << SUPERPOPS.length)) !== 0
 }
 
 /** Canonical ANCESTRY_INDEX values for the 5 superpops an `anc_mask` bitmask

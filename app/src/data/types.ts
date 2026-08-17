@@ -161,7 +161,7 @@ export interface VariantMetaSlice {
   i2: (number | null)[] // Cochran's I^2 (heterogeneity)
   cq: (number | null)[] // Cochran's Q, -log10 p
   ed: (string | null)[] // per-biobank effect-direction string (+/-/?)
-  anc_mask: number[] // 5-bit superpop presence bitmask — see decodeAncMask
+  anc_mask: number[] // presence bitmask — see decodeAncMask / hasNonEurMask
 }
 
 /**
@@ -220,7 +220,7 @@ export interface VariantOverview {
   lp: number[]
   beta: (number | null)[] // cross-ancestry meta β for the alternate allele
   dir: number[] // sign(beta): 1 (risk↑) / -1 (protective) / 0
-  anc_mask: number[] // 5-bit superpop presence bitmask — see decodeAncMask
+  anc_mask: number[] // presence bitmask — see decodeAncMask / hasNonEurMask
   gene_idx: number[] // gene for click-through, -1 if none
 }
 

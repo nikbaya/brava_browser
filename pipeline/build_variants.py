@@ -10,14 +10,17 @@ Outputs (see docs/variant-v2-design.md):
   variant/gene/{ENSG}.json       All-meta, all phenotypes. First paint.
                                  shared coord table + sparse per-phenotype slices
                                  (beta/se/lp/nc/ne/i2/cq/ed/anc_mask). anc_mask is
-                                 a 5-bit superpop-presence bitmask (EUR/AFR/AMR/
-                                 EAS/SAS), per phenotype — see SUPERPOP_BIT.
+                                 a presence bitmask, per phenotype — bits 0-4 are
+                                 the superpops (EUR/AFR/AMR/EAS/SAS, SUPERPOP_BIT)
+                                 and drive the ancestry filter; bit 5 (NON_EUR_BIT)
+                                 separately flags "also in the non_EUR pooled
+                                 meta", display-only (see decodeAncMask vs.
+                                 hasNonEurMask in constants.ts).
   variant/gene/{ENSG}.anc.json   All 6 non-meta ancestries (beta/se/lp/nc/ne/i2/
                                  cq). Lazy, powers the per-variant forest plot.
   variant/overview/{PHENO}.json  Pixel-decimated genome-wide Manhattan, plus the
-                                 same 5-bit anc_mask (genome-wide, not per-pheno
-                                 since the overview is already one file per
-                                 phenotype).
+                                 same anc_mask (genome-wide, not per-pheno since
+                                 the overview is already one file per phenotype).
 
 Memory is bounded by hash-sharding the gene pass: pass 1 streams every VCF and
 appends gene-assigned records to `--gene-shards` temp files keyed by hash(ensg);
@@ -68,12 +71,30 @@ ANCESTRY_INDEX = {a: i for i, (a, _) in enumerate(ANCESTRIES)}
 NON_META = [a for a, _ in ANCESTRIES if a != "All"]
 
 # The 5 real population ancestries, for the presence bitmask (bit i = this
-# list's i-th entry). Excludes All (meta) and non_EUR (itself a meta-analysis
-# of the other 4 non-EUR pops — tagging with it alongside e.g. AFR would double
-# up on the same underlying samples). Order matches the frontend's SUPERPOPS
-# constant (app/src/lib/constants.ts) — keep the two in sync.
+# list's i-th entry). Order matches the frontend's SUPERPOPS constant
+# (app/src/lib/constants.ts) — keep the two in sync.
 SUPERPOPS = ["EUR", "AFR", "AMR", "EAS", "SAS"]
 SUPERPOP_BIT = {ANCESTRY_INDEX[a]: i for i, a in enumerate(SUPERPOPS)}
+
+# One more bit, past the 5 superpop ones, flagging "also observed in the
+# non_EUR pooled meta" — display-only (see decodeAncMask/hasNonEurMask in
+# constants.ts and AncestryChips in indicators.tsx). non_EUR is itself a
+# meta-analysis of the other 4 non-EUR pops, so it's excluded from
+# SUPERPOP_BIT/the ancestry *filter* (tagging with it alongside e.g. AFR would
+# double up on the same underlying samples for an exact-match query) — but a
+# variant that reaches the pooled non-EUR meta's reporting threshold without
+# reaching any single population's own threshold has NO bit set at all without
+# this, which reads identically to "no ancestry data exists", when we in fact
+# know precisely where it came from.
+NON_EUR_BIT = len(SUPERPOPS)
+
+
+def _anc_presence_bit(aidx: int) -> int | None:
+    """Bit position in the anc_mask presence bitmask for this ancestry index,
+    or None if untracked (only 'All'/meta has no bit)."""
+    if aidx == ANCESTRY_INDEX["non_EUR"]:
+        return NON_EUR_BIT
+    return SUPERPOP_BIT.get(aidx)
 
 CHROM_ORDER = {str(c): i for i, c in enumerate(list(range(1, 23)) + ["X", "Y"])}
 
@@ -357,7 +378,7 @@ def pass1(
             it = vcf_lines(pheno, suffix, local_dir)
             if it is None:
                 continue
-            anc_bit = None if is_meta else SUPERPOP_BIT.get(aidx)
+            anc_bit = None if is_meta else _anc_presence_bit(aidx)
             n = _stream_file(
                 it, pidx, aidx, gidx, allow_gidx, shard_files, shards, ov,
                 is_meta, anc_bit, overview_only,
@@ -491,15 +512,13 @@ def _union_table(rows):
 
 
 def _gene_anc_mask(other_rows) -> dict[tuple[str, int, str, str], int]:
-    """(pheno_idx_str, pos, ref, alt) -> bitmask of superpop ancestries that
-    observed this variant for that phenotype. Presence is phenotype-specific
-    (MAC/QC cutoffs vary by sample size), so this is keyed by phenotype, not
-    shared genome-wide like the overview's mask. non_EUR is excluded (not in
-    SUPERPOP_BIT) — it's a meta-analysis of the other 4 non-EUR pops, so
-    tagging with it alongside e.g. AFR would double up on the same samples."""
+    """(pheno_idx_str, pos, ref, alt) -> presence bitmask (see NON_EUR_BIT)
+    of ancestries that observed this variant for that phenotype. Presence is
+    phenotype-specific (MAC/QC cutoffs vary by sample size), so this is keyed
+    by phenotype, not shared genome-wide like the overview's mask."""
     masks: dict[tuple[str, int, str, str], int] = {}
     for r in other_rows:
-        bit = SUPERPOP_BIT.get(int(r[2]))
+        bit = _anc_presence_bit(int(r[2]))
         if bit is None:
             continue
         key = (r[1], int(r[3]), r[4], r[5])
