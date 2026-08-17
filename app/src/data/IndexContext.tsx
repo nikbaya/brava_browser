@@ -105,12 +105,18 @@ export function IndexProvider({ children }: { children: ReactNode }) {
       }
 
       // Genes: rank by best hit on symbol OR ENSG id (exact=0, prefix=1,
-      // substring=2). Prefix-tier hits rank above substring-tier.
+      // substring=2), each tier sorted alphabetically by symbol. Both matter:
+      // tiering alone would still let "APOBEC1" (prefix) place ahead of an
+      // exact "APOB" match purely by gene-index array order; the alphabetical
+      // tiebreak is what then puts "GIGYF1" before "GIGYF2" when both are
+      // prefix-tier hits for "GIG". (No early-exit once `limit` prefix hits
+      // are found, unlike before — that capped the candidate pool before it
+      // could be sorted, which is exactly how an exact match could lose to an
+      // earlier-indexed prefix match.)
       if (geneIndex) {
         const rank = (s: string) =>
           !s ? -1 : s === q ? 0 : s.startsWith(q) ? 1 : s.includes(q) ? 2 : -1
-        const prefix: SearchResult[] = []
-        const contains: SearchResult[] = []
+        const hits: { r: SearchResult; tier: number; symbol: string }[] = []
         for (let i = 0; i < geneIndex.ids.length; i++) {
           const symHit = rank(symbolLower[i])
           const ensgHit = rank(geneIndex.ids[i].toLowerCase())
@@ -121,17 +127,20 @@ export function IndexProvider({ children }: { children: ReactNode }) {
                 ? symHit
                 : Math.min(symHit, ensgHit)
           if (hit < 0) continue
-          const r: SearchResult = {
-            kind: 'gene',
-            id: geneIndex.ids[i],
-            primary: geneIndex.symbols[i] || geneIndex.ids[i],
-            tag: 'gene',
-            secondary: geneIndex.ids[i],
-          }
-          ;(hit <= 1 ? prefix : contains).push(r)
-          if (prefix.length >= limit) break
+          hits.push({
+            r: {
+              kind: 'gene',
+              id: geneIndex.ids[i],
+              primary: geneIndex.symbols[i] || geneIndex.ids[i],
+              tag: 'gene',
+              secondary: geneIndex.ids[i],
+            },
+            tier: hit,
+            symbol: symbolLower[i] || geneIndex.ids[i].toLowerCase(),
+          })
         }
-        out.push(...prefix, ...contains)
+        hits.sort((a, b) => a.tier - b.tier || a.symbol.localeCompare(b.symbol))
+        out.push(...hits.map((h) => h.r))
       }
       return out.slice(0, limit)
     }
