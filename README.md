@@ -1,7 +1,7 @@
 # BRaVa browser
 
 A fast, static browser for [Biobank Rare Variant Analysis
-(BRaVa)](https://brava-genetics.github.io) consortium **gene-level** rare
+(BRaVa)](https://www.medrxiv.org/content/10.64898/2026.05.21.26353759v1.full) consortium **gene-level** rare
 coding-variant association results — gene-level meta-analysis of ~1.2M
 individuals across 10 global biobanks. Modeled on gnomAD / Genebass.
 
