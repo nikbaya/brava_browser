@@ -261,20 +261,23 @@ export function AncestryChip({ anc, dim = false }: { anc: Ancestry; dim?: boolea
 
 /**
  * Ancestry-availability tags: one `AncestryChip` per population ancestry a
- * variant was observed in, plus a trailing "non-EUR" chip when the variant
- * only reached the *pooled* non-European meta's reporting threshold without
- * reaching any single population's own (see `hasNonEurMask`) — otherwise that
- * case has no superpop bits set at all and would render no chip, reading
- * identically to "no ancestry data" when we in fact know it came from the
- * non-EUR meta. Takes a raw `anc_mask` bitmask (see `decodeAncMask`) — both
- * the gene page's per-gene variant table and the phenotype page's
- * genome-wide overview table use this, reading straight off their row's
- * `ancMask` field (baked into the data at pipeline build time, so no extra
- * fetch either way).
+ * variant was observed in. Falls back to a single "non-EUR" chip only when
+ * *no* superpop chip applies — i.e. the variant only reached the *pooled*
+ * non-European meta's reporting threshold, never any single population's own
+ * (see `hasNonEurMask`). Without this fallback that case has no superpop bits
+ * set at all and renders no chip, reading identically to "no ancestry data"
+ * when we in fact know it came from the non-EUR meta. When a superpop chip
+ * IS available, it's shown alone — non-EUR is a fallback, not an addition,
+ * so a variant already tagged e.g. AFR doesn't also carry a second, broader
+ * "non-EUR" chip alongside it. Takes a raw `anc_mask` bitmask (see
+ * `decodeAncMask`) — both the gene page's per-gene variant table and the
+ * phenotype page's genome-wide overview table use this, reading straight off
+ * their row's `ancMask` field (baked into the data at pipeline build time,
+ * so no extra fetch either way).
  */
 export function AncestryChips({ mask }: { mask: number }) {
   const ancIdxs = decodeAncMask(mask)
-  if (hasNonEurMask(mask)) ancIdxs.push(ANCESTRY_INDEX.non_EUR)
+  if (ancIdxs.length === 0 && hasNonEurMask(mask)) ancIdxs.push(ANCESTRY_INDEX.non_EUR)
   if (ancIdxs.length === 0) return null
   const label = `Observed in: ${ancIdxs.map((i) => ANCESTRY_META[ANCESTRIES[i]].long).join(', ')}`
   return (

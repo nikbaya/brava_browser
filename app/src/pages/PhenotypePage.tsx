@@ -1167,12 +1167,14 @@ function VariantOverviewTable({
         { header: 'beta', value: (r) => r.beta },
         {
           header: 'ancestries',
-          // Mirrors AncestryChips' display list, including the non-EUR-only
-          // case (see hasNonEurMask) — the export should never show blank
-          // for a row whose on-screen chip isn't.
+          // Mirrors AncestryChips' display list: non-EUR only as a fallback
+          // when no superpop applies (see hasNonEurMask), never alongside
+          // one — the export should never show blank for a row whose
+          // on-screen chip isn't, but also shouldn't add a chip the row
+          // doesn't actually show.
           value: (r) => {
             const idxs = decodeAncMask(r.ancMask)
-            if (hasNonEurMask(r.ancMask)) idxs.push(ANCESTRY_INDEX.non_EUR)
+            if (idxs.length === 0 && hasNonEurMask(r.ancMask)) idxs.push(ANCESTRY_INDEX.non_EUR)
             return idxs.map((a) => ANCESTRIES[a]).join(',')
           },
         },
