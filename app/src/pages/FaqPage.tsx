@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import {
   SIG_GENE_CAUCHY,
   SIG_GENE_MASK_BONFERRONI,
@@ -100,16 +100,43 @@ export default function FaqPage() {
             </a>{' '}
             for a detailed description of genetic ancestry.
           </p>
+        </Faq>
+
+        <Faq q="How were individuals assigned to genetic ancestry groups?">
+          <p>
+            To characterise the genetic ancestries represented across BRaVa,
+            participants were projected onto the principal-component space
+            defined by the 1000 Genomes and Human Genome Diversity Project
+            reference panels. Following the approach taken by the
+            Global Biobank Meta-analysis Initiative, individuals were
+            assigned to one of five broad continental ancestry groups against
+            these reference panels: African (AFR), Admixed American (AMR),
+            East Asian (EAS), European (EUR), and Central/South Asian (SAS).
+            These are the three-letter codes used throughout this browser, as
+            in the flagship paper. Association analyses were then carried out
+            separately within each ancestry-by-biobank subset, before being
+            meta-analysed across biobanks and ancestries.
+          </p>
           <p className="mt-2">
-            See BRaVa's own{' '}
-            <Link
-              to={{ pathname: '/about', hash: '#ancestral-diversity' }}
-              className="text-brand whitespace-nowrap hover:underline"
-            >
-              ancestral diversity
-            </Link>{' '}
-            for how the ancestry groups in this browser are assembled across
-            biobanks.
+            As in other large-scale genetic studies, these groupings are an
+            analytic device used to improve calibration and reduce
+            confounding from population stratification in rare-variant
+            association testing; they should not be read as biologically
+            discrete or socially meaningful categories.
+          </p>
+          <p className="mt-2">
+            BRaVa is not yet globally representative. Most individuals
+            assigned to the AMR and AFR groups were recruited through
+            US-based biobanks, while most assigned to SAS were recruited
+            through UK-based cohorts; continental African and Central/South
+            American populations in particular remain underrepresented.
+            Despite this, BRaVa remains one of the broadest cross-ancestry
+            resources currently available for rare-variant association
+            analysis. See the{' '}
+            <a href={PAPER_URL} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+              flagship paper
+            </a>{' '}
+            for full detail on the ancestry-assignment procedure.
           </p>
         </Faq>
 
@@ -120,7 +147,8 @@ export default function FaqPage() {
             phenotype definitions were consistent between contributing
             cohorts. A subset of these nominated phenotypes was then chosen
             for analysis based on representation across
-            biobank–ancestry (e.g. UKB-EUR, AoU-AFR) subcohorts: a disease trait was retained if it
+            biobank–ancestry (e.g. UK Biobank × EUR, All of Us × AFR)
+            subcohorts: a disease trait was retained if it
             had at least 100 cases in at least ten biobank–ancestry
             subcohorts spanning at least five biobanks, or a case prevalence
             above 1% across ancestries in UK Biobank.
