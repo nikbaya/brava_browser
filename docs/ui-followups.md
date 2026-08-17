@@ -469,3 +469,30 @@ never in a page title, never in an export.
 
 Same mechanism would carry gene-symbol aliases (previous/withdrawn HGNC symbols),
 which the Ensembl GTF the gene index is built from already has.
+
+## Bump font size app-wide (~10%)
+
+Tried and reverted: `html { zoom: 110% }` in
+[index.css](../app/src/index.css) scaled everything uniformly (chosen over
+`transform: scale` specifically because a transform on an ancestor makes it
+the containing block for `position: fixed` descendants, which would have
+broken the `Tip` tooltip portal and every drawer). It worked for that, but
+`zoom` also changes the effective CSS px viewport used for layout — the
+ancestry pies' responsive sizing didn't account for that and overflowed the
+viewport at narrower window widths. Reverted rather than chase the pies fix
+under time pressure.
+
+**Likely better next attempt: root `html { font-size: … }`.** Unlike `zoom`,
+this only rescales `rem`-based values (Tailwind's default text/spacing
+utilities) and leaves the actual CSS px viewport alone, so responsive
+breakpoints and viewport-relative sizing (the pies) aren't affected.
+
+The catch: a meaningful fraction of this app's text is set in **fixed px**,
+not Tailwind's rem-based classes — `text-[13px]` for `VirtualTable` body
+cells, `text-[9px]` for `AncestryChip`, etc. (a deliberate density choice for
+gnomAD/Genebass-style dense tables, not an oversight). Root font-size
+wouldn't touch any of those, so headings/prose/labels would grow while table
+numbers stayed the same size — possibly fine, possibly looks inconsistent.
+Worth mocking before committing; if full uniformity is wanted, the fixed-px
+values would need converting to rem (or scaling individually), which is a
+larger, more invasive change than it first looks.
