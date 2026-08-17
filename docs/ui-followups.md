@@ -15,37 +15,11 @@ The route (`/changelog`) is still registered in
 request, so it's live but undiscoverable. Decide whether/how to surface it
 (raw commit log vs. a curated subset) before re-adding the nav link.
 
-## Show the Burden β value in the table, not just the up/down triangle
 
-The per-ancestry grid renders β as an `EffectTriangle` with the number only in
-the tooltip ([ancestryColumns.tsx](../app/src/components/ancestryColumns.tsx#L133)).
-Worth a numeric β column, or a toggle.
-
-(The "3 significant figures everywhere" half of this item shipped: `fmtPLog3` /
-`fmtBeta3` in every tooltip, `fmtPCompact` at 3 dp in the dense grid.)
-
-## Clicking on gene in phenotype page must show gene page with phenotype in forest plot.
 
 ## Landing page:
 - Consider adding global map (with current and future partnering biobanks)?
 
-## Mobile: collapse the header nav into a burger menu
-
-[Header.tsx](../app/src/components/Header.tsx) puts the logo, the search bar and
-three nav links (Downloads / About / FAQ) in one flex row at every width. The
-links are `shrink-0`, so on a phone they hold their full width and the search
-bar — the primary action, and the only one that has to be usable one-handed —
-is squeezed into what's left.
-
-Put the three links behind a burger button pinned top right below roughly `sm`,
-and let the search bar take the freed width. Points to settle: the logo probably
-drops to the mark without the "BRaVa" wordmark at that width; the menu needs to
-close on navigation and on Escape; and the header is `sticky top-0 z-30` with the
-`StickyTitle` sub-bar pinned at `top-14`, so an open panel has to sit above both
-without disturbing that fixed `h-14`.
-
-## Manhattan plots
-Include actual cutoff pval in gene-level and gene-mask legend
 
 ## 'Sample size by ancestry' plots on phenotype pages
 - Add note on chart size not being proportional to sample size.
@@ -69,95 +43,9 @@ Include actual cutoff pval in gene-level and gene-mask legend
 ## More info
 - Add '?' button cursortips for 'Ancestry', variant mask, mask maf and test dropdown titles.
 
-## Canonical gene URL should be the ENSG, so other sites can link to us
-
-`/gene/:id` already **accepts** an ENSG — `resolveGene` looks up either form and
-[GenePage.tsx](../app/src/pages/GenePage.tsx#L37) falls back to treating an
-`ENSG…` param as the id directly. The problem is that our own links mint the
-**symbol**: [SearchBar.tsx:64](../app/src/components/SearchBar.tsx#L64) and the
-landing-page example chips ([LandingPage.tsx:49](../app/src/pages/LandingPage.tsx#L49))
-navigate to `/gene/PCSK9`, so that is the URL a user copies out of the address
-bar and the one that ends up cited elsewhere. (The phenotype page already links
-by `ensg`.)
-
-Symbols are unstable (HGNC renames, aliases, and symbols that have been reused
-across loci), so a symbol URL is a fragile inbound link. Make the ENSG canonical:
-
-- All internal navigation emits `/gene/ENSG00000169174`.
-- A symbol param keeps working but **redirects** (`<Navigate replace>`) to the
-  ENSG URL, so the address bar always settles on the stable form.
-- Show the symbol prominently in the page heading (it already is) — the URL
-  being an ENSG costs nothing in readability there.
-- Note the analytics implication: [analytics.ts](../app/src/lib/analytics.ts)
-  reports the router path, so today's dashboard has symbol paths and would gain
-  ENSG ones; a redirect that fires before the pageview avoids double-counting.
-- Worth a one-line "stable link to this page" affordance on the gene page once
-  the ENSG is canonical, mirroring what gnomAD/Open Targets do.
 
 
-## Download button on gene / phenotype pages — DONE (option 1)
 
-Shipped as "export what's already loaded": [exportTable.ts](../app/src/lib/exportTable.ts)
-(serialiser) + [DownloadButton.tsx](../app/src/components/DownloadButton.tsx),
-declared per table via VirtualTable's `exportSpec` prop. Live on the gene table,
-the phenotype table, and the variant table. **Zero extra requests** — no R2
-reads, no pipeline change, works offline.
-
-Decisions worth not re-litigating:
-
-- **The button lives in VirtualTable's caption bar**, not on the page, because
-  that component owns `getSortedRowModel()` — so the file is the rows on screen
-  *in the order shown*, which a page-level button couldn't produce without
-  duplicating the sort.
-- **Row extraction and serialisation are both deferred to the click.** The
-  caption bar re-renders on every scroll frame (the virtualizer drives it), so
-  mapping 20k rows per render would cost more than the download.
-- **TSV, not CSV.** Phenotype names, categories and mask labels contain commas;
-  tabs never occur in this data, so tab-delimited needs no escaping path at all
-  and matches the upstream BRaVa summary-stat files.
-- **Qualifying constants become columns** (gene, phenotype, mask, MAF, test,
-  ancestry) rather than a `#` comment header, so each row is self-describing and
-  the file still loads with a plain `read.delim` / `pd.read_csv(sep='\t')`.
-- **Both `P` and `neglog10P` ship.** `P` is reconstructed from the stored
-  −log10 via `exportP` (`10**-lp` underflows to 0 past ~1e-308), and the raw
-  −log10 column is the lossless one.
-- Missing values export as **empty cells**, the NA convention in R and pandas —
-  never the display formatters' em-dash, which would poison the column type.
-- Per-ancestry triples come from `ancestryExportColumns` in
-  [ancestryColumns.tsx](../app/src/components/ancestryColumns.tsx), beside the
-  on-screen grid columns they mirror, so the two can't drift.
-
-Not done (deliberately): **linking to the raw source files** from these pages.
-It sends users to per-phenotype × ancestry files far larger than what they were
-viewing and adds R2 reads; the [Downloads page](../app/src/pages/DownloadsPage.tsx)
-already covers bulk access.
-
-### R2 request budget — how much headroom is there?
-
-Cloudflare R2 free tier (see [CLAUDE.md](../CLAUDE.md) for the full table):
-
-| | Free / month | What counts |
-|---|---|---|
-| **Class B** (reads) | **10,000,000** | one per file fetched from R2 |
-| Class A (writes/lists) | 1,000,000 | uploads only — users never trigger these |
-| Egress | unlimited, free | why R2 was chosen |
-
-Only `dataUrl`/`variantUrl` fetches hit R2. The bundled `meta/*.json` indexes
-(gene + phenotype search, biobanks, pheno sizes, variant split) ship with the app
-and are served by GitHub Pages, so they cost nothing against R2 — see
-[client.ts](../app/src/data/client.ts).
-
-Per pageview, worst case:
-- **Gene page:** `gene/{ENSG}.json`, plus the variant base file and its `.anc`
-  file when the variant view is opened → **1–3 reads**.
-- **Phenotype page:** one `phenotype/{id}.{anc}.json` per available ancestry,
-  eagerly loaded so the grid can show all columns, plus a gene file if the forest
-  drawer is opened → **up to ~8 reads**.
-
-So ~5 reads for a typical pageview → **roughly 2 million pageviews/month before
-the 10M Class B ceiling**, and the client's in-memory cache means repeat views in
-one session are free. A download button of type (1) adds **nothing** to this.
-Conclusion: requests are not a constraint — build the client-side export.
 
 ## ClinVar annotations on the variant view
 
@@ -198,7 +86,7 @@ significance, review status, variation ID. Same shape as the exon build: a
   chr:pos:ref:alt matching will silently miss some indels. Worth quantifying the
   miss rate on one gene before promising a "in ClinVar" badge.
 
-## Chromosome ideogram + locus context on the gene page
+## [minor] Chromosome ideogram + locus context on the gene page
 
 Show where the gene sits on its chromosome (cytoband ideogram with a position
 marker), and ideally let neighbouring genes be clicked to navigate. Requested as
@@ -519,7 +407,7 @@ noisier than useful; the tooltip + click disambiguate which trait a point is.
   `meta/all_results.*.json` shards. Standalone target, not wired into `make
   full`/`upload` — its output is bundled, not R2-hosted.
 
-## Search: map lay / synonym terms to the phenotypes they mean
+## [minor] Search: map lay / synonym terms to the phenotypes they mean
 
 The header search
 ([IndexContext.tsx](../app/src/data/IndexContext.tsx)) is a case-insensitive
