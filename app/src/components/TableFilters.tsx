@@ -4,6 +4,8 @@ import {
   ANCESTRIES,
   ANCESTRY_META,
   decodeAncMask,
+  hasNonEurMask,
+  NON_EUR_SUPERPOP_IDXS,
   SIG_GENE_CAUCHY,
   SUPERPOP_IDXS,
 } from '../lib/constants'
@@ -324,13 +326,20 @@ export default function TableFilters({
  * to `sel ∩ available` fixes that without needing `sel` itself to track
  * availability.
  *
- * No superpop bits set ("composition unknown" — see Overview.mark_ancestry in
- * build_variants.py) always passes either way: we can't confidently say it
- * doesn't match. This is checked via `decodeAncMask`, not `mask === 0` — a
- * variant that only reached the pooled non-EUR meta's threshold has the
- * separate non_EUR display bit set (see `hasNonEurMask`) but no superpop
- * bits, and must still always-pass here exactly like a truly all-zero mask;
- * that bit is display-only and never enters this filter.
+ * No bits at all ("composition genuinely unknown" — see Overview.mark_ancestry
+ * in build_variants.py) always passes either way: we can't confidently say it
+ * doesn't match.
+ *
+ * A mask with *only* the non-EUR bit set (see `hasNonEurMask`) is a distinct,
+ * narrower case: it's confirmed to be *some* non-empty subset of
+ * NON_EUR_SUPERPOP_IDXS (AFR/AMR/EAS/SAS), just not which. That's enough
+ * certainty to matter, but not enough to say it matches a specific
+ * population — "AFR ticked alone" can't tell this row apart from one that's
+ * actually AMR/EAS/SAS-only, so treating it as a match would claim precision
+ * the data doesn't have. It only passes the default (OR) mode when *all four*
+ * are ticked, since then it's guaranteed to overlap regardless of which one
+ * it actually is; it never passes `exclusive` (exact-set) mode, since that
+ * needs to know the exact composition and this mask never tells us.
  */
 export function matchesAncFilter(
   mask: number,
@@ -339,7 +348,10 @@ export function matchesAncFilter(
   available: Set<number>,
 ): boolean {
   const tags = decodeAncMask(mask)
-  if (tags.length === 0) return true
+  if (tags.length === 0) {
+    if (!hasNonEurMask(mask)) return true
+    return !exclusive && NON_EUR_SUPERPOP_IDXS.every((a) => sel.has(a))
+  }
   if (!exclusive) return tags.some((a) => sel.has(a))
   let n = 0
   for (const a of sel) if (available.has(a)) n++

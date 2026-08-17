@@ -69,14 +69,26 @@ export function decodeAncMask(mask: number): number[] {
 }
 
 /** One bit past the 5 superpop ones (see pipeline's NON_EUR_BIT): flags "also
- *  observed in the non_EUR pooled meta", for *display* only. A variant that
- *  only reaches the pooled non-EUR meta's reporting threshold (not any single
- *  population's own) has none of the SUPERPOPS bits set — without this it
- *  reads identically to "no ancestry data", when it's really "non-EUR only".
- *  Never fed into the ancestry filter (see `decodeAncMask`). */
+ *  observed in the non_EUR pooled meta". A variant that only reaches the
+ *  pooled non-EUR meta's reporting threshold (not any single population's
+ *  own) has none of the SUPERPOPS bits set — without this it reads
+ *  identically to "no ancestry data", when it's really "non-EUR only". Used
+ *  for chip display (`AncestryChips`) and, narrowly, by the ancestry filter
+ *  (`matchesAncFilter`) — see `NON_EUR_SUPERPOP_IDXS`. */
 export function hasNonEurMask(mask: number): boolean {
   return (mask & (1 << SUPERPOPS.length)) !== 0
 }
+
+/** The 4 populations pooled into non_EUR (all of SUPERPOPS except EUR). A
+ *  non-EUR-only variant (see `hasNonEurMask`) is confirmed to be *some*
+ *  non-empty subset of these — but which one is unknown, so the ancestry
+ *  filter (`matchesAncFilter`) only treats it as matching when every one of
+ *  these is ticked; narrower selections (e.g. AFR alone) can't confirm it's
+ *  actually in AFR rather than AMR/EAS/SAS, and showing it anyway would claim
+ *  a certainty the data doesn't have. */
+export const NON_EUR_SUPERPOP_IDXS = SUPERPOPS.filter((a) => a !== 'EUR').map(
+  (a) => ANCESTRY_INDEX[a],
+)
 
 /** Canonical ANCESTRY_INDEX values for the 5 superpops an `anc_mask` bitmask
  *  can tag — the "tick which ancestries to include" filter offers exactly
