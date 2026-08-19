@@ -230,6 +230,22 @@ export default function FaqPage() {
           GRCh38 (hg38), annotated from Ensembl release 110.
         </Faq>
 
+        <Faq q="What license are the data released under?">
+          All results in this browser — and the underlying summary statistics —
+          are released under a{' '}
+          <a
+            href="https://creativecommons.org/licenses/by/4.0/"
+            target="_blank"
+            rel="noreferrer"
+            className="text-brand hover:underline"
+          >
+            Creative Commons Attribution 4.0 International licence (CC BY 4.0)
+          </a>
+          , matching the flagship paper. You're free to share and adapt them for
+          any purpose, including commercially, as long as you give appropriate
+          credit — see “How to cite” below.
+        </Faq>
+
         <Faq q="Can I use these data clinically?">
           No. These are research summary statistics and are not validated for
           clinical or diagnostic use.

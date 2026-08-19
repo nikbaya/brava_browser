@@ -8,6 +8,33 @@ export default function DownloadsPage() {
     <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-bold text-ink">Downloads</h1>
 
+      <div className="mt-4 rounded-2xl border border-line bg-surface p-5">
+        <h2 className="text-lg font-semibold text-ink">License &amp; citing the data</h2>
+        <p className="mt-1 text-sm leading-relaxed text-ink-soft">
+          BRaVa summary statistics are released under a{' '}
+          <a
+            href="https://creativecommons.org/licenses/by/4.0/"
+            target="_blank"
+            rel="noreferrer"
+            className="text-brand hover:underline"
+          >
+            Creative Commons Attribution 4.0 International licence (CC BY 4.0)
+          </a>
+          , matching the flagship paper: you're free to share and adapt the data
+          for any purpose, including commercially, as long as you give
+          appropriate credit. If you use BRaVa results in your work, please cite
+          the flagship paper — see{' '}
+          <Link
+            to={{ pathname: '/faq', hash: '#cite' }}
+            className="text-brand hover:underline"
+          >
+            how to cite
+          </Link>
+          . These are research summary statistics and are not validated for
+          clinical or diagnostic use.
+        </p>
+      </div>
+
       <Section title="Just need what's on screen? Use the download button">
         <p>
           Every results table in this browser — gene page, phenotype page,
@@ -139,21 +166,6 @@ gsutil -u YOUR_PROJECT -m cp -r ${BUCKET}/gene .`}</Cmd>
             FAQ
           </Link>{' '}
           for how to interpret the masks, tests, and significance thresholds.
-        </p>
-      </Section>
-
-      <Section title="Citing the data">
-        <p>
-          If you use BRaVa results in your work, please cite the flagship paper —
-          see{' '}
-          <Link
-            to={{ pathname: '/faq', hash: '#cite' }}
-            className="text-brand hover:underline"
-          >
-            How to cite
-          </Link>
-          . These are research summary statistics and are not validated for
-          clinical or diagnostic use.
         </p>
       </Section>
     </div>
